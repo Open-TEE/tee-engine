@@ -28,6 +28,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include "context_child.h"
+
 /*!
  * \brief restart
  * set this to true when we receive a SIGHUP and we can re init the daemon
@@ -119,23 +121,6 @@ static int daemonize(void)
 }
 
 /*!
- * \brief child_main_loop
- * This is where the child processing will start from
- */
-static void child_main_loop(int childfd)
-{
-	ssize_t n;
-	char buff[1024];
-
-	while ((n = (read(childfd, buff, sizeof(buff) - 1))) > 0) {
-		buff[n] = '\0';
-		syslog(LOG_DEBUG, "%s", buff);
-	}
-
-	return;
-}
-
-/*!
  * \brief check_signal_status
  * After the signals have change the state of the global bits we should check what we have been
  * requested to do
@@ -213,7 +198,7 @@ static void daemon_main_loop()
 		case 0:
 			/* in the child */
 			close(sockfd); /* This is the parents socket descriptor */
-			child_main_loop(childfd);
+			context_handler_loop(childfd);
 			_exit(0);
 		default:
 			/* In the parent, just close the new child fd and continue
