@@ -17,19 +17,54 @@
 #include "tee_memory.h"
 #include <stdlib.h>
 #include <string.h>
-
+#include <stdio.h>
 
 static void *instance_data;
 
-TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buffer, size_t size)
+TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buf, size_t size)
 {
-	//TODO using the /proc/self/maps determine where the address points to
-	// if it is heap or stack then it is read write, if mmap, then we need to
-	// determine the access constrainsts.
-	accessFlags = accessFlags;
-	buffer = buffer;
+	const char *maps = "/proc/self/maps";
+	FILE *fd;
+	char *line = NULL;
+	unsigned long region_start, region_end;
+	char perms[4];
+	uint32_t mem_perms = 0;
+	size_t dummy;
 	size = size;
-	return TEE_SUCCESS;
+
+	if (!buf)
+		return TEEC_ERROR_BAD_PARAMETERS;
+
+	fd = fopen(maps, "r");
+	if (!fd)
+		return TEEC_ERROR_ITEM_NOT_FOUND;
+
+	while (getline(&line, &dummy, fd) != -1) {
+		/* Ensure that we can read the first 3 elements of the line and that the address
+		 * that we are searching for falls with in the memory region define by the first
+		 * 2 paramaters
+		 */
+		if (sscanf(line, "%lx-%lx %4s", &region_start, &region_end, perms) != 3 ||
+		    !((uintptr_t)buf < region_end && region_start <= (uintptr_t)buf)) {
+			free(line);
+			line = NULL;
+			continue;
+		}
+
+		if (perms[0] == 'r')
+			mem_perms |= (TEE_ACCESS_READ & accessFlags);
+		if (perms[1] == 'w')
+			mem_perms |= (TEE_ACCESS_WRITE & accessFlags);
+		if (perms[3] == 's')
+			mem_perms |= TEE_ACCESS_ANY_OWNER;
+
+		break;
+	}
+
+	fclose(fd);
+	free (line);
+
+	return (mem_perms == accessFlags) ? TEEC_SUCCESS : TEEC_ERROR_ACCESS_DENIED;
 }
 
 void TEE_SetInstanceData(void *instanceData)
