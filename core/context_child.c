@@ -18,15 +18,24 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include "tee_internal_api.h"
+
 void context_handler_loop(int childfd)
 {
 	ssize_t n;
-	char buff[1024];
+	char *buff;
 
-	while ((n = (read(childfd, buff, sizeof(buff) - 1))) > 0) {
+	buff = TEE_Malloc(1024, 0);
+	if (!buff) {
+		syslog(LOG_DEBUG, "Malloc failed");
+		return;
+	}
+
+	while ((n = (read(childfd, buff, 1024 - 1))) > 0) {
 		buff[n] = '\0';
 		syslog(LOG_DEBUG, "%s", buff);
 	}
 
+	TEE_Free(buff);
 	return;
 }

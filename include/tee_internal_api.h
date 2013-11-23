@@ -17,4 +17,7 @@
 #ifndef __TEE_INTERNAL_API_EMU_H__
 #define __TEE_INTERNAL_API_EMU_H__
 
+#include "../internal_api/data_types.h"
+#include "../internal_api/tee_memory.h"
+
 #endif
