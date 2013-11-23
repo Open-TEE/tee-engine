@@ -14,4 +14,27 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include "session_child.h"
+#ifndef __TEE_INTERNAL_MEMORY_H__
+#define __TEE_INTERNAL_MEMORY_H__
+
+#include "data_types.h"
+
+TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buffer, size_t size);
+
+void TEE_SetInstanceData(void *instanceData);
+
+void *TEE_GetInstanceData();
+
+void *TEE_Malloc(size_t size, uint32_t hint);
+
+void *TEE_Realloc(void *buffer, uint32_t newSize);
+
+void TEE_Free(void *buffer);
+
+void TEE_MemMove(void *dest, void *src, uint32_t size);
+
+int32_t TEE_MemCompare(void *buffer1, void *buffer2, uint32_t size);
+
+void TEE_MemFill(void *buffer, uint32_t x, uint32_t size);
+
+#endif
