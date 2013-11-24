@@ -1,7 +1,7 @@
 import qbs
 
 DynamicLibrary {
-    name: "internal"
+    name: "InternalApi"
     Depends { name: "cpp" }
 
     Export {
