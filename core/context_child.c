@@ -17,19 +17,21 @@
 #include "context_child.h"
 #include <syslog.h>
 #include <unistd.h>
-#include <dlfcn.h>
 #include <errno.h>
 #include <string.h>
 
 #include "tee_internal_api.h"
-
+#include "dynamic_loader.h"
 
 void context_handler_loop(int childfd)
 {
 	ssize_t n;
 	char *buff;
-	void *applet;
 	TEE_Result ret;
+	struct ta_interface *inf = NULL;
+	TEE_UUID dummy_uuid;
+
+	//sleep(15);
 
 	buff = TEE_Malloc(1024, 0);
 	if (!buff) {
@@ -37,22 +39,22 @@ void context_handler_loop(int childfd)
 		return;
 	}
 
-	applet = dlopen("/home/brian/code/ccpp/project-build/qtc_Desktop-debug/libtest_applet.so", RTLD_LAZY);
-	if (!applet)
-		syslog(LOG_ERR, "Failed to load the library : %s", strerror(errno));
+	ret = load_ta(dummy_uuid, &inf);
+	if (ret != TEE_SUCCESS)
+		goto end;
 
-	TA_CreateEntryPoint_t ep = dlsym(applet, "TA_CreateEntryPoint");
-	if (!ep)
-		syslog(LOG_DEBUG, "Failed to load enty symbol : %s", strerror(errno));
+	inf->create();
+	inf->close_session(NULL);
+	unload_ta(inf);
 
-	ret = ep();
-	syslog(LOG_DEBUG, "Return value is %d", ret);
+	sync();
 
 	while ((n = (read(childfd, buff, 1024 - 1))) > 0) {
 		buff[n] = '\0';
 		syslog(LOG_DEBUG, "%s", buff);
 	}
 
+end:
 	TEE_Free(buff);
 	return;
 }
