@@ -14,45 +14,40 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include "context_child.h"
-#include <syslog.h>
-#include <unistd.h>
-#include <dlfcn.h>
-#include <errno.h>
-#include <string.h>
+#ifndef __TEE_TA_INTERFACE_H__
+#define __TEE_TA_INTERFACE_H__
 
-#include "tee_internal_api.h"
+#include "data_types.h"
 
+#ifdef TA_PLUGIN
+#define TA_EXPORT __attribute__((__visibility__("default")))
 
-void context_handler_loop(int childfd)
-{
-	ssize_t n;
-	char *buff;
-	void *applet;
-	TEE_Result ret;
+TEE_Result TA_EXPORT TA_CreateEntryPoint(void);
 
-	buff = TEE_Malloc(1024, 0);
-	if (!buff) {
-		syslog(LOG_DEBUG, "Malloc failed");
-		return;
-	}
+void TA_EXPORT TA_DestroyEntryPoint(void);
 
-	applet = dlopen("/home/brian/code/ccpp/project-build/qtc_Desktop-debug/libtest_applet.so", RTLD_LAZY);
-	if (!applet)
-		syslog(LOG_ERR, "Failed to load the library : %s", strerror(errno));
+TEE_Result TA_EXPORT TA_OpenSessionEntryPoint(uint32_t paramTypes,
+					      TEE_Param params[4], void **sessionContext);
 
-	TA_CreateEntryPoint_t ep = dlsym(applet, "TA_CreateEntryPoint");
-	if (!ep)
-		syslog(LOG_DEBUG, "Failed to load enty symbol : %s", strerror(errno));
+void TA_EXPORT TA_CloseSessionEntryPoint(void *sessionContext);
 
-	ret = ep();
-	syslog(LOG_DEBUG, "Return value is %d", ret);
+TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext, uint32_t commandID,
+						uint32_t paramTypes, TEE_Param params[4]);
+#else
+#define TA_EXPORT
 
-	while ((n = (read(childfd, buff, 1024 - 1))) > 0) {
-		buff[n] = '\0';
-		syslog(LOG_DEBUG, "%s", buff);
-	}
+typedef TEE_Result (*TA_CreateEntryPoint_t)(void);
 
-	TEE_Free(buff);
-	return;
-}
+typedef void (*TA_DestroyEntryPoint_t)(void);
+
+typedef TEE_Result (*TA_OpenSessionEntryPoint_t)(uint32_t paramTypes,
+						 TEE_Param params[4], void **sessionContext);
+
+typedef void (*TA_CloseSessionEntryPoint_t)(void *sessionContext);
+
+typedef TEE_Result (*TA_InvokeCommandEntryPoint_t)(void *sessionContext, uint32_t commandID,
+						   uint32_t paramTypes, TEE_Param params[4]);
+
+#endif /* TA_PLUGIN */
+
+#endif

@@ -6,11 +6,11 @@ DynamicLibrary {
 
     Export {
         Depends { name: "cpp" }
-        cpp.includePaths: "../include"
+        cpp.includePaths: ["../include", "."]
     }
 
-    files: ["../include/tee_internal_api.h", "data_types.h", "tee_memory.h",
-        'tee_memory.c'
+    files: ["../include/tee_internal_api.h", "data_types.h", "tee_ta_interface.h",
+        "tee_memory.h", "tee_memory.c"
     ]
 }
 

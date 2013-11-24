@@ -140,4 +140,9 @@ typedef struct __TEE_PropSetHandle* TEE_PropSetHandle;
 #define TEE_ACCESS_WRITE		0x00000002
 #define TEE_ACCESS_ANY_OWNER		0x00000004
 
+#define TEE_PARAM_TYPES(param0Type, param1Type, param2Type, param3Type) \
+	((param0Type) | ((param1Type) << 4) | ((param2Type) << 8) | ((param3Type) << 12))
+
+#define TEE_PARAM_TYPE_GET(paramsType, index) (((paramsType) >> (index * 4)) & 0xF)
+
 #endif
