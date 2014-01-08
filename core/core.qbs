@@ -6,6 +6,6 @@ CppApplication {
 
     cpp.dynamicLibraries: ["dl"]
 
-    files: ["main.c", "context_child.c", "context_child.h", "dynamic_loader.h", "dynamic_loader.c"
+    files: ["main.c", "context_child.c", "context_child.h", "dynamic_loader.h", "dynamic_loader.c", "conf_parser.c", "conf_parser.h"
     ]
 }
