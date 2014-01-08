@@ -2,25 +2,25 @@
 #define __CONFIG_PARSER_H__
 
 
-/*! 
+/*!
  * \file conf_parser.h
- * \brief A simple modul for parsning a TEE emulator configure file. The 
+ * \brief A simple modul for parsning a TEE emulator configure file. The
  * configure file syntax is described in config.conf file.
- * 
+ *
  * How to Use:
- * 1. Function get_value() is retrieving a value from the configure file, 
+ * 1. Function get_value() is retrieving a value from the configure file,
  * which corresponds with a key. \sa getvalue()
  * or
  * 2. Function get_config() will populate the given struct, but this should
  * only be used if neccesary implementation is implemented. \sa get_config()
- * 
+ *
  * How these two differ from each other?
- * Function get_value() returns a value, which is allocated by malloc and 
- * freeing the allocated memory is the responsibility of users. If you do not 
- * wantfor example to do a  malloc-free-memory operation or want to get all 
- * config at once, you can implement the neccesary implemetation and use 
+ * Function get_value() returns a value, which is allocated by malloc and
+ * freeing the allocated memory is the responsibility of users. If you do not
+ * wantfor example to do a  malloc-free-memory operation or want to get all
+ * config at once, you can implement the neccesary implemetation and use
  * get_config() function.
- * 
+ *
  * How can I  add a new config parameter and use get_config()-function?
  * At this point the preferred solution
  * 1.Add a new member to Emulator_config-struct
@@ -29,19 +29,26 @@
  * Really simple, See for example fill_ta_dir_path()-function
  */
 
-
 #define CONF_FILE_WITH_PATH "config.conf"
-#define MAX_TA_DIR_PATH 64
-
+#define MAX_TA_DIR_PATH 255
+static const size_t BLOCK_SIZE = 32;
 
 /*!
  * \brief Emulator config struct
  * Emulator config parameters
  */
-struct Emulator_config
-{
-   char ta_dir_path[MAX_TA_DIR_PATH]; /*!< Folder that contais TAs */
+struct Emulator_config {
+	char ta_dir_path[MAX_TA_DIR_PATH]; /*!< Folder that contais TAs */
 };
+
+
+/*!
+ * \brief strip_whitespace
+ * Removes whitespaces from the beginning and at the end. Does not actually
+ * remove.
+ * \param line is handled line
+ */
+static void strip_whitespace(char *line);
 
 
 /*!
@@ -55,37 +62,15 @@ int get_config(struct Emulator_config *conf);
 
 
 /*!
- * \brief readline
- * Reading a line from a file
- * \parem file that will be read
- * \param has_next_line 1 if there is next line, 0 if EOF has been read 
- * \return NULL if something has failed (no need freeing allocated memory).
- * In case of success returning pointer to allocated memory (with malloc) 
- * and the line is terminated with newline (\n). Note. user should free 
- * allocated memory.
- */
-char* readline(FILE* file, int *has_next_line);
-
-
-/*!
  * \brief get_value
  * Retrieving a value from configure file that is responding to a key.
  * \param key which value is wanted
- * \return In case of success returning pointer to value. Memory for value 
- * is allocated by malloc and it is the responsibility of a user to free 
- * memory. Value is newline terminated. On failure function will return  
+ * \return In case of success returning pointer to value. Memory for value
+ * is allocated by malloc and it is the responsibility of a user to free
+ * memory. Value is newline terminated. On failure function will return
  * NULL and no memory is malloced.
  */
-char* get_value(char* key);
-
-
-/*!
- * \brief is_empty
- * Checking if file is empty. No modifications to file.
- * \param file that is tested
- * \return 0 if file is not empty, 1 if file is empty
- */
-int is_empty(FILE* file);
+char *get_value(const char *key);
 
 
 /*!
@@ -94,28 +79,36 @@ int is_empty(FILE* file);
  * \param line is handled line
  * \return a pointer to first non whitespace character in line
  */
-char* first_non_whitspace(char* line);
+static const char *first_non_whitespace(const char *line);
+
+
+/*!
+ * \brief last_non_whitespace
+ * Opposite to first_non_whitespace. \sa first_non_whitespace
+ */
+static char *last_non_whitespace(char *line);
 
 
 /*!
  * \brief parse_value
  * Function is retrieving a value from a line. At the beginning and at the
- * end whitespace is removed.
+ * ind whitespace is removed.
  * \param line that is containing a key-value pair
- * \return In case of success returning a pointer to value. Memory for value 
- * is allocated by malloc and it is the responsibility of a user to free 
- * memory. Value is newline terminated. In case of failure function will 
+ * \return In case of success returning a pointer to value. Memory for value
+ * is allocated by malloc and it is the responsibility of a user to free
+ * memory. Value is newline terminated. In case of failure function will
  * return NULL and no memory is malloced.
  */
-char* parse_value(char* line);
+static char *parse_value(const char *line);
 
 
 /*!
  * \brief fill_ta_dir_path
  * Fill a TA directory path to Emulator config struct
- * \param conf Struct that contains a member which is populated 
+ * \param conf Struct that contains a member which is populated
  * \return 1 On success, 0 On failure
  */
-int fill_ta_dir_path(struct Emulator_config *conf);
+static int fill_ta_dir_path(struct Emulator_config *conf);
+
 
 #endif /* __CONFIG_PARSER_H__ */
