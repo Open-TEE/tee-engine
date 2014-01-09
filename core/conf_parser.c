@@ -60,15 +60,14 @@ static char *parse_value(const char *line)
 	char read_ch;
 	size_t buf_index = 0;
 	size_t count = 0;
-	size_t re_n = 1;
+    size_t buf_size = BLOCK_SIZE;
 
 	size_t k = 0;
 	for (k = begin; k < end; ++k) {
 
-		if ((re_n * BLOCK_SIZE) == (count - 1)) {
-			++re_n;
+        if (count - 1 >= buf_size) {
 			char *tmp;
-			tmp = realloc(buf, re_n * (sizeof(char) * BLOCK_SIZE));
+            tmp = realloc(buf, buf_size + BLOCK_SIZE);
 			if (tmp == NULL) {
 				syslog(LOG_DEBUG, "Realloc failed");
 				free(buf);
@@ -76,6 +75,7 @@ static char *parse_value(const char *line)
 			}
 
 			buf = tmp;
+            buf_size += BLOCK_SIZE;
 			memset(&buf[k], 0, BLOCK_SIZE);
 			count = 0;
 		}
