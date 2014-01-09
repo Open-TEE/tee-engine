@@ -31,7 +31,7 @@
 
 #define CONF_FILE_WITH_PATH "config.conf"
 #define MAX_TA_DIR_PATH 255
-static const size_t BLOCK_SIZE = 32;
+static const size_t BLOCK_SIZE = 256;
 
 /*!
  * \brief Emulator config struct
@@ -79,7 +79,7 @@ char *get_value(const char *key);
  * \param line is handled line
  * \return a pointer to first non whitespace character in line
  */
-static const char *first_non_whitespace(const char *line);
+static char *first_non_whitespace(char *line);
 
 
 /*!

@@ -5,13 +5,12 @@
 
 #include "conf_parser.h"
 
-static const char *first_non_whitespace(const char *line)
+static char *first_non_whitespace(char *line)
 {
 	size_t k = 0;
 	for (k = 0; k < strlen(line); ++k) {
-		if (isspace(line[k]))
-			continue;
-		break;
+		if (!isspace(line[k]))
+			break;
 	}
 
 	return &line[k];
@@ -21,9 +20,8 @@ static char *last_non_whitespace(char *line)
 {
 	size_t k = 0;
 	for (k = (strlen(line)-1); k > 0; --k) {
-		if (isspace(line[k]))
-			continue;
-		break;
+		if (!isspace(line[k]))
+			break;
 	}
 
 	return &line[k];
@@ -31,16 +29,14 @@ static char *last_non_whitespace(char *line)
 
 static void strip_whitespace(char *line)
 {
-	size_t begin = first_non_whitespace(line) - line;
-
-	if (begin != 0) {
-		size_t i = 0;
-		for (i = begin; i <= strlen(line); ++i)
-			line[i-begin] = line[i];
-	}
-
 	char *end = last_non_whitespace(line) + 1;
-	*end = '\0';
+	*end = '\0';	
+	
+	char *begin = first_non_whitespace(line);
+
+	size_t len = (end + 1) - begin;
+
+	memmove(line, begin, len);
 }
 
 static char *parse_value(const char *line)
@@ -61,29 +57,34 @@ static char *parse_value(const char *line)
 	size_t begin = as_op - line + 1;
 	size_t end = strlen(line);
 
-	char readed_ch;
+	char read_ch;
 	size_t buf_index = 0;
 	size_t count = 0;
+	size_t re_n = 1;
 
 	size_t k = 0;
 	for (k = begin; k < end; ++k) {
 
-		if (BLOCK_SIZE == (count - 1)) {
-			buf = realloc(buf, sizeof(char) * BLOCK_SIZE);
-			if (buf == NULL) {
+		if ((re_n * BLOCK_SIZE) == (count - 1)) {
+			++re_n;
+			char *tmp;
+			tmp = realloc(buf, re_n * (sizeof(char) * BLOCK_SIZE));
+			if (tmp == NULL) {
 				syslog(LOG_DEBUG, "Realloc failed");
+				free(buf);
 				return NULL;
 			}
 
+			buf = tmp;
 			memset(&buf[k], 0, BLOCK_SIZE);
 			count = 0;
 		}
 
-		readed_ch = line[k];
-		if (readed_ch == '#')
+		read_ch = line[k];
+		if (read_ch == '#')
 			break;
 
-		buf[buf_index] = readed_ch;
+		buf[buf_index] = read_ch;
 		buf_index++;
 		count++;
 	}
