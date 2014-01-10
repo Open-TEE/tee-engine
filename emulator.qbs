@@ -5,6 +5,6 @@ Project {
     references: [
         "core/core.qbs",
         "internal_api/internal.qbs",
-        "TAs/TrustedApplications.qbs"
+        "TAs/TrustedApplications.qbs",
     ]
 }
