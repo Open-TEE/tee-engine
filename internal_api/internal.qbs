@@ -10,8 +10,7 @@ DynamicLibrary {
     }
 
     files: ["../include/tee_internal_api.h", "data_types.h", "tee_ta_interface.h",
-        "tee_memory.h", "tee_memory.c", "time_api/time_api.h", "time_api/time_api.c",
-        "time_api/time_data_types.h"
+        "tee_memory.h", "tee_memory.c", "time_api.h", "time_api.c"
     ]
 }
 
