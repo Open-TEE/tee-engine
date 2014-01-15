@@ -20,5 +20,6 @@
 #include "../internal_api/data_types.h"
 #include "../internal_api/tee_memory.h"
 #include "../internal_api/tee_ta_interface.h"
+#include "../internal_api/time_api.h"
 
 #endif
