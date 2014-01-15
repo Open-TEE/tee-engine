@@ -19,10 +19,42 @@
 
 #include "time_api.h"
 
+
+/*
+ * Helper functions
+ */
+
+/*!
+ * \brief add_with_overflow_detect
+ * \param a
+ * \param b
+ * \param result
+ * \return If overflow detected, -1 is returned. 0 on success.
+ */
+static int add_with_overflow_detect(const uint32_t a, const uint32_t b, uint32_t *result);
+
+/*!
+ * \brief delta_cur_and_mark_time
+ * Calculating delta between current time (using GetSystemTime \sa GetSystemTime)
+ * and persistant time mark.
+ * \param delta is filled with delta
+ */
+static void delta_cur_and_per_time(TEE_Time *delta);
+
+
+
+/*
+ * Variables
+ */
+
 static TEE_Time persistent_time;
-static TEE_Time persistent_time_mark;
 static int TIME_HAS_SET;
 
+
+
+/*
+ * ## Internal API functions ##
+ */
 
 void TEE_GetSystemTime(TEE_Time *time) 
 {
@@ -42,6 +74,7 @@ TEE_Result TEE_Wait(uint32_t timeout)
 {
 	/*
 	 * TODO: Add cancelabe
+	 * TODO: Improve timeout (select)
 	 */
 
 	struct timeval tv;
@@ -50,14 +83,18 @@ TEE_Result TEE_Wait(uint32_t timeout)
 		while(1) {
 			tv.tv_sec = 1;
 			tv.tv_usec = 0;
-			select(0, NULL, NULL, NULL, &tv);
+			if (select(0, NULL, NULL, NULL, &tv) == -1) {
+				/* Try wait again or panic? */
+			}
 			/* check cancel flag ? */
 		}
 	}
 	else {
 		tv.tv_sec = timeout / 1000;
 		tv.tv_usec = (timeout % 1000) * 1000;
-		select(0, NULL, NULL, NULL, &tv);
+		while (select(0, NULL, NULL, NULL, &tv) == -1) {
+			/* Try wait again */
+		}
 	}
 	return TEE_SUCCESS;
 }
@@ -65,22 +102,21 @@ TEE_Result TEE_Wait(uint32_t timeout)
 
 TEE_Result TEE_GetTAPersistentTime(TEE_Time *time)
 {
+	uint32_t sum = 0;
+	TEE_Time delta;
+
 	if (TIME_HAS_SET == 0)
 		return TEE_ERROR_TIME_NOT_SET;
 
-	TEE_Time delta;
-	delta_cur_and_mark_time(&delta);
+	delta_cur_and_per_time(&delta);
 
-	uint32_t sum = 0;
-	if (add_with_overflow_detect(persistent_time.seconds,
-				     delta.seconds, &sum) == -1) {
+	if (add_with_overflow_detect(persistent_time.seconds, delta.seconds, &sum) == -1) {
 		time->seconds = 0;
 		return TEE_ERROR_OVERFLOW;
 	}
 	time->seconds = sum;
 
-	if (add_with_overflow_detect(persistent_time.millis,
-				     delta.millis, &sum) == -1) {
+	if (add_with_overflow_detect(persistent_time.millis, delta.millis, &sum) == -1) {
 		time->seconds = 0;
 		return TEE_ERROR_OVERFLOW;
 	}
@@ -96,13 +132,9 @@ TEE_Result TEE_SetTAPersistentTime(TEE_Time *time)
 	 * TODO: Survive reboot
 	 */
 
-	TEE_Time time_mark;
-	TEE_GetSystemTime(&time_mark);
-
 	if (time == NULL)
 		return TEE_ERROR_TIME_NOT_SET; /* this is not correct ret. code */
 
-	memcpy(&persistent_time_mark, &time_mark, sizeof(TEE_Time));
 	memcpy(&persistent_time, time, sizeof(TEE_Time));
 	TIME_HAS_SET = 1;
 
@@ -115,28 +147,30 @@ void TEE_GetREETime(TEE_Time *time)
 	TEE_GetSystemTime(time);
 }
 
+
+
+
 /*
  * Non internal api functions
  */
 
-static void delta_cur_and_mark_time(TEE_Time *delta)
+static void delta_cur_and_per_time(TEE_Time *delta)
 {
 	TEE_Time cur;
 	TEE_GetSystemTime(&cur);
 
-	if (cur.millis < persistent_time_mark.millis) {
+	if (cur.millis < persistent_time.millis) {
 		cur.seconds = cur.seconds - 1;
 		cur.millis = cur.millis + 1000;
 	}
 
-	delta->seconds = cur.seconds - persistent_time_mark.seconds;
-	delta->millis = cur.millis - persistent_time_mark.millis;
+	delta->seconds = cur.seconds - persistent_time.seconds;
+	delta->millis = cur.millis - persistent_time.millis;
 }
 
 static int add_with_overflow_detect(const uint32_t a, const uint32_t b, uint32_t *result)
 {
-	if ( a > 0 && b > 0 &&
-	     a > UINT32_MAX - b ) {
+	if (a > UINT32_MAX - b) {
 		return -1; /* Overflow */
 	}
 

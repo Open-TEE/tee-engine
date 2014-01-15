@@ -77,25 +77,4 @@ TEE_Result TEE_SetTAPersistentTime(TEE_Time *time);
 void TEE_GetREETime(TEE_Time *time);
 
 
-/*
- * Non internal api functions
- */
-
-/*!
- * \brief add_with_overflow_detect
- * \param a
- * \param b
- * \param result
- * \return If overflow detected, -1 is returned. 0 on success.
- */
-static int add_with_overflow_detect(const uint32_t a, const uint32_t b, uint32_t *result);
-
-/*!
- * \brief delta_cur_and_mark_time
- * Calculating delta between current time (using GetSystemTime \sa GetSystemTime)
- * and persistant time mark.
- * \param delta is filled with delta
- */
-static void delta_cur_and_mark_time(TEE_Time *delta);
-
 #endif /* __TIME_API_H__ */
