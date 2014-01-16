@@ -21,10 +21,9 @@
 
 #include "data_types.h"
 
-/*
- * ## Data types ##
- */
-
+/*!
+  * \brief Specify a wait time that will only be interupted by seting a cancelation flag.
+  */
 #define TEE_TIMEOUT_INFINITE		0xFFFFFFFF
 
 typedef struct {
@@ -32,17 +31,11 @@ typedef struct {
 	uint32_t millis;
 } TEE_Time;
 
-
-/*
- * ## Internal api functions ##
- */
-
 /*!
  * \brief TEE_GetSystemTime
  * \param time
  */
 void TEE_GetSystemTime(TEE_Time *time);
-
 
 /*!
  * \brief TEE_Wait
@@ -52,14 +45,12 @@ void TEE_GetSystemTime(TEE_Time *time);
  */
 TEE_Result TEE_Wait(uint32_t timeout);
 
-
 /*!
  * \brief TEE_GetTAPersistentTime
  * \param time If time parameter is NULL, retured TEE_ERROR_BAD_PARAMETERS
  * \return
  */
 TEE_Result TEE_GetTAPersistentTime(TEE_Time *time);
-
 
 /*!
  * \brief TEE_SetTAPersistentTime
@@ -68,13 +59,11 @@ TEE_Result TEE_GetTAPersistentTime(TEE_Time *time);
  */
 TEE_Result TEE_SetTAPersistentTime(TEE_Time *time);
 
-
 /*!
  * \brief TEE_GetREETime
  * Function Calling GetSystemTime -function. \sa GetSystemTime
  * \param time
  */
 void TEE_GetREETime(TEE_Time *time);
-
 
 #endif /* __TIME_API_H__ */
