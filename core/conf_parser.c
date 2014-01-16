@@ -18,6 +18,7 @@
 #include <syslog.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "conf_parser.h"
 
@@ -122,6 +123,7 @@ char *get_value(const char *key)
 	}
 
 	if (feof(init_file)) {
+		fclose(init_file);
 		syslog(LOG_DEBUG, "File is empty");
 		return NULL;
 	}
@@ -150,6 +152,7 @@ char *get_value(const char *key)
 		char *key_line = (char *) calloc(0, sizeof(char) * (assigment_op-line));
 		if (key_line == NULL) {
 			free(line);
+			fclose(init_file);
 			syslog(LOG_DEBUG, "Calloc failed");
 			return NULL;
 		}
@@ -161,12 +164,14 @@ char *get_value(const char *key)
 			if (value == NULL) {
 				free(key_line);
 				free(line);
+				fclose(init_file);
 				return NULL;
 			}
 
 			free(key_line);
 			n = 0;
 			free(line);
+			fclose(init_file);
 			return value;
 		}
 
@@ -176,6 +181,7 @@ char *get_value(const char *key)
 		line = NULL;
 	}
 
+	fclose(init_file);
 	return NULL;
 }
 
