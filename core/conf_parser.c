@@ -18,6 +18,7 @@
 #include <syslog.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "conf_parser.h"
 
@@ -115,15 +116,16 @@ static char *parse_value(const char *line)
 char *get_value(const char *key)
 {
 	FILE *init_file = fopen(CONF_FILE_WITH_PATH, "r");
+	char *value = NULL;
 
 	if (init_file == NULL) {
 		syslog(LOG_DEBUG, "Failed open config file");
-		return NULL;
+		goto err1;
 	}
 
 	if (feof(init_file)) {
 		syslog(LOG_DEBUG, "File is empty");
-		return NULL;
+		goto err2;
 	}
 
 	size_t n = 0;
@@ -149,25 +151,17 @@ char *get_value(const char *key)
 
 		char *key_line = (char *) calloc(0, sizeof(char) * (assigment_op-line));
 		if (key_line == NULL) {
-			free(line);
 			syslog(LOG_DEBUG, "Calloc failed");
-			return NULL;
+			goto err3;
 		}
 
 		strncpy(key_line, line, assigment_op-line);
 
 		if (strstr(key_line, key)) {
-			char *value = parse_value(line);
-			if (value == NULL) {
-				free(key_line);
-				free(line);
-				return NULL;
-			}
+			value = parse_value(line);
 
 			free(key_line);
-			n = 0;
-			free(line);
-			return value;
+			goto err3;
 		}
 
 		free(key_line);
@@ -176,7 +170,12 @@ char *get_value(const char *key)
 		line = NULL;
 	}
 
-	return NULL;
+err3:
+	free(line);
+err2:
+	fclose(init_file);
+err1:
+	return value;
 }
 
 static int fill_ta_dir_path(struct emulator_config *conf)
@@ -185,8 +184,10 @@ static int fill_ta_dir_path(struct emulator_config *conf)
 	if (value == NULL)
 		return -1;
 
-	if (strlen(value) >= MAX_TA_DIR_PATH)
+	if (strlen(value) >= MAX_TA_DIR_PATH) {
+		free(value);
 		return -1;
+	}
 
 	strncpy(conf->ta_dir_path, value, strlen(value));
 	free(value);
