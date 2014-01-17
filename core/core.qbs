@@ -2,10 +2,16 @@ import qbs
 
 CppApplication {
     type: "application"
-    Depends { name: "InternalApi" }
+    Depends { name: "CommonApi" }
 
     cpp.dynamicLibraries: ["dl"]
+    cpp.includePaths: ["../include"]
 
-    files: ["main.c", "context_child.c", "context_child.h", "dynamic_loader.h", "dynamic_loader.c", "conf_parser.c", "conf_parser.h"
-    ]
+    Group {
+        name: 'Common'
+        prefix: '../include/'
+        files: ["subprocess.h", "conf_parser.h"]
+    }
+
+    files: ["main.c"]
 }
