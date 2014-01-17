@@ -146,32 +146,125 @@ static char *parse_value(const char *line)
 }
 
 /*!
- * \brief fill_ta_dir_path
- * Fill a TA directory path to Emulator config struct
- * \param conf Struct that contains a member which is populated
- * \return 1 On success, 0 On failure
+ * \brief alloc_fill_value
+ * Read a value from the config and allocate enough space for it in the dest
+ * \param key The config setting we wish to find in the config file
+ * \param dest Where to store the value
+ * \return -1 on error, 0 otherwise
  */
-static int fill_ta_dir_path(struct emulator_config *conf)
+static int alloc_fill_value(const char *key, char **dest)
 {
-	char *value = config_parser_get_value("ta_dir_path");
+	char *value = config_parser_get_value(key);
 	if (value == NULL)
 		return -1;
 
-	if (strlen(value) >= MAX_TA_DIR_PATH) {
+	*dest = (char *)calloc(strlen(value) + 1, sizeof(char));
+	if (*dest == NULL) {
 		free(value);
 		return -1;
 	}
 
-	strncpy(conf->ta_dir_path, value, strlen(value));
+	strncpy(*dest, value, strlen(value));
 	free(value);
 	return 0;
 }
 
-int config_parser_get_config(struct emulator_config *conf)
+/*!
+ * \brief concat_values
+ * Many values in the config file may need to be concatinated together, e.g.
+ * library path and library name, so that the library can be accessed properly
+ * \param base The base value that is used for concatination
+ * \param src_n_dest The value that is to be concatinated to the base and where the result will
+ * be stored
+ * \return 0 on success, -1 otherwise
+ */
+static int concat_values(const char *base, char **src_n_dest)
 {
-	if (fill_ta_dir_path(conf) == -1)
+	char *tmp;
+
+	if (base == NULL || *src_n_dest == NULL)
+		return 0; /* nothing will change */
+
+	tmp = (char *)calloc(strlen(base) + strlen(*src_n_dest) + 1, sizeof(char));
+	if (tmp == NULL)
 		return -1;
+
+	/* concatinat the 2 strings */
+	snprintf(tmp, strlen(base) + strlen(*src_n_dest) + 1, "%s%s", base, *src_n_dest);
+
+	/* now store the result back into src_n_dest */
+	free(*src_n_dest);
+	*src_n_dest = tmp;
+
 	return 0;
+}
+
+int config_parser_get_config(struct emulator_config **conf)
+{
+	struct emulator_config *conf_ptr;
+	int ret;
+
+	/* TODO: Fix this function to only open the conf file once and read all values */
+
+	conf_ptr = (struct emulator_config *)calloc(sizeof(struct emulator_config), sizeof(char));
+	if (conf_ptr == NULL)
+		return -1;
+
+	if (alloc_fill_value("ta_dir_path", &conf_ptr->ta_dir_path) == -1) {
+		ret = -1;
+		goto out;
+	}
+
+	if (alloc_fill_value("subprocess_manager", &conf_ptr->subprocess_manager) == -1) {
+		ret = -1;
+		goto out;
+	}
+
+	if (alloc_fill_value("subprocess_launcher", &conf_ptr->subprocess_launcher) == -1) {
+		ret = -1;
+		goto out;
+	}
+
+	/* tidy up and make the library paths full paths, hence usable */
+
+	if (concat_values(conf_ptr->ta_dir_path, &conf_ptr->subprocess_manager) == -1) {
+		ret = -1;
+		goto out;
+	}
+
+	if (concat_values(conf_ptr->ta_dir_path, &conf_ptr->subprocess_launcher) == -1) {
+		ret = -1;
+		goto out;
+	}
+
+out:
+	/* There has been some error so clean up */
+	if (ret == -1) {
+		config_parser_free_config(conf_ptr);
+		conf_ptr = NULL;
+	}
+
+	/* Assign the config back to the caller */
+	*conf = conf_ptr;
+
+	return ret;
+}
+
+void config_parser_free_config(struct emulator_config *conf)
+{
+	if (conf == NULL)
+		return; /* nothing to free */
+
+	if (conf->ta_dir_path)
+		free(conf->ta_dir_path);
+
+	if (conf->subprocess_launcher)
+		free(conf->subprocess_launcher);
+
+	if (conf->subprocess_manager)
+		free(conf->subprocess_manager);
+
+	free(conf);
 }
 
 char *config_parser_get_value(const char *key)

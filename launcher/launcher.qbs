@@ -1,0 +1,17 @@
+import qbs
+
+DynamicLibrary {
+    name: "LauncherApi"
+    Depends { name: "cpp" }
+    Depends { name: "CommonApi" }
+    Depends { name: "InternalApi" }
+
+    Export {
+        Depends { name: "cpp" }
+        cpp.includePaths: ["../include"]
+    }
+
+    cpp.dynamicLibraries: ["dl"]
+
+    files: ["launcher_mainloop.c", "dynamic_loader.c", "dynamic_loader.h"]
+}
