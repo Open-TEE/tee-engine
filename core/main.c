@@ -23,12 +23,8 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <syslog.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <string.h>
-#include <errno.h>
 
-#include "context_child.h"
+#include "io_thread.h"
 
 /*!
  * \brief restart
@@ -138,78 +134,6 @@ static void check_signal_status()
 	}
 }
 
-/*!
- * \brief daemon_main_loop
- * This is the main processing loop of the parent, daemon process. It never returns.
- */
-static void daemon_main_loop()
-{
-	const char *sock_path = "/tmp/open_tee_sock";
-	int sockfd, childfd;
-	struct sockaddr_un sock_addr;
-
-	if (remove(sock_path) == -1 && errno != ENOENT) {
-		syslog(LOG_ERR, "Failed to remove %s : %s", sock_path, strerror(errno));
-		exit(1);
-	}
-
-	sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (sockfd == -1) {
-		syslog(LOG_ERR, "Create socket %s", strerror(errno));
-		exit(1);
-	}
-
-	memset(&sock_addr, 0, sizeof(struct sockaddr_un));
-	strncpy(sock_addr.sun_path, sock_path, sizeof(sock_addr.sun_path) - 1);
-	sock_addr.sun_family = AF_UNIX;
-
-	if (bind(sockfd, (struct sockaddr *) &sock_addr, sizeof(struct sockaddr_un)) == -1) {
-		syslog(LOG_ERR, "Error %s", strerror(errno));
-		exit(1);
-	}
-
-	if (listen(sockfd, SOMAXCONN) == -1) {
-		syslog(LOG_ERR, "Listen socket %s", strerror(errno));
-		exit(1);
-	}
-
-	for (;;) {
-		/* Block and wait for a client to connect */
-		childfd = accept(sockfd, NULL, NULL);
-		if (childfd == -1) {
-			if (errno == EINTR) {
-				/* We have been interrupted so check which of our signals it was
-				 * and act on it, though it may have been a SIGCHLD
-				 */
-				check_signal_status();
-				continue;
-			} else {
-				syslog(LOG_ERR, "Accept error %s", strerror(errno));
-				exit(1);
-			}
-		}
-
-		/* create a child process to handle the connection */
-		switch (fork()) {
-		case -1:
-			/* Failed to fork */
-			close(childfd);
-			break;
-		case 0:
-			/* in the child */
-			close(sockfd); /* This is the parents socket descriptor */
-			context_handler_loop(childfd);
-			_exit(0);
-		default:
-			/* In the parent, just close the new child fd and continue
-			 * to accept the next connection
-			 */
-			close(childfd);
-			break;
-		}
-	}
-}
-
 int main(int argc, char **argv)
 {
 	(void)argc;
@@ -237,7 +161,9 @@ int main(int argc, char **argv)
 	/* open syslog for writing */
 	openlog(NULL, 0, LOG_USER);
 
-	daemon_main_loop();
+	/* in a proper situation this function should never return */
+	if (daemon_main_loop(&check_signal_status))
+		exit(2);
 
 	exit(0);
 }
