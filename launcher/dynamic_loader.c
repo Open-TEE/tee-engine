@@ -79,9 +79,9 @@ TEE_Result load_ta(const TEE_UUID id, struct ta_interface **callbacks)
 	memset((void *)&tmp_cb, 0, sizeof(struct ta_interface));
 	*callbacks = NULL;
 
-	if ((ret = get_library(id, path, MAX_PATH))) {
+	ret = get_library(id, path, MAX_PATH);
+	if (ret)
 		return ret;
-	}
 
 	dlerror();
 
@@ -96,31 +96,36 @@ TEE_Result load_ta(const TEE_UUID id, struct ta_interface **callbacks)
 	 */
 
 	*(void **)(&tmp_cb.create) = dlsym(tmp_cb.library, "TA_CreateEntryPoint");
-	if ((err = dlerror()) != NULL || !tmp_cb.create) {
+	err = dlerror();
+	if (err != NULL || !tmp_cb.create) {
 		syslog(LOG_DEBUG, "Failed to find CreateEntryPoint : %s : %s", path, err);
 		goto err_cleanup;
 	}
 
 	*(void **)(&tmp_cb.destroy) = dlsym(tmp_cb.library, "TA_DestroyEntryPoint");
-	if ((err = dlerror()) != NULL || !tmp_cb.destroy) {
+	err = dlerror();
+	if (err != NULL || !tmp_cb.destroy) {
 		syslog(LOG_DEBUG, "Failed to find DestroyEntryPoint : %s : %s", path, err);
 		goto err_cleanup;
 	}
 
 	*(void **)(&tmp_cb.open_session) = dlsym(tmp_cb.library, "TA_OpenSessionEntryPoint");
-	if ((err = dlerror()) != NULL || !tmp_cb.open_session) {
+	err = dlerror();
+	if (err != NULL || !tmp_cb.open_session) {
 		syslog(LOG_DEBUG, "Failed to find OpenSessionEntryPoint : %s : %s", path, err);
 		goto err_cleanup;
 	}
 
 	*(void **)(&tmp_cb.invoke_cmd) = dlsym(tmp_cb.library, "TA_InvokeCommandEntryPoint");
-	if ((err = dlerror()) != NULL || !tmp_cb.invoke_cmd) {
+	err = dlerror();
+	if (err != NULL || !tmp_cb.invoke_cmd) {
 		syslog(LOG_DEBUG, "Failed to find InvokeCommandEntryPoint : %s : %s", path, err);
 		goto err_cleanup;
 	}
 
 	*(void **)(&tmp_cb.close_session) = dlsym(tmp_cb.library, "TA_CloseSessionEntryPoint");
-	if ((err = dlerror()) != NULL || !tmp_cb.close_session) {
+	err = dlerror();
+	if (err != NULL || !tmp_cb.close_session) {
 		syslog(LOG_DEBUG, "Failed to find CloseSession Entry point : %s : %s", path, err);
 		goto err_cleanup;
 	}
@@ -154,9 +159,8 @@ void unload_ta(struct ta_interface *callbacks)
 	/* Call the TA cleanup routine */
 	callbacks->destroy();
 
-	if (dlclose(callbacks->library)) {
+	if (dlclose(callbacks->library))
 		syslog(LOG_DEBUG, "Error while closing library : %s", dlerror());
-	}
 
 	TEE_Free(callbacks);
 
