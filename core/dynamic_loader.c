@@ -15,10 +15,12 @@
 *****************************************************************************/
 
 #include "dynamic_loader.h"
+#include "conf_parser.h"
 
 #include <syslog.h>
 #include <dlfcn.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define MAX_PATH 255
 
@@ -30,17 +32,41 @@
  * \param size The available space in lib_path
  * \return TEE_SUCCESS on success another value on failure.
  */
-static TEE_Result get_library(const TEE_UUID id, char *lib_path, uint32_t size)
+static TEE_Result get_library(const TEE_UUID id, char *lib_path, size_t size)
 {
-	//TODO this whole function :)
-	char *path = "/home/brian/code/ccpp/project-build/qtc_Desktop-debug/libtest_applet.so";
+	/* TODO: most of this function */
+	char *ta_path;
+	char final[MAX_PATH];
+	size_t len;
+	TEE_Result ret;
+	char *dummy_lib = "libtest_applet.so";
 
-	if (!lib_path)
+	if (!lib_path || size > MAX_PATH)
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	(void)id;
-	memcpy(lib_path, path, size);
-	return TEE_SUCCESS;
+
+	ta_path = config_parser_get_value("ta_dir_path");
+	len = strlen(ta_path);
+	if (len >= size) {
+		ret = TEE_ERROR_SHORT_BUFFER;
+		goto end;
+	}
+
+	/* Pad final with NULLs */
+	strncpy(final, ta_path, size);
+
+	if (strlen(dummy_lib) >= (size - len)) {
+		ret = TEE_ERROR_SHORT_BUFFER;
+		goto end;
+	}
+
+	strncat(final, dummy_lib, size - len);
+	memcpy(lib_path, final, size);
+
+end:
+	free(ta_path);
+	return ret;
 }
 
 TEE_Result load_ta(const TEE_UUID id, struct ta_interface **callbacks)

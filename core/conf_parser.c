@@ -22,6 +22,18 @@
 
 #include "conf_parser.h"
 
+#ifndef CONF_FILE_WITH_PATH /* Allow this to be sepecified on the compile line -D */
+#define CONF_FILE_WITH_PATH "/etc/opentee.conf"
+#endif
+
+static const size_t BLOCK_SIZE = 256;
+
+/*!
+ * \brief first_non_whitspace
+ * Allocate first non whitespace character location from the beginning
+ * \param line is handled line
+ * \return a pointer to first non whitespace character in line
+ */
 static char *first_non_whitespace(char *line)
 {
 	size_t k = 0;
@@ -33,6 +45,10 @@ static char *first_non_whitespace(char *line)
 	return &line[k];
 }
 
+/*!
+ * \brief last_non_whitespace
+ * Opposite to first_non_whitespace. \sa first_non_whitespace
+ */
 static char *last_non_whitespace(char *line)
 {
 	size_t k = 0;
@@ -44,6 +60,12 @@ static char *last_non_whitespace(char *line)
 	return &line[k];
 }
 
+/*!
+ * \brief strip_whitespace
+ * Removes whitespaces from the beginning and at the end. Does not actually
+ * remove.
+ * \param line is handled line
+ */
 static void strip_whitespace(char *line)
 {
 	char *end = last_non_whitespace(line) + 1;
@@ -56,6 +78,16 @@ static void strip_whitespace(char *line)
 	memmove(line, begin, len);
 }
 
+/*!
+ * \brief parse_value
+ * Function is retrieving a value from a line. At the beginning and at the
+ * ind whitespace is removed.
+ * \param line that is containing a key-value pair
+ * \return In case of success returning a pointer to value. Memory for value
+ * is allocated by malloc and it is the responsibility of a user to free
+ * memory. Value is newline terminated. In case of failure function will
+ * return NULL and no memory is malloced.
+ */
 static char *parse_value(const char *line)
 {
 	char *buf = (char *) calloc(0, sizeof(char) * BLOCK_SIZE);
@@ -113,7 +145,36 @@ static char *parse_value(const char *line)
 	return buf;
 }
 
-char *get_value(const char *key)
+/*!
+ * \brief fill_ta_dir_path
+ * Fill a TA directory path to Emulator config struct
+ * \param conf Struct that contains a member which is populated
+ * \return 1 On success, 0 On failure
+ */
+static int fill_ta_dir_path(struct emulator_config *conf)
+{
+	char *value = config_parser_get_value("ta_dir_path");
+	if (value == NULL)
+		return -1;
+
+	if (strlen(value) >= MAX_TA_DIR_PATH) {
+		free(value);
+		return -1;
+	}
+
+	strncpy(conf->ta_dir_path, value, strlen(value));
+	free(value);
+	return 0;
+}
+
+int config_parser_get_config(struct emulator_config *conf)
+{
+	if (fill_ta_dir_path(conf) == -1)
+		return -1;
+	return 0;
+}
+
+char *config_parser_get_value(const char *key)
 {
 	FILE *init_file = fopen(CONF_FILE_WITH_PATH, "r");
 	char *value = NULL;
@@ -159,7 +220,6 @@ char *get_value(const char *key)
 
 		if (strstr(key_line, key)) {
 			value = parse_value(line);
-
 			free(key_line);
 			goto err3;
 		}
@@ -176,27 +236,4 @@ err2:
 	fclose(init_file);
 err1:
 	return value;
-}
-
-static int fill_ta_dir_path(struct emulator_config *conf)
-{
-	char *value = get_value("ta_dir_path");
-	if (value == NULL)
-		return -1;
-
-	if (strlen(value) >= MAX_TA_DIR_PATH) {
-		free(value);
-		return -1;
-	}
-
-	strncpy(conf->ta_dir_path, value, strlen(value));
-	free(value);
-	return 0;
-}
-
-int get_config(struct emulator_config *conf)
-{
-	if (fill_ta_dir_path(conf) == -1)
-		return -1;
-	return 0;
 }
