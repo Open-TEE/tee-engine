@@ -25,9 +25,13 @@
 #include <sys/wait.h>
 #include <syslog.h>
 #include <dlfcn.h>
+#include <sys/prctl.h>
+#include <string.h>
 
 #include "subprocess.h"
 #include "conf_parser.h"
+
+#define MAX_PR_NAME 16
 
 /*!
  * \brief restart
@@ -166,14 +170,16 @@ int load_lib(char *path, main_loop_cb *callback)
 
 int main(int argc, char **argv)
 {
-	(void)argc;
-	(void)argv;
 	struct sigaction sig_act;
 	int sockfd[2];
 	struct emulator_config *conf;
 	char *lib_to_load = NULL;
 	int comm_sock_fd;
 	main_loop_cb main_loop;
+	char proc_name[MAX_PR_NAME];
+	int cmd_name_len = strnlen(argv[0], MAX_PR_NAME);
+
+	argc = argc;
 
 	sigemptyset(&sig_act.sa_mask);
 	sig_act.sa_flags = 0;
@@ -210,17 +216,25 @@ int main(int argc, char **argv)
 		close(sockfd[0]);
 		comm_sock_fd = sockfd[1];
 		lib_to_load = conf->subprocess_launcher;
+		strncpy(proc_name, "tee_launcher", MAX_PR_NAME);
 		break;
 	default:
 		/* parent process will become the manager */
 		close(sockfd[1]);
 		comm_sock_fd = sockfd[0];
 		lib_to_load = conf->subprocess_manager;
+		strncpy(proc_name, "tee_manager", MAX_PR_NAME);
 		break;
 	}
 
+	/* set the name of our process it appears that we have to set
+	 * both process and cmdline names
+	 */
+	prctl(PR_SET_NAME, (unsigned long)proc_name);
+	strncpy(argv[0], proc_name, cmd_name_len);
+
 	/* open syslog for writing */
-	openlog(NULL, 0, LOG_USER);
+	openlog(proc_name, 0, LOG_USER);
 
 	if (load_lib(lib_to_load, &main_loop) == -1)
 		exit(1);
