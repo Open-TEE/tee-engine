@@ -21,5 +21,6 @@
 #include "../internal_api/tee_memory.h"
 #include "../internal_api/tee_ta_interface.h"
 #include "../internal_api/time_api.h"
+#include "../internal_api/storage_data_key_api.h"
 
 #endif
