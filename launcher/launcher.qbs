@@ -13,5 +13,6 @@ DynamicLibrary {
 
     cpp.dynamicLibraries: ["dl"]
 
-    files: ["launcher_mainloop.c", "dynamic_loader.c", "dynamic_loader.h"]
+    files: ["launcher_mainloop.c", "dynamic_loader.c", "dynamic_loader.h",
+            "ta_process.h", "ta_process.c"]
 }

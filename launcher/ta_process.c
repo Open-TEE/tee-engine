@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Brian McGillion.                                      **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,49 +14,26 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include "context_child.h"
 #include <syslog.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
+#include <stdlib.h>
 
-#include "tee_internal_api.h"
+#include "ta_process.h"
+#include "dynamic_loader.h"
 
-void context_handler_loop(int childfd)
+int ta_process_loop(const char *lib_path, int sockfd)
 {
-	childfd = childfd;
-/*
-	ssize_t n;
-	char *buff;
-	TEE_Result ret;
-	struct ta_interface *inf = NULL;
-	TEE_UUID dummy_uuid;
+	TEEC_Result ret;
+	struct ta_interface *interface;
 
-	//sleep(15);
-
-	buff = TEE_Malloc(1024, 0);
-	if (!buff) {
-		syslog(LOG_DEBUG, "Malloc failed");
-		return;
+	ret = load_ta(lib_path, &interface);
+	if (ret != TEE_SUCCESS) {
+		/* TODO write the error to the sockfd so the manager is notified and can notify
+		 * the client application.
+		 */
+		syslog(LOG_ERR, "Failed to load the TA");
+		exit(1);
 	}
 
-	ret = load_ta(dummy_uuid, &inf);
-	if (ret != TEE_SUCCESS)
-		goto end;
-
-	inf->create();
-	inf->close_session(NULL);
-	unload_ta(inf);
-
-	sync();
-
-	while ((n = (read(childfd, buff, 1024 - 1))) > 0) {
-		buff[n] = '\0';
-		syslog(LOG_DEBUG, "%s", buff);
-	}
-
-end:
-	TEE_Free(buff);
-	return;
-	*/
+	/* Should never reach here */
+	return -1;
 }

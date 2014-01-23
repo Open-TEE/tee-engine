@@ -20,68 +20,14 @@
 #include <syslog.h>
 #include <dlfcn.h>
 #include <string.h>
-#include <stdlib.h>
 
-#define MAX_PATH 255
-
-/*!
- * \brief get_library
- * Based on the UUID of the TA try and find the library where it is implemented
- * \param id The ID of the TA
- * \param lib_path The path where the library is located on success
- * \param size The available space in lib_path
- * \return TEE_SUCCESS on success another value on failure.
- */
-static TEE_Result get_library(const TEE_UUID id, char *lib_path, size_t size)
-{
-	/* TODO: most of this function */
-	char *ta_path;
-	char final[MAX_PATH];
-	size_t len;
-	TEE_Result ret;
-	char *dummy_lib = "libtest_applet.so";
-
-	if (!lib_path || size > MAX_PATH)
-		return TEE_ERROR_BAD_PARAMETERS;
-
-	(void)id;
-
-	ta_path = config_parser_get_value("ta_dir_path");
-	len = strlen(ta_path);
-	if (len >= size) {
-		ret = TEE_ERROR_SHORT_BUFFER;
-		goto end;
-	}
-
-	/* Pad final with NULLs */
-	strncpy(final, ta_path, size);
-
-	if (strlen(dummy_lib) >= (size - len)) {
-		ret = TEE_ERROR_SHORT_BUFFER;
-		goto end;
-	}
-
-	strncat(final, dummy_lib, size - len);
-	memcpy(lib_path, final, size);
-
-end:
-	free(ta_path);
-	return ret;
-}
-
-TEE_Result load_ta(const TEE_UUID id, struct ta_interface **callbacks)
+TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 {
 	struct ta_interface tmp_cb;
-	char path[MAX_PATH];
-	TEE_Result ret;
 	char *err = NULL;
 
 	memset((void *)&tmp_cb, 0, sizeof(struct ta_interface));
 	*callbacks = NULL;
-
-	ret = get_library(id, path, MAX_PATH);
-	if (ret)
-		return ret;
 
 	dlerror();
 

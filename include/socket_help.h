@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Intel Corperation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,16 +14,40 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_CONTEXT_CHILD_H__
-#define __TEE_CONTEXT_CHILD_H__
+#ifndef __TEE_SOCKET_HELP_H__
+#define __TEE_SOCKET_HELP_H__
+
+#define MAX_TA_PATH_NAME 255
+
+#include <sys/types.h>
+#include <sys/socket.h>
+
+struct ta_path {
+	char path[MAX_TA_PATH_NAME];
+	int len;
+};
+
+struct control_fd {
+	struct cmsghdr header;
+	int fd;
+};
 
 /*!
- * \brief context_handler_loop
- * This is the entry point for the client context that is created by the InitializeContext call
- * in the client, the rest of the context duration will be handled from here, including the
- * creation of any subsequent sessions
- * \param client_sock_fd An initialized socket connection to the Client
+ * \brief send_fd
+ * Send a file descriptor over a socket to another process
+ * \param sockfd The socket to use for transport
+ * \param fd_to_send The fd to be sent
+ * \return 0 on success, -1 othersie
  */
-void context_handler_loop(int client_sock_fd);
+int send_fd(int sockfd, int fd_to_send);
+
+/*!
+ * \brief recv_fd
+ * receive a file descriptior from another process over a socket
+ * \param sockfd The socket connected to the other process
+ * \param recvd_fd The fd to receive
+ * \return 0 on success, -1 otherwise
+ */
+int recv_fd(int sockfd, int *recvd_fd);
 
 #endif

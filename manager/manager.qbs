@@ -7,7 +7,7 @@ DynamicLibrary {
 
     cpp.includePaths: ["../include"]
 
-    files: ["../include/subprocess.h", "mainloop.c", "context_child.c", "context_child.h",
+    files: ["mainloop.c",
             "process_definition.h", "epoll_wrapper.c", "epoll_wrapper.h",
             "process_manager.c", "process_manager.h"
     ]
