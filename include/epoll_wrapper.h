@@ -20,6 +20,8 @@
 #include <sys/epoll.h>
 #include <stdint.h>
 
+#define MAX_CURR_EVENTS 5
+
 /*!
  * \brief init_epoll
  * Create an epoll instance that can be monitored

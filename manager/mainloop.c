@@ -27,7 +27,6 @@
 #include "epoll_wrapper.h"
 #include "process_manager.h"
 
-#define MAX_CURR_EVENTS 5
 #define MAX_ERR_STRING 100
 
 /*!
