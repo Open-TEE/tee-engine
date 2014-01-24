@@ -11,8 +11,8 @@ DynamicLibrary {
         cpp.includePaths: ["../include"]
     }
 
-    cpp.dynamicLibraries: ["dl"]
+    cpp.dynamicLibraries: ["dl", "pthread", "rt"]
 
     files: ["launcher_mainloop.c", "dynamic_loader.c", "dynamic_loader.h",
-            "ta_process.h", "ta_process.c"]
+            "ta_process.h", "ta_process.c", "utils.h", "utils.c"]
 }

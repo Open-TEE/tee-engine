@@ -27,7 +27,7 @@
 int lib_main_loop(sig_status_cb check_signal_status, int manager_sock)
 {
 	struct ta_path lib_path;
-	ssize_t to_read = sizeof(struct ta_path);
+	const ssize_t to_read = sizeof(struct ta_path);
 	ssize_t num_r;
 	int sockfd[2];
 
@@ -35,16 +35,15 @@ int lib_main_loop(sig_status_cb check_signal_status, int manager_sock)
 	 * When it receives a command from the manager it creates a new socket pair
 	 * and forks off a child process.  this child process will become a TA.
 	 * Once the child process is forked off, the launcher sends one end
-	 * of the newly created socket pair to the back to the manager so it can
+	 * of the newly created socket pair back to the manager so it can
 	 * communicate directly with the TA. The launcher then returns to wait until
 	 * it is required to start the next TA.
 	 *
-	 * In the child process the launcher loads the TA library and waits for an
-	 * open_session request to arrive from the manager so it cna complete its
+	 * In the child process the launcher loads the TA as a library and waits for
+	 * an open_session request to arrive from the manager so it cna complete its
 	 * initialization
 	 */
 	for (;;) {
-
 		num_r = recv(manager_sock, &lib_path, to_read, 0);
 		if (num_r == -1) {
 			if (errno == EINTR) {
@@ -66,7 +65,7 @@ int lib_main_loop(sig_status_cb check_signal_status, int manager_sock)
 			continue;
 		}
 
-		/* create a socket pair so the manager and launcher can communicate */
+		/* create a socket pair so the manager and TA can communicate */
 		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1) {
 			syslog(LOG_ERR, "failed to create a socket pair : %s", strerror(errno));
 			continue;

@@ -8,7 +8,6 @@ DynamicLibrary {
     cpp.includePaths: ["../include"]
 
     files: ["mainloop.c",
-            "process_definition.h", "epoll_wrapper.c", "epoll_wrapper.h",
-            "process_manager.c", "process_manager.h"
+            "process_definition.h", "process_manager.c", "process_manager.h"
     ]
 }

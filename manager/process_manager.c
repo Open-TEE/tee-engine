@@ -99,7 +99,7 @@ void pm_handle_connection(uint32_t events, void *proc_ptr)
 
 	} else if (events & EPOLLIN) {
 		/* We have revceived an input event from a client so we must determine
-		 * the session context, if one exists, and pass the message to teh other end of that
+		 * the session context, if one exists, and pass the message to the other end of that
 		 * session
 		 */
 		session_manager(ptr);

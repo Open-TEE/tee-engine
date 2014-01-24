@@ -59,6 +59,16 @@ struct list_head {
 	((type *)(void *)((char *)(ptr) - (unsigned long)(&((type *)0)->(element))))
 
 /*!
+ * \brief Get the first element for a list (assumes NON_EMPTY list)
+ * \param ptr The position of the list_head entry in the data structure
+ * \param type The type of structure that the struct list_head is embedded in
+ * \param element The name of the struct list_head entry in the data structure
+ * \returns A pointer to the data structure
+ */
+#define LIST_FIRST_ENTRY(ptr, type, element) \
+	 LIST_ENTRY((ptr)->next, type, element)
+
+/*!
  *  \brief Iterate over a list
  *  \param pos a struct list_head entry point to the current entry
  *  \param head The main list to iterating over
@@ -129,5 +139,15 @@ void list_move_after(struct list_head *from, struct list_head *to);
  * \param to The location to move to
  */
 void list_move_before(struct list_head *from, struct list_head *to);
+
+/*!
+ * \brief Get the first element for a list or NULL if the list is empty
+ * \param ptr The position of the list_head entry in the data structure
+ * \param type The type of structure that the struct list_head is embedded in
+ * \param element The name of the struct list_head entry in the data structure
+ * \returns A pointer to the data structure if it exists
+ */
+#define LIST_FIRST_ENTRY_OR_NULL(ptr, type, element) \
+	(!list_empty(ptr) ? LIST_FIRST_ENTRY(ptr, type, element) : NULL)
 
 #endif

@@ -6,5 +6,7 @@ CppApplication {
 
     Depends { name: "InternalApi" }
 
+    cpp.dynamicLibraries: ["ssl", "crypto"]
+
     files: ["storage_test.c"]
 }

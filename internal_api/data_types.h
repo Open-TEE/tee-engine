@@ -102,7 +102,6 @@ typedef union {
 	} value;
 } TEE_Param;
 
-
 typedef struct __TEE_TASessionHandle* TEE_TASessionHandle;
 
 typedef struct __TEE_PropSetHandle* TEE_PropSetHandle;
