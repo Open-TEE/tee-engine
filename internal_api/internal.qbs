@@ -3,6 +3,7 @@ import qbs
 DynamicLibrary {
     name: "InternalApi"
     Depends { name: "cpp" }
+    Depends { name: "OpenSSL" }
 
     Export {
         Depends { name: "cpp" }
@@ -13,4 +14,3 @@ DynamicLibrary {
         "tee_memory.h", "tee_memory.c", "time_api.h", "time_api.c"
     ]
 }
-
