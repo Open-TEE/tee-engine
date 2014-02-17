@@ -1,4 +1,4 @@
-/*****************************************************************************
+ /*****************************************************************************
 ** Copyright (C) 2013 ICRI.						    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
@@ -14,11 +14,14 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 #include <openssl/rand.h>
+#include <openssl/rsa.h>
 
+#include <stdio.h>
 #include <syslog.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "storage_data_key_api.h"
 #include "tee_memory.h"
@@ -27,151 +30,188 @@ struct __TEE_ObjectHandle {
 	TEE_ObjectInfo *objectInfo;
 	TEE_Attribute *attrs;
 	uint32_t attrs_count;
-	void *public_key;
-	void *private_ley;
 };
 
 
 /*
- * ## TEMP, wil be removed. Function intorduction ##
+ * ## TEMP ##
  */
+static bool multiple_of_8(uint32_t number); /* ok */
+static bool multiple_of_64(uint32_t number); /* ok */
+static bool is_usage_extractable(TEE_ObjectHandle object); /* ok */
+static bool is_persistent_obj(TEE_ObjectHandle object); /* ok */
 static bool is_value_attribute(uint32_t attr_ID); /* ok */
-static bool valid_attrID(int32_t attributeID); /* ok */
+static bool is_public_attribute(uint32_t attr_ID); /* ok */
+static bool is_initialized(TEE_ObjectHandle object); /* ok */
+static bool does_arr_contain_attrID(uint32_t ID, TEE_Attribute* attrs, uint32_t attrCount); /* ok */
+static bool does_object_contain_attrID(uint32_t ID, TEE_ObjectHandle object); /* ok */
 static void reset_attrs(TEE_ObjectHandle obj); /* ok */
-static TEE_Result handle_first_10_popu(TEE_ObjectHandle object, TEE_Attribute* attrs, uint32_t attrCount);
-static bool handle_first_10_malloc(TEE_ObjectHandle object, uint32_t len);
-static void free_attrs(TEE_ObjectHandle object);
-static bool is_initialized(uint32_t handleFlags);
-static bool multiple_of_8(uint32_t number);
-static bool multiple_of_64(uint32_t number);
-static bool valid_object_max_size(object_type obj, uint32_t size);
-static int valid_obj_type_and_attr_count(object_type obj);
-static bool gen_key_AES(TEE_ObjectHandle object, uint32_t keySize, TEE_Attribute* params, uint32_t paramCount);
-static bool is_persistent_obj(TEE_ObjectHandle object);
+static void free_attrs(TEE_ObjectHandle object); /* ok */
+static bool valid_object_max_size(object_type obj, uint32_t size); /* ok */
+static int valid_obj_type_and_attr_count(object_type obj); /* ok */
+static int get_attr_index(TEE_ObjectHandle object, uint32_t attributeID); /* ok */
+static void populate_from_attrs_object(TEE_ObjectHandle object, TEE_Attribute* attrs, uint32_t attrCount); /* ok */
+static bool gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size);
+static bool gen_10_key(TEE_ObjectHandle object, uint32_t keySize);
+
+
 
 /*
  * ## Non internal API functions ##
  */
+
+static bool does_arr_contain_attrID(uint32_t ID, TEE_Attribute* attrs, uint32_t attrCount)
+{
+	size_t i;
+
+	for (i = 0; i < attrCount; ++i) {
+		if (ID == attrs[i].attributeID)
+			return true;
+	}
+
+	return false;
+}
+
+static bool does_object_contain_attrID(uint32_t ID, TEE_ObjectHandle object)
+{
+	size_t i;
+
+	for (i = 0; i < object->attrs_count; ++i) {
+		if (object->attrs[i].attributeID == ID)
+			return true;
+	}
+
+	return false;
+}
+
+static void populate_from_attrs_object(TEE_ObjectHandle object, TEE_Attribute* attrs, uint32_t attrCount)
+{
+	size_t i, obj_index = 0;
+
+	for (i = 0; i < attrCount; ++i) {
+		if (does_object_contain_attrID(attrs[i].attributeID, object))
+			continue;
+
+		/* Add attribute */
+		if (obj_index > object->attrs_count)
+			return;
+
+		memcpy(&object->attrs[obj_index], &attrs[i], sizeof(TEE_Attribute));
+
+		if (!is_value_attribute(attrs[i].attributeID)) {
+			if (object->objectInfo->maxObjectSize >= attrs[i].content.ref.length)
+				memcpy(object->attrs[obj_index].content.ref.buffer, attrs[i].content.ref.buffer, attrs[i].content.ref.length);
+			else
+				memcpy(object->attrs[obj_index].content.ref.buffer, attrs[i].content.ref.buffer, object->objectInfo->maxObjectSize);
+		}
+
+		++obj_index;
+	}
+}
+
+static bool is_usage_extractable(TEE_ObjectHandle object)
+{
+	return (object->objectInfo->objectUsage ^ TEE_USAGE_EXTRACTABLE);
+}
 
 static bool is_persistent_obj(TEE_ObjectHandle object)
 {
 	return (object->objectInfo->handleFlags & TEE_HANDLE_FLAG_PERSISTENT);
 }
 
-static bool gen_10_key(TEE_ObjectHandle object, uint32_t keySize, TEE_Attribute* params, uint32_t paramCount)
+static bool is_initialized(TEE_ObjectHandle object)
 {
-	size_t i;
-	bool found_ATTR_SECRET_VALUE = false;
-
-	/* Maybe not first */
-	for (i = 0; i < paramCount; ++i) {
-		if (params[i].attributeID == TEE_ATTR_SECRET_VALUE) {
-			found_ATTR_SECRET_VALUE = true;
-			object->attrs->content.ref.length = object->attrs[i].content.ref.length;
-			object->attrs->attributeID = TEE_ATTR_SECRET_VALUE;
-			memcpy(&object->attrs[0], &params[i], sizeof(TEE_Attribute) + object->attrs->content.ref.length);
-			return true;
-		}
-	}
-
-	unsigned char buf[12];
-		unsigned char* buf_ptr = buf;
-		RAND_bytes(buf, 12);
-/*	if (!RAND_bytes(object->attrs->content.ref.buffer, object->objectInfo->maxObjectSize / 8))
-		return false;
-*/
-	return true;
+	return (object->objectInfo->handleFlags & TEE_HANDLE_FLAG_INITIALIZED);
 }
 
 static bool is_value_attribute(uint32_t attr_ID)
 {
-	/* if bit 29 is not 1 == buffer attribute */
-	return (attr_ID & (1 << 29));
+	/* Bit [29]:
+	 * 0: buffer attribute
+	 * 1: value attribute
+	 */
+	return (attr_ID & TEE_ATTR_FLAG_VALUE);
 }
 
-static bool valid_attrID(int32_t attributeID)
+static bool is_public_attribute(uint32_t attr_ID)
 {
-	switch(attributeID) {
-	case TEE_ATTR_SECRET_VALUE:
-	case TEE_ATTR_RSA_MODULUS:
-	case TEE_ATTR_RSA_PUBLIC_EXPONENT:
-	case TEE_ATTR_RSA_PRIVATE_EXPONENT:
-	case TEE_ATTR_RSA_PRIME1:
-	case TEE_ATTR_RSA_PRIME2:
-	case TEE_ATTR_RSA_EXPONENT1:
-	case TEE_ATTR_RSA_EXPONENT2:
-	case TEE_ATTR_RSA_COEFFICIENT:
-	case TEE_ATTR_DSA_PRIME:
-	case TEE_ATTR_DSA_SUBPRIME:
-	case TEE_ATTR_DSA_BASE:
-	case TEE_ATTR_DSA_PUBLIC_VALUE:
-	case TEE_ATTR_DSA_PRIVATE_VALUE:
-	case TEE_ATTR_DH_PRIME:
-	case TEE_ATTR_DH_SUBPRIME:
-	case TEE_ATTR_DH_BASE:
-	case TEE_ATTR_DH_X_BITS:
-	case TEE_ATTR_DH_PUBLIC_VALUE:
-	case TEE_ATTR_DH_PRIVATE_VALUE:
-	case TEE_ATTR_RSA_OAEP_LABEL:
-	case TEE_ATTR_RSA_PSS_SALT_LENGTH:
-		return true;
-		break;
+	/* Bit [28]:
+	 * 0: protected attribute
+	 * 1: public attribute
+	 */
+	return (attr_ID & TEE_ATTR_FLAG_VALUE);
+}
 
-	default:
+static bool gen_10_key(TEE_ObjectHandle object, uint32_t keySize)
+{
+	syslog(LOG_DEBUG, "Generating first 10\n");
+
+	if (!RAND_bytes(object->attrs->content.ref.buffer, keySize/8))
 		return false;
-	}
+
+	object->attrs->attributeID = TEE_ATTR_SECRET_VALUE;
+	object->attrs->content.ref.length = keySize / 8;
+
+	syslog(LOG_DEBUG, "First 10 generated\n");
+
+	return true;
+}
+
+static bool gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size)
+{
+	syslog(LOG_DEBUG, "Generating RSA keypair\n");
+	obj = obj;
+	key_size = key_size;
+	/*
+	obj = obj;
+	RSA *rsa_key = RSA_generate_key(key_size, 17, NULL, NULL);
+	if (rsa_key == NULL)
+		return false;
+
+	if (!RSA_check_key(rsa_key))
+		return false;
+
+	RSA_free(rsa_key);
+
+	syslog(LOG_DEBUG, "RSA keypair generated\n");
+	*/
+	return true;
+}
+
+static bool multiple_of_8(uint32_t number)
+{
+	return !(number % 8) ? true : false;
+}
+
+static bool multiple_of_64(uint32_t number)
+{
+	return !(number % 64) ? true : false;
 }
 
 static void reset_attrs(TEE_ObjectHandle obj)
 {
-	size_t i, len;
+	size_t i;
 
 	for (i = 0; i < obj->attrs_count; ++i) {
-		len = sizeof(TEE_Attribute);
 		if (!is_value_attribute(obj->attrs[i].attributeID)) {
-			len += obj->attrs[i].content.ref.length;
+			memset(obj->attrs[i].content.ref.buffer, 0, obj->attrs[i].content.ref.length);
 		}
 
-		memset(&obj->attrs[i], 0, len);
+		memset(&obj->attrs[i], 0, sizeof(TEE_Attribute));
 	}
 }
 
-/*!
- * \brief handle_first_10
- * Function handles following attributes initilization to objec:
- * TEE_TYPE_DES, TEE_TYPE_DES3, TEE_TYPE_HMAC_MD5, TEE_TYPE_HMAC_SHA1, TEE_TYPE_HMAC_SHA224,
- * TEE_TYPE_HMAC_SHA256, TEE_TYPE_HMAC_SHA384, TEE_TYPE_HMAC_SHA512, TEE_TYPE_GENERIC_SECRET
- * \param object
- * \param attrs
- * \param attrCount
- * \return
- */
-static TEE_Result handle_first_10_popu(TEE_ObjectHandle object, TEE_Attribute* attrs, uint32_t attrCount)
-{	
-	size_t i;
-	size_t buf_len;
-
-	/* For loop is need, because there can be more than one value and wanted is not first */
-	for (i = 0; i < attrCount; ++i) {
-		if (attrs[i].attributeID == TEE_ATTR_SECRET_VALUE) {
-			buf_len = object->attrs[i].content.ref.length;
-			object->attrs->attributeID = TEE_ATTR_SECRET_VALUE;
-			memcpy(&object->attrs[0], &attrs[i], sizeof(TEE_Attribute) + buf_len);
-			return TEE_SUCCESS;
-		}
-	}
-
-	syslog(LOG_ERR, "Provide all necessery parameter(s)\n");
-	return TEE_ERROR_BAD_PARAMETERS;
-}
-
-static bool handle_first_10_malloc(TEE_ObjectHandle object, uint32_t len)
+static bool malloc_for_attrs(TEE_ObjectHandle object, uint32_t max_len, uint32_t attrs_count)
 {
-	object->attrs->content.ref.buffer = TEE_Malloc((len + 8) / 8, 0);
-	if (object->attrs->content.ref.buffer == NULL)
-		return false;
+	size_t i;
 
-	object->attrs->content.ref.length = (len + 8) / 8; /* malloc space or should be maxObjectSize? */
+	for (i = 0; i < attrs_count; ++i) {
+		object->attrs[i].content.ref.buffer = TEE_Malloc((max_len + 8) / 8, 0);
+		if (object->attrs[i].content.ref.buffer == NULL)
+			return false;
+
+		object->attrs[i].content.ref.length = (max_len + 8) / 8; /* malloc space or should be maxObjectSize? */
+	}
 
 	return true;
 }
@@ -187,28 +227,9 @@ static void free_attrs(TEE_ObjectHandle object)
 			continue;
 		}
 
-		if (object->attrs[i].content.ref.buffer != NULL) {
-			object->attrs[i].content.ref.length = 0;
-			free(object->attrs[i].content.ref.buffer);
-		}
+		object->attrs[i].content.ref.length = 0;
+		free(object->attrs[i].content.ref.buffer);
 	}
-}
-
-static bool is_initialized(uint32_t handleFlags)
-{
-	/*chnge to (handleFlags & TEE_HANDLE_FLAG_INITIALIZED) */
-	return (handleFlags & TEE_HANDLE_FLAG_INITIALIZED);
-}
-
-static bool multiple_of_8(uint32_t number)
-{
-	/* Keeping the ? : -operation */
-	return !(number % 8) ? true : false;
-}
-
-static bool multiple_of_64(uint32_t number)
-{
-	return !(number % 64) ? true : false;
 }
 
 static bool valid_object_max_size(object_type obj, uint32_t size)
@@ -329,9 +350,143 @@ static int valid_obj_type_and_attr_count(object_type obj)
 	}
 }
 
+static int get_attr_index(TEE_ObjectHandle object, uint32_t attributeID)
+{
+	size_t i;
+
+	for (i = 0; i < object->attrs_count; ++i) {
+		if (object->attrs[i].attributeID == attributeID)
+			return i;
+	}
+
+	return -1;
+}
+
+
+
 /*
- * ## Internal API functions
+ * ## Internal API functions ##
  */
+
+void TEE_GetObjectInfo(TEE_ObjectHandle object, TEE_ObjectInfo* objectInfo)
+{
+	if (object == NULL || objectInfo == NULL)
+		return;
+
+	memcpy(objectInfo, object->objectInfo, sizeof(objectInfo));
+}
+
+void TEE_RestrictObjectUsage(TEE_ObjectHandle object, uint32_t objectUsage)
+{
+	if (object == NULL)
+		return;
+
+	object->objectInfo->objectUsage = objectUsage ^ object->objectInfo->objectUsage;
+}
+
+TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attributeID, void* buffer, size_t* size)
+{
+	int attr_index = -1;
+
+	/* Check input parameters */
+	if (object == NULL) {
+		syslog(LOG_ERR, "Object NULL\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	if (buffer == NULL) {
+		syslog(LOG_ERR, "buffer NULL\n");
+		return TEE_ERROR_SHORT_BUFFER;
+	}
+
+	/* Is this buffer attribute */
+	if (is_value_attribute(attributeID)) {
+		/* panic(); */
+		syslog(LOG_ERR, "Not a buffer attribute\n");
+		return TEE_ERROR_GENERIC;
+	}
+
+	/* Find attribute, if it is found */
+	attr_index = get_attr_index(object, attributeID);
+
+	/* NB! This take a count initialization status! */
+	if (attr_index == -1) {
+		syslog(LOG_ERR, "Attribute not found\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	/* Attribute found*/
+
+	if (!is_public_attribute(attributeID) && !is_usage_extractable(object)) {
+		/* panic(); */
+		syslog(LOG_ERR, "Not axtractable attribute\n");
+		return TEE_ERROR_GENERIC;
+	}
+
+	if (object->attrs[attr_index].content.ref.length > *size) {
+		syslog(LOG_ERR, "Short buffer\n");
+		return TEE_ERROR_SHORT_BUFFER;
+	}
+
+	memcpy(buffer, &object->attrs[attr_index].content.ref.buffer, object->attrs[attr_index].content.ref.length);
+	*size = object->attrs[attr_index].content.ref.length;
+
+	return TEE_SUCCESS;
+}
+
+TEE_Result TEE_GetObjectValueAttribute(TEE_ObjectHandle object, uint32_t attributeID, uint32_t* a, uint32_t* b)
+{
+	int attr_index = -1;
+
+	/* Check input parameters */
+	if (object == NULL) {
+		syslog(LOG_ERR, "Object NULL\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	if (a == NULL && b == NULL) {
+		syslog(LOG_ERR, "A and B NULL\n");
+		return TEE_SUCCESS; /* ? */
+	}
+
+	if (!is_value_attribute(attributeID)) {
+		/* panic(); */
+	}
+
+	/* Find attribute, if it is found */
+
+	attr_index = get_attr_index(object, attributeID);
+
+	/* NB! This take a count initialization status! */
+	if (attr_index == -1) {
+		syslog(LOG_ERR, "Attribute not found\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	/* Attribute found*/
+
+	if (!is_public_attribute(attributeID) && !is_usage_extractable(object)) {
+		/* panic(); */
+		syslog(LOG_ERR, "Not axtractable attribute\n");
+		return TEE_ERROR_GENERIC;
+	}
+
+	if (a != NULL)
+		*a = object->attrs[attr_index].content.value.a;
+
+	if (b != NULL)
+		*b = object->attrs[attr_index].content.value.b;
+
+	return TEE_SUCCESS;
+}
+
+void TEE_CloseObject(TEE_ObjectHandle object)
+{
+	object = object;
+
+	/* TODO */
+}
+
 TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSize, TEE_ObjectHandle* object)
 {
 	TEE_ObjectHandle tmp_handle;
@@ -342,17 +497,18 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 		syslog(LOG_ERR, "Not valid object type\n");
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
-
-	if (valid_object_max_size(objectType, maxObjectSize)) {
+	if (!valid_object_max_size(objectType, maxObjectSize)) {
 		syslog(LOG_ERR, "Not valid object max size\n");
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
 
-	/* Alloc memory for objectHandle and initialize */
-	
-	/* For object handle */
+	/* Alloc memory for objectHandle */
 	tmp_handle = TEE_Malloc(sizeof(struct __TEE_ObjectHandle), 0);
 	if (tmp_handle == NULL)
+		goto out_of_mem_handle;
+
+	tmp_handle->objectInfo = TEE_Malloc(sizeof(TEE_ObjectInfo), 0);
+	if (tmp_handle->objectInfo == NULL)
 		goto out_of_mem_info;
 
 	/* object info */
@@ -363,7 +519,6 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 	tmp_handle->objectInfo->dataSize = 0;
 	tmp_handle->objectInfo->handleFlags = 0x00000000;
 	tmp_handle->attrs_count = attr_count;
-
 
 	/* Alloc memory for attributes (pointers) */
 	tmp_handle->attrs = TEE_Malloc(attr_count * sizeof(TEE_Attribute), 0);
@@ -382,14 +537,31 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 	case TEE_TYPE_HMAC_SHA384:
 	case TEE_TYPE_HMAC_SHA512:
 	case TEE_TYPE_GENERIC_SECRET:
-		if (!handle_first_10_malloc(tmp_handle, tmp_handle->objectInfo->maxObjectSize))
+		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count))
 			goto out_of_mem_attrs;
 		break;
 
-	case TEE_TYPE_RSA_KEYPAIR: /* TODO */
-	case TEE_TYPE_DSA_PUBLIC_KEY: /* TODO */
-	case TEE_TYPE_DSA_KEYPAIR: /* TODO */
-	case TEE_TYPE_DH_KEYPAIR: /* TODO */
+	case TEE_TYPE_RSA_KEYPAIR:
+		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count))
+			goto out_of_mem_attrs;
+		break;
+
+	case TEE_TYPE_DSA_PUBLIC_KEY:
+		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count))
+			goto out_of_mem_attrs;
+		break;
+
+	case TEE_TYPE_DSA_KEYPAIR:
+		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count))
+			goto out_of_mem_attrs;
+		break;
+
+	case TEE_TYPE_DH_KEYPAIR:
+		/* -1, because DH contains one value attribute */
+		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count-1))
+			goto out_of_mem_attrs;
+		break;
+
 	default:
 		break; /* Should never get here */
 	}
@@ -398,28 +570,33 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 
 	return TEE_SUCCESS;
 
-
 out_of_mem_attrs:
 	free(tmp_handle->attrs);
+	free(tmp_handle->objectInfo);
 out_of_mem_attrs_ptr:
 	free(tmp_handle);
+	free(tmp_handle->objectInfo);
 out_of_mem_info:
+	free(tmp_handle);
+out_of_mem_handle:
 	syslog(LOG_ERR, "Out of memory\n");
+
 	return TEE_ERROR_OUT_OF_MEMORY;
 }
 
 void TEE_FreeTransientObject(TEE_ObjectHandle object)
 {
+	/* TODO: add persistant object functionality */
+
 	if (object == NULL)
 		return;
 
-	/* Should check that this is a valid object (opened) */
-
-	free_attrs(object);
-	free(object->attrs);
-	free(object);
-
-	/* KEY CLEAR! */
+	if (!is_persistent_obj(object)) {
+		free_attrs(object);
+		free(object->attrs);
+		free(object->objectInfo);
+		free(object);
+	}
 }
 
 void TEE_ResetTransientObject(TEE_ObjectHandle object)
@@ -440,14 +617,11 @@ void TEE_ResetTransientObject(TEE_ObjectHandle object)
 
 TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* attrs, uint32_t attrCount)
 {
-	TEE_Result return_value;
-
 	if (object == NULL || attrs == NULL)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	/*no fucn*/
-	if (is_initialized(object->objectInfo->handleFlags)) {
-		syslog(LOG_ERR, "Initialized container\n");
+	if (is_initialized(object)) {
+		syslog(LOG_ERR, "Can not populate initialized object\n");
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
@@ -462,22 +636,71 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* a
 	case TEE_TYPE_HMAC_SHA384:
 	case TEE_TYPE_HMAC_SHA512:
 	case TEE_TYPE_GENERIC_SECRET:
-		return_value = handle_first_10_popu(object, attrs, attrCount);
-		break;
+		if (does_arr_contain_attrID(TEE_ATTR_SECRET_VALUE, attrs, attrCount))
+			break;
 
-	case TEE_TYPE_RSA_PUBLIC_KEY: /* TODO */
-	case TEE_TYPE_RSA_KEYPAIR: /* TODO */
-	case TEE_TYPE_DSA_PUBLIC_KEY: /* TODO */
-	case TEE_TYPE_DSA_KEYPAIR: /* TODO */
-	case TEE_TYPE_DH_KEYPAIR: /* TODO */
+	case TEE_TYPE_RSA_PUBLIC_KEY:
+		if (does_arr_contain_attrID(TEE_ATTR_RSA_MODULUS, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount))
+			break;
+
+	case TEE_TYPE_RSA_KEYPAIR:
+		if (does_arr_contain_attrID(TEE_ATTR_RSA_PRIME1, attrs, attrCount) ||
+		    does_arr_contain_attrID(TEE_ATTR_RSA_PRIME2, attrs, attrCount) ||
+		    does_arr_contain_attrID(TEE_ATTR_RSA_EXPONENT1, attrs, attrCount) ||
+		    does_arr_contain_attrID(TEE_ATTR_RSA_EXPONENT2, attrs, attrCount) ||
+		    does_arr_contain_attrID(TEE_ATTR_RSA_COEFFICIENT, attrs, attrCount)) {
+
+			if (does_arr_contain_attrID(TEE_ATTR_RSA_MODULUS, attrs, attrCount) &&
+			    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount) &&
+			    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount) &&
+			    does_arr_contain_attrID(TEE_ATTR_RSA_PRIME1, attrs, attrCount) &&
+			    does_arr_contain_attrID(TEE_ATTR_RSA_PRIME2, attrs, attrCount) &&
+			    does_arr_contain_attrID(TEE_ATTR_RSA_EXPONENT1, attrs, attrCount) &&
+			    does_arr_contain_attrID(TEE_ATTR_RSA_EXPONENT2, attrs, attrCount) &&
+			    does_arr_contain_attrID(TEE_ATTR_RSA_COEFFICIENT, attrs, attrCount))
+				break;
+		}
+
+		else {
+			if (does_arr_contain_attrID(TEE_ATTR_RSA_MODULUS, attrs, attrCount) &&
+			    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount) &&
+			    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount))
+				break;
+		}
+
+	case TEE_TYPE_DSA_PUBLIC_KEY:
+		if (does_arr_contain_attrID(TEE_ATTR_DSA_PRIME, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DSA_SUBPRIME, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DSA_BASE, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DSA_PRIVATE_VALUE, attrs, attrCount))
+			break;
+
+	case TEE_TYPE_DSA_KEYPAIR:
+		if (does_arr_contain_attrID(TEE_ATTR_DSA_PRIME, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DSA_SUBPRIME, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DSA_BASE, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DSA_PRIVATE_VALUE, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DSA_PUBLIC_VALUE, attrs, attrCount))
+			break;
+
+	case TEE_TYPE_DH_KEYPAIR:
+		if (does_arr_contain_attrID(TEE_ATTR_DH_PRIME, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DH_BASE, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DH_PRIVATE_VALUE, attrs, attrCount) &&
+		    does_arr_contain_attrID(TEE_ATTR_DH_PUBLIC_VALUE, attrs, attrCount))
+			break;
+
 	default:
-		return_value = TEE_ERROR_BAD_PARAMETERS;
+		/* Correct response would be PANIC, but not yet implmented*/
+		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
-	/* set initialization flag */
+	populate_from_attrs_object(object, attrs, attrCount);
+
 	object->objectInfo->handleFlags |= TEE_HANDLE_FLAG_INITIALIZED;
 	
-	return return_value;
+	return TEE_SUCCESS;
 }
 
 void TEE_InitRefAttribute(TEE_Attribute* attr, uint32_t attributeID, void* buffer, size_t length)
@@ -510,6 +733,9 @@ void TEE_InitValueAttribute(TEE_Attribute* attr, uint32_t attributeID, uint32_t 
 
 TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attribute* params, uint32_t paramCount)
 {
+	params = params;
+	paramCount = paramCount;
+
 	if (object == NULL)
 		return TEE_ERROR_BAD_PARAMETERS;
 
@@ -519,8 +745,9 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 	}
 
 	/* Should be a transient object and uninit */
-	if (is_persistent_obj(object) || is_initialized(object->objectInfo->handleFlags))
+	if (is_persistent_obj(object) || is_initialized(object)) {
 		/* panic() */
+	}
 
 	switch(object->objectInfo->objectType) {
 	case TEE_TYPE_AES:
@@ -533,13 +760,19 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 	case TEE_TYPE_HMAC_SHA384:
 	case TEE_TYPE_HMAC_SHA512:
 	case TEE_TYPE_GENERIC_SECRET:
-		if (gen_10_key(object, keySize, params, paramCount))
+		if (gen_10_key(object, keySize)) {
 			/* panic() */
+		}
+
 		break;
 
-	case TEE_TYPE_RSA_PUBLIC_KEY:
 	case TEE_TYPE_RSA_KEYPAIR:
-	case TEE_TYPE_DSA_PUBLIC_KEY:
+		if (gen_rsa_keypair(object, keySize)) {
+			/* panic() */
+		}
+
+		break;
+
 	case TEE_TYPE_DSA_KEYPAIR:
 	case TEE_TYPE_DH_KEYPAIR:
 	default:
@@ -548,7 +781,3 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 
 	return TEE_SUCCESS;
 }
-
-
-
-

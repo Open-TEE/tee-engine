@@ -27,7 +27,8 @@ typedef struct {
 	uint32_t attributeID;
 	union {
 		struct {
-			void* buffer; size_t length;
+			void* buffer;
+			size_t length;
 		} ref;
 		struct {
 			uint32_t a, b;
@@ -63,7 +64,7 @@ typedef struct __TEE_ObjectEnumHandle* TEE_ObjectEnumHandle;
  */
 
 /* Object Storage Constants */
-#define TEE_OBJECT_STORAGE_PRIVATE		0x00000001
+#define TEE_STORAGE_PRIVATE			0x00000001
 
 /* Data Flag Constants */
 #define TEE_DATA_FLAG_ACCESS_READ		0x00000001
@@ -104,6 +105,49 @@ typedef struct __TEE_ObjectEnumHandle* TEE_ObjectEnumHandle;
 
 
 
+/*
+ * ## Generic Object Functions ##
+ */
+
+/*!
+ * \brief TEE_GetObjectInfo
+ * \param object
+ * \param objectInfo
+ */
+void TEE_GetObjectInfo(TEE_ObjectHandle object, TEE_ObjectInfo* objectInfo);
+
+/*!
+ * \brief TEE_RestrictObjectUsage
+ * \param object
+ * \param objectUsage
+ */
+void TEE_RestrictObjectUsage(TEE_ObjectHandle object, uint32_t objectUsage);
+
+/*!
+ * \brief TEE_GetObjectBufferAttribute
+ * \param object
+ * \param attributeID
+ * \param buffer
+ * \param size
+ * \return
+ */
+TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attributeID, void* buffer, size_t* size);
+
+/*!
+ * \brief TEE_GetObjectValueAttribute
+ * \param object
+ * \param attributeID
+ * \param a
+ * \param b
+ * \return
+ */
+TEE_Result TEE_GetObjectValueAttribute(TEE_ObjectHandle object, uint32_t attributeID, uint32_t* a, uint32_t* b);
+
+/*!
+ * \brief TEE_CloseObject
+ * \param object
+ */
+void TEE_CloseObject(TEE_ObjectHandle object);
 
 /*
  * ## Transient Object Functions ##
@@ -175,5 +219,136 @@ void TEE_CopyObjectAttributes(TEE_ObjectHandle destObject, TEE_ObjectHandle srcO
 TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attribute* params, uint32_t paramCount);
 
 
+
+/*
+ * ## Persistent Object Functions ##
+ */
+
+/*!
+ * \brief TEE_OpenPersistentObject
+ * \param storageID
+ * \param objectID
+ * \param objectIDLen
+ * \param flags
+ * \param object
+ * \return
+ */
+TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void* objectID, size_t objectIDLen, uint32_t flags, TEE_ObjectHandle* object);
+
+/*!
+ * \brief TEE_CreatePersistentObject
+ * \param storageID
+ * \param objectID
+ * \param objectIDLen
+ * \param flags
+ * \param attributes
+ * \param initialData
+ * \param initialDataLen
+ * \param object
+ * \return
+ */
+TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void* objectID, size_t objectIDLen, uint32_t flags, TEE_ObjectHandle attributes, void* initialData, size_t initialDataLen, TEE_ObjectHandle* object);
+
+/*!
+ * \brief TEE_CloseAndDeletePersistentObject
+ * \param object
+ */
+void TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object);
+
+/*!
+ * \brief TEE_RenamePersistentObject
+ * \param object
+ * \param newObjectID
+ * \param newObjectIDLen
+ * \return
+ */
+TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void* newObjectID, size_t newObjectIDLen);
+
+
+
+
+/*
+ * ## Persistent Object Enumeration Functions ##
+ */
+
+/*!
+ * \brief TEE_AllocatePersistentObjectEnumerator
+ * \param objectEnumerator
+ * \return
+ */
+TEE_Result TEE_AllocatePersistentObjectEnumerator(TEE_ObjectEnumHandle* objectEnumerator);
+
+/*!
+ * \brief TEE_FreePersistentObjectEnumerator
+ * \param objectEnumerator
+ */
+void TEE_FreePersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumerator);
+
+/*!
+ * \brief TEE_ResetPersistentObjectEnumerator
+ * \param objectEnumerator
+ */
+void TEE_ResetPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumerator);
+
+/*!
+ * \brief TEE_StartPersistentObjectEnumerator
+ * \param objectEnumerator
+ * \param storageID
+ * \return
+ */
+TEE_Result TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumerator, uint32_t storageID);
+
+/*!
+ * \brief TEE_GetNextPersistentObject
+ * \param objectEnumerator
+ * \param objectInfo
+ * \param objectID
+ * \param objectIDLen
+ * \return
+ */
+TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator, TEE_ObjectInfo objectInfo, void* objectID, size_t* objectIDLen);
+
+
+
+
+/*
+ * ## Data Stream Access Functions ##
+ */
+
+/*!
+ * \brief TEE_ReadObjectData
+ * \param object
+ * \param buffer
+ * \param size
+ * \param count
+ * \return
+ */
+TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void* buffer, size_t size, uint32_t* count);
+
+/*!
+ * \brief TEE_WriteObjectData
+ * \param object
+ * \param buffer
+ * \param size
+ * \return
+ */
+TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void* buffer, size_t size);
+
+/*!
+ * \brief TEE_TruncateObjectData
+ * \param object
+ * \param size
+ * \return
+ */
+TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size);
+
+/*!
+ * \brief TEE_SeekObjectData
+ * \param object
+ * \param offset
+ * \param whence
+ * \return
+ */
+TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whence whence);
 
 #endif /* __STORAGE_DATA_KEY_API_H__ */
