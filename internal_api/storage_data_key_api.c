@@ -14,7 +14,11 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 #include <openssl/rand.h>
+#include <openssl/bn.h>
 #include <openssl/rsa.h>
+#include <openssl/dsa.h>
+#include <openssl/dh.h>
+
 
 #include <stdio.h>
 #include <syslog.h>
@@ -30,8 +34,10 @@ struct __TEE_ObjectHandle {
 	TEE_ObjectInfo *objectInfo;
 	TEE_Attribute *attrs;
 	uint32_t attrs_count;
+	uint32_t maxObjSizeBytes;
 };
 
+static const uint32_t EMU_ALL = 1;
 
 /*
  * ## TEMP ##
@@ -43,70 +49,215 @@ static bool is_persistent_obj(TEE_ObjectHandle object); /* ok */
 static bool is_value_attribute(uint32_t attr_ID); /* ok */
 static bool is_public_attribute(uint32_t attr_ID); /* ok */
 static bool is_initialized(TEE_ObjectHandle object); /* ok */
-static bool does_arr_contain_attrID(uint32_t ID, TEE_Attribute* attrs, uint32_t attrCount); /* ok */
-static bool does_object_contain_attrID(uint32_t ID, TEE_ObjectHandle object); /* ok */
 static void reset_attrs(TEE_ObjectHandle obj); /* ok */
 static void free_attrs(TEE_ObjectHandle object); /* ok */
+static bool malloc_for_attrs(TEE_ObjectHandle object, uint32_t attrs_count);
 static bool valid_object_max_size(object_type obj, uint32_t size); /* ok */
 static int valid_obj_type_and_attr_count(object_type obj); /* ok */
 static int get_attr_index(TEE_ObjectHandle object, uint32_t attributeID); /* ok */
-static void populate_from_attrs_object(TEE_ObjectHandle object, TEE_Attribute* attrs, uint32_t attrCount); /* ok */
-static bool gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size);
-static bool gen_10_key(TEE_ObjectHandle object, uint32_t keySize);
-
-
+static int gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size);
+static int gen_10_key(TEE_ObjectHandle object, uint32_t keySize);
+static int gen_dsa_keypair(TEE_ObjectHandle object, TEE_Attribute* params, uint32_t paramCount);
+static int gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute* params, uint32_t paramCount);
+static int bn2ref_to_obj(BIGNUM *bn, uint32_t ID, TEE_ObjectHandle obj, int i);
+static int extract_attr_to_object(uint32_t ID, TEE_Attribute* params, uint32_t paramCount, TEE_ObjectHandle object, uint32_t index);
+static int does_arr_contain_attrID(uint32_t ID, TEE_Attribute* attrs, uint32_t attrCount);
+static int copy_obj_attr_to_obj(TEE_ObjectHandle srcObj, uint32_t attrID, TEE_ObjectHandle destObj, uint32_t destIndex);
 
 /*
  * ## Non internal API functions ##
  */
 
-static bool does_arr_contain_attrID(uint32_t ID, TEE_Attribute* attrs, uint32_t attrCount)
+static int does_arr_contain_attrID(uint32_t ID, TEE_Attribute* attrs, uint32_t attrCount)
 {
 	size_t i;
 
 	for (i = 0; i < attrCount; ++i) {
 		if (ID == attrs[i].attributeID)
-			return true;
+			return i;
 	}
 
-	return false;
+	return -1;
 }
 
-static bool does_object_contain_attrID(uint32_t ID, TEE_ObjectHandle object)
+static int copy_obj_attr_to_obj(TEE_ObjectHandle srcObj, uint32_t attrID, TEE_ObjectHandle destObj, uint32_t destIndex)
 {
-	size_t i;
+	int srcIndex = -1;
 
-	for (i = 0; i < object->attrs_count; ++i) {
-		if (object->attrs[i].attributeID == ID)
-			return true;
-	}
+	if (attrID == EMU_ALL) {
+		memcpy(&destObj->attrs[destIndex], &srcObj->attrs[destIndex], sizeof(TEE_Attribute));
 
-	return false;
-}
-
-static void populate_from_attrs_object(TEE_ObjectHandle object, TEE_Attribute* attrs, uint32_t attrCount)
-{
-	size_t i, obj_index = 0;
-
-	for (i = 0; i < attrCount; ++i) {
-		if (does_object_contain_attrID(attrs[i].attributeID, object))
-			continue;
-
-		/* Add attribute */
-		if (obj_index > object->attrs_count)
-			return;
-
-		memcpy(&object->attrs[obj_index], &attrs[i], sizeof(TEE_Attribute));
-
-		if (!is_value_attribute(attrs[i].attributeID)) {
-			if (object->objectInfo->maxObjectSize >= attrs[i].content.ref.length)
-				memcpy(object->attrs[obj_index].content.ref.buffer, attrs[i].content.ref.buffer, attrs[i].content.ref.length);
-			else
-				memcpy(object->attrs[obj_index].content.ref.buffer, attrs[i].content.ref.buffer, object->objectInfo->maxObjectSize);
+		if (!is_value_attribute(srcObj->attrs[destIndex].attributeID)) {
+			memcpy(destObj->attrs[destIndex].content.ref.buffer, srcObj->attrs[destIndex].content.ref.buffer, srcObj->attrs[destIndex].content.ref.length);
+			destObj->attrs[destIndex].content.ref.length = srcObj->attrs[destIndex].content.ref.length;
 		}
 
-		++obj_index;
+		return 1;
 	}
+
+	srcIndex = get_attr_index(srcObj, attrID);
+
+	if (srcIndex == -1)
+		return 0; /* Array does not contain extracted attribute */
+
+	if (destIndex > destObj->attrs_count)
+		return -1; /* Should never happen */
+
+	memcpy(&destObj->attrs[destIndex], &srcObj->attrs[srcIndex], sizeof(TEE_Attribute));
+
+	if (!is_value_attribute(srcObj->attrs[srcIndex].attributeID)) {
+		memcpy(destObj->attrs[destIndex].content.ref.buffer, srcObj->attrs[srcIndex].content.ref.buffer, srcObj->attrs[srcIndex].content.ref.length);
+		destObj->attrs[destIndex].content.ref.length = srcObj->attrs[srcIndex].content.ref.length;
+	}
+
+	return 1;
+}
+
+static int extract_attr_to_object(uint32_t ID, TEE_Attribute* params, uint32_t paramCount, TEE_ObjectHandle object, uint32_t index)
+{
+	int attr_index;
+
+	attr_index = does_arr_contain_attrID(ID, params, paramCount);
+
+	if (attr_index == -1)
+		return 0; /* Array does not contain extracted attribute */
+
+	if (index > object->attrs_count)
+		return -1; /* Should never happen */
+
+	memcpy(&object->attrs[index], &params[attr_index], sizeof(TEE_Attribute));
+
+	if (!is_value_attribute(params[attr_index].attributeID)) {
+		if (object->maxObjSizeBytes >= params[attr_index].content.ref.length) {
+			memcpy(object->attrs[index].content.ref.buffer, params[attr_index].content.ref.buffer, params[attr_index].content.ref.length);
+		}
+
+		else {
+			memcpy(object->attrs[index].content.ref.buffer, params[attr_index].content.ref.buffer, object->maxObjSizeBytes);
+			object->attrs[index].content.ref.length = object->maxObjSizeBytes;
+		}
+	}
+
+	return 1;
+}
+
+static int bn2ref_to_obj(BIGNUM *bn, uint32_t ID, TEE_ObjectHandle obj, int i)
+{
+	obj->attrs[i].content.ref.length = BN_num_bytes(bn);
+	if (obj->attrs[i].content.ref.length > obj->maxObjSizeBytes)
+		return -1;
+
+	obj->attrs[i].attributeID = ID;
+	BN_bn2bin(bn, obj->attrs[i].content.ref.buffer);
+	return 1;
+}
+
+static int gen_10_key(TEE_ObjectHandle object, uint32_t keySize)
+{
+	if (!RAND_bytes(object->attrs->content.ref.buffer, keySize/8))
+		return 0;
+
+	object->attrs->attributeID = TEE_ATTR_SECRET_VALUE;
+	object->attrs->content.ref.length = keySize / 8;
+
+	return 1;
+}
+
+static int gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size)
+{
+	int i = 0;
+	RSA *rsa_key = RSA_generate_key(key_size, RSA_3, NULL, NULL);
+
+	if (rsa_key == NULL)
+		return 0;
+
+	if (!RSA_check_key(rsa_key)) {
+		RSA_free(rsa_key);
+		return 0;
+	}
+
+	/* Extract/copy values from RSA struct to object */
+
+	if (bn2ref_to_obj(rsa_key->n, TEE_ATTR_RSA_MODULUS, obj, i++) == -1 ||
+	    bn2ref_to_obj(rsa_key->e, TEE_ATTR_RSA_PUBLIC_EXPONENT, obj, i++) == -1 ||
+	    bn2ref_to_obj(rsa_key->d, TEE_ATTR_RSA_PRIVATE_EXPONENT, obj, i++) == -1 ||
+	    bn2ref_to_obj(rsa_key->p, TEE_ATTR_RSA_PRIME1, obj, i++) == -1 ||
+	    bn2ref_to_obj(rsa_key->q, TEE_ATTR_RSA_PRIME2, obj, i++) == -1 ||
+	    bn2ref_to_obj(rsa_key->dmp1, TEE_ATTR_RSA_EXPONENT1, obj, i++) == -1 ||
+	    bn2ref_to_obj(rsa_key->dmq1, TEE_ATTR_RSA_EXPONENT2, obj, i++) == -1 ||
+	    bn2ref_to_obj(rsa_key->iqmp, TEE_ATTR_RSA_COEFFICIENT, obj, i++) == -1) {
+		RSA_free(rsa_key);
+		return -1;
+	}
+
+	RSA_free(rsa_key);
+
+	return 1;
+}
+
+static int gen_dsa_keypair(TEE_ObjectHandle object, TEE_Attribute* params, uint32_t paramCount)
+{
+	int i = 0, attr_index = 0;
+	DSA *dsa_key = DSA_new();
+
+	if (extract_attr_to_object(TEE_ATTR_DSA_PRIME, params, paramCount, object, i++) &&
+	    extract_attr_to_object(TEE_ATTR_DSA_SUBPRIME, params, paramCount, object, i++) &&
+	    extract_attr_to_object(TEE_ATTR_DSA_BASE, params, paramCount, object, i++)) {
+		DSA_free(dsa_key);
+		return -1;
+	}
+
+	attr_index = get_attr_index(object, TEE_ATTR_DSA_PRIME);
+	BN_bin2bn(object->attrs[attr_index].content.ref.buffer, object->attrs[attr_index].content.ref.length, dsa_key->p);
+	attr_index = get_attr_index(object, TEE_ATTR_DSA_SUBPRIME);
+	BN_bin2bn(object->attrs[attr_index].content.ref.buffer, object->attrs[attr_index].content.ref.length, dsa_key->q);
+	attr_index = get_attr_index(object, TEE_ATTR_DSA_BASE);
+	BN_bin2bn(object->attrs[attr_index].content.ref.buffer, object->attrs[attr_index].content.ref.length, dsa_key->g);
+
+	if (!DSA_generate_key(dsa_key)) {
+		DSA_free(dsa_key);
+		return 0;
+	}
+
+	if (bn2ref_to_obj(dsa_key->pub_key, TEE_ATTR_DSA_PUBLIC_VALUE, object, i++) == -1 ||
+	    bn2ref_to_obj(dsa_key->priv_key, TEE_ATTR_DSA_PRIVATE_VALUE, object, i++) == -1) {
+		DSA_free(dsa_key);
+		return -1;
+	}
+
+	DSA_free(dsa_key);
+
+	return 1;
+}
+
+static int gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute* params, uint32_t paramCount)
+{
+	int i = 0, attr_index = 0;
+	DH *dh_key = DH_new();
+
+	if (extract_attr_to_object(TEE_ATTR_DH_PRIME, params, paramCount, object, i++) &&
+	    extract_attr_to_object(TEE_ATTR_DH_BASE, params, paramCount, object, i++)) {
+		DH_free(dh_key);
+		return -1;
+	}
+
+	attr_index = get_attr_index(object, TEE_ATTR_DH_PRIME);
+	BN_bin2bn(object->attrs[attr_index].content.ref.buffer, object->attrs[attr_index].content.ref.length, dh_key->p);
+	attr_index = get_attr_index(object, TEE_ATTR_DH_BASE);
+	BN_bin2bn(object->attrs[attr_index].content.ref.buffer, object->attrs[attr_index].content.ref.length, dh_key->g);
+
+	if (!DH_generate_key(dh_key))
+		return -1;
+
+	if (bn2ref_to_obj(dh_key->pub_key, TEE_ATTR_DH_PUBLIC_VALUE, object, i++) == -1 ||
+	    bn2ref_to_obj(dh_key->priv_key, TEE_ATTR_DH_PRIVATE_VALUE, object, i++) == -1) {
+		DH_free(dh_key);
+		return -1;
+	}
+
+	DH_free(dh_key);
+
+	return 1;
 }
 
 static bool is_usage_extractable(TEE_ObjectHandle object)
@@ -142,42 +293,6 @@ static bool is_public_attribute(uint32_t attr_ID)
 	return (attr_ID & TEE_ATTR_FLAG_VALUE);
 }
 
-static bool gen_10_key(TEE_ObjectHandle object, uint32_t keySize)
-{
-	syslog(LOG_DEBUG, "Generating first 10\n");
-
-	if (!RAND_bytes(object->attrs->content.ref.buffer, keySize/8))
-		return false;
-
-	object->attrs->attributeID = TEE_ATTR_SECRET_VALUE;
-	object->attrs->content.ref.length = keySize / 8;
-
-	syslog(LOG_DEBUG, "First 10 generated\n");
-
-	return true;
-}
-
-static bool gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size)
-{
-	syslog(LOG_DEBUG, "Generating RSA keypair\n");
-	obj = obj;
-	key_size = key_size;
-	/*
-	obj = obj;
-	RSA *rsa_key = RSA_generate_key(key_size, 17, NULL, NULL);
-	if (rsa_key == NULL)
-		return false;
-
-	if (!RSA_check_key(rsa_key))
-		return false;
-
-	RSA_free(rsa_key);
-
-	syslog(LOG_DEBUG, "RSA keypair generated\n");
-	*/
-	return true;
-}
-
 static bool multiple_of_8(uint32_t number)
 {
 	return !(number % 8) ? true : false;
@@ -201,16 +316,16 @@ static void reset_attrs(TEE_ObjectHandle obj)
 	}
 }
 
-static bool malloc_for_attrs(TEE_ObjectHandle object, uint32_t max_len, uint32_t attrs_count)
+static bool malloc_for_attrs(TEE_ObjectHandle object, uint32_t attrs_count)
 {
 	size_t i;
 
 	for (i = 0; i < attrs_count; ++i) {
-		object->attrs[i].content.ref.buffer = TEE_Malloc((max_len + 8) / 8, 0);
+		object->attrs[i].content.ref.buffer = TEE_Malloc(object->maxObjSizeBytes, 0);
 		if (object->attrs[i].content.ref.buffer == NULL)
 			return false;
 
-		object->attrs[i].content.ref.length = (max_len + 8) / 8; /* malloc space or should be maxObjectSize? */
+		object->attrs[i].content.ref.length = object->maxObjSizeBytes; /* malloc space (or should be maxObjectSize?) */
 	}
 
 	return true;
@@ -363,7 +478,6 @@ static int get_attr_index(TEE_ObjectHandle object, uint32_t attributeID)
 }
 
 
-
 /*
  * ## Internal API functions ##
  */
@@ -482,9 +596,11 @@ TEE_Result TEE_GetObjectValueAttribute(TEE_ObjectHandle object, uint32_t attribu
 
 void TEE_CloseObject(TEE_ObjectHandle object)
 {
-	object = object;
+	if (!is_persistent_obj(object)) {
+		TEE_FreeTransientObject(object);
+	}
 
-	/* TODO */
+	/* TODO: per functionality */
 }
 
 TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSize, TEE_ObjectHandle* object)
@@ -519,6 +635,7 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 	tmp_handle->objectInfo->dataSize = 0;
 	tmp_handle->objectInfo->handleFlags = 0x00000000;
 	tmp_handle->attrs_count = attr_count;
+	tmp_handle->maxObjSizeBytes = (maxObjectSize + 7) / 8;
 
 	/* Alloc memory for attributes (pointers) */
 	tmp_handle->attrs = TEE_Malloc(attr_count * sizeof(TEE_Attribute), 0);
@@ -537,28 +654,28 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 	case TEE_TYPE_HMAC_SHA384:
 	case TEE_TYPE_HMAC_SHA512:
 	case TEE_TYPE_GENERIC_SECRET:
-		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count))
+		if (!malloc_for_attrs(tmp_handle, attr_count))
 			goto out_of_mem_attrs;
 		break;
 
 	case TEE_TYPE_RSA_KEYPAIR:
-		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count))
+		if (!malloc_for_attrs(tmp_handle, attr_count))
 			goto out_of_mem_attrs;
 		break;
 
 	case TEE_TYPE_DSA_PUBLIC_KEY:
-		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count))
+		if (!malloc_for_attrs(tmp_handle, attr_count))
 			goto out_of_mem_attrs;
 		break;
 
 	case TEE_TYPE_DSA_KEYPAIR:
-		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count))
+		if (!malloc_for_attrs(tmp_handle, attr_count))
 			goto out_of_mem_attrs;
 		break;
 
 	case TEE_TYPE_DH_KEYPAIR:
 		/* -1, because DH contains one value attribute */
-		if (!malloc_for_attrs(tmp_handle, tmp_handle->objectInfo->maxObjectSize, attr_count-1))
+		if (!malloc_for_attrs(tmp_handle, attr_count-1))
 			goto out_of_mem_attrs;
 		break;
 
@@ -617,6 +734,8 @@ void TEE_ResetTransientObject(TEE_ObjectHandle object)
 
 TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* attrs, uint32_t attrCount)
 {
+	uint32_t i = 0;
+
 	if (object == NULL || attrs == NULL)
 		return TEE_ERROR_BAD_PARAMETERS;
 
@@ -636,12 +755,12 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* a
 	case TEE_TYPE_HMAC_SHA384:
 	case TEE_TYPE_HMAC_SHA512:
 	case TEE_TYPE_GENERIC_SECRET:
-		if (does_arr_contain_attrID(TEE_ATTR_SECRET_VALUE, attrs, attrCount))
+		if (extract_attr_to_object(TEE_ATTR_SECRET_VALUE, attrs, attrCount, object, i++))
 			break;
 
 	case TEE_TYPE_RSA_PUBLIC_KEY:
-		if (does_arr_contain_attrID(TEE_ATTR_RSA_MODULUS, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount))
+		if (extract_attr_to_object(TEE_ATTR_RSA_MODULUS, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount, object, i++))
 			break;
 
 	case TEE_TYPE_RSA_KEYPAIR:
@@ -651,54 +770,55 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* a
 		    does_arr_contain_attrID(TEE_ATTR_RSA_EXPONENT2, attrs, attrCount) ||
 		    does_arr_contain_attrID(TEE_ATTR_RSA_COEFFICIENT, attrs, attrCount)) {
 
-			if (does_arr_contain_attrID(TEE_ATTR_RSA_MODULUS, attrs, attrCount) &&
-			    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount) &&
-			    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount) &&
-			    does_arr_contain_attrID(TEE_ATTR_RSA_PRIME1, attrs, attrCount) &&
-			    does_arr_contain_attrID(TEE_ATTR_RSA_PRIME2, attrs, attrCount) &&
-			    does_arr_contain_attrID(TEE_ATTR_RSA_EXPONENT1, attrs, attrCount) &&
-			    does_arr_contain_attrID(TEE_ATTR_RSA_EXPONENT2, attrs, attrCount) &&
-			    does_arr_contain_attrID(TEE_ATTR_RSA_COEFFICIENT, attrs, attrCount))
+			if (extract_attr_to_object(TEE_ATTR_RSA_MODULUS, attrs, attrCount, object, i++) &&
+			    extract_attr_to_object(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount, object, i++) &&
+			    extract_attr_to_object(TEE_ATTR_RSA_PRIVATE_EXPONENT, attrs, attrCount, object, i++) &&
+			    extract_attr_to_object(TEE_ATTR_RSA_PRIME1, attrs, attrCount, object, i++) &&
+			    extract_attr_to_object(TEE_ATTR_RSA_PRIME2, attrs, attrCount, object, i++) &&
+			    extract_attr_to_object(TEE_ATTR_RSA_EXPONENT1, attrs, attrCount, object, i++) &&
+			    extract_attr_to_object(TEE_ATTR_RSA_EXPONENT2, attrs, attrCount, object, i++) &&
+			    extract_attr_to_object(TEE_ATTR_RSA_COEFFICIENT, attrs, attrCount, object, i++))
 				break;
 		}
 
 		else {
-			if (does_arr_contain_attrID(TEE_ATTR_RSA_MODULUS, attrs, attrCount) &&
-			    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount) &&
-			    does_arr_contain_attrID(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount))
+			if (extract_attr_to_object(TEE_ATTR_RSA_MODULUS, attrs, attrCount, object, i++) &&
+			    extract_attr_to_object(TEE_ATTR_RSA_PUBLIC_EXPONENT, attrs, attrCount, object, i++) &&
+			    extract_attr_to_object(TEE_ATTR_RSA_PRIVATE_EXPONENT, attrs, attrCount, object, i++))
 				break;
 		}
 
 	case TEE_TYPE_DSA_PUBLIC_KEY:
-		if (does_arr_contain_attrID(TEE_ATTR_DSA_PRIME, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DSA_SUBPRIME, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DSA_BASE, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DSA_PRIVATE_VALUE, attrs, attrCount))
+		if (extract_attr_to_object(TEE_ATTR_DSA_PRIME, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DSA_SUBPRIME, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DSA_BASE, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DSA_PUBLIC_VALUE, attrs, attrCount, object, i++))
 			break;
 
 	case TEE_TYPE_DSA_KEYPAIR:
-		if (does_arr_contain_attrID(TEE_ATTR_DSA_PRIME, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DSA_SUBPRIME, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DSA_BASE, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DSA_PRIVATE_VALUE, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DSA_PUBLIC_VALUE, attrs, attrCount))
+		if (extract_attr_to_object(TEE_ATTR_DSA_PRIME, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DSA_SUBPRIME, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DSA_BASE, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DSA_PRIVATE_VALUE, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DSA_PUBLIC_VALUE, attrs, attrCount, object, i++))
 			break;
 
 	case TEE_TYPE_DH_KEYPAIR:
-		if (does_arr_contain_attrID(TEE_ATTR_DH_PRIME, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DH_BASE, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DH_PRIVATE_VALUE, attrs, attrCount) &&
-		    does_arr_contain_attrID(TEE_ATTR_DH_PUBLIC_VALUE, attrs, attrCount))
+		if (extract_attr_to_object(TEE_ATTR_DH_PRIME, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DH_BASE, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DH_PUBLIC_VALUE, attrs, attrCount, object, i++) &&
+		    extract_attr_to_object(TEE_ATTR_DH_PRIVATE_VALUE, attrs, attrCount, object, i++)) {
+			extract_attr_to_object(TEE_ATTR_DH_SUBPRIME, attrs, attrCount, object, i++);
 			break;
+		}
 
 	default:
-		/* Correct response would be PANIC, but not yet implmented*/
+		/* Correct response would be PANIC, but not yet implmented */
+		free_attrs(object);
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
-	populate_from_attrs_object(object, attrs, attrCount);
-
-	object->objectInfo->handleFlags |= TEE_HANDLE_FLAG_INITIALIZED;
+	object->objectInfo->handleFlags |= TEE_HANDLE_FLAG_INITIALIZED; /* TODO: CHECK!! */
 	
 	return TEE_SUCCESS;
 }
@@ -731,10 +851,67 @@ void TEE_InitValueAttribute(TEE_Attribute* attr, uint32_t attributeID, uint32_t 
 	attr->content.value.b = b;
 }
 
+void TEE_CopyObjectAttributes(TEE_ObjectHandle destObject, TEE_ObjectHandle srcObject)
+{
+	size_t i = 0;
+
+	if (destObject == NULL || srcObject == NULL)
+		return;
+
+	if (is_initialized(destObject) || !is_initialized(srcObject)) {
+		/* Correct would e panic, but not implemented (yet) */
+		return;
+	}
+
+	if (srcObject->maxObjSizeBytes > destObject->maxObjSizeBytes) {
+		/* Correct would e panic, but not implemented (yet) */
+		return;
+	}
+
+	/* Extract attributes, if possible */
+	if (destObject->objectInfo->objectType == srcObject->objectInfo->objectType) {
+		if (srcObject->attrs_count != destObject->attrs_count) {
+			/* Should never end up here */
+			return;
+		}
+
+		for (i = 0; i < srcObject->attrs_count; ++i) {
+			if (copy_obj_attr_to_obj(srcObject, EMU_ALL, destObject, i) < 0)
+				/* Correct would e panic, but not implemented (yet) */
+				return;
+		}
+	}
+
+	else if (destObject->objectInfo->objectType == TEE_TYPE_RSA_PUBLIC_KEY &&
+		 srcObject->objectInfo->objectType == TEE_TYPE_RSA_KEYPAIR) {
+		if (copy_obj_attr_to_obj(srcObject, TEE_ATTR_RSA_MODULUS, destObject, i++) < 0 ||
+		    copy_obj_attr_to_obj(srcObject, TEE_ATTR_RSA_PUBLIC_EXPONENT, destObject, i++) < 0) {
+			/* Correct would e panic, but not implemented (yet) */
+			return;
+		}
+
+	}
+
+	else if (destObject->objectInfo->objectType == TEE_TYPE_DSA_PUBLIC_KEY &&
+		 srcObject->objectInfo->objectType == TEE_TYPE_DSA_KEYPAIR) {
+		if (copy_obj_attr_to_obj(srcObject, TEE_ATTR_DSA_PUBLIC_VALUE, destObject, i++) < 0 ||
+		    copy_obj_attr_to_obj(srcObject, 0, destObject, i++) < 0) {
+			/* Correct would e panic, but not implemented (yet) */
+			return;
+		}
+	}
+
+	else {
+		/* Correct would e panic, but not implemented (yet) */
+		return;
+	}
+
+	destObject->objectInfo->handleFlags |= TEE_HANDLE_FLAG_INITIALIZED; /* TODO: CHECK!! */
+}
+
 TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attribute* params, uint32_t paramCount)
 {
-	params = params;
-	paramCount = paramCount;
+	int ret_val = 1;
 
 	if (object == NULL)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -760,24 +937,36 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 	case TEE_TYPE_HMAC_SHA384:
 	case TEE_TYPE_HMAC_SHA512:
 	case TEE_TYPE_GENERIC_SECRET:
-		if (gen_10_key(object, keySize)) {
-			/* panic() */
-		}
-
+		ret_val = gen_10_key(object, keySize);
 		break;
 
 	case TEE_TYPE_RSA_KEYPAIR:
-		if (gen_rsa_keypair(object, keySize)) {
-			/* panic() */
-		}
-
+		ret_val = gen_rsa_keypair(object, keySize);
 		break;
 
 	case TEE_TYPE_DSA_KEYPAIR:
+		ret_val = gen_dsa_keypair(object, params, paramCount);
+		break;
+
 	case TEE_TYPE_DH_KEYPAIR:
+		ret_val = gen_dh_keypair(object, params, paramCount);
+		break;
+
 	default:
 		break; /* panic() Should never get here */
 	}
+
+	if (ret_val == -1) {
+		/* If ret_val is -1, KeySize too large or mandatory parameter missing
+		 * Correct response would be PANIC, but not yet implmented */
+		return TEE_ERROR_GENERIC;
+	}
+
+	if (ret_val == 0) {
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+
+	object->objectInfo->handleFlags |= TEE_HANDLE_FLAG_INITIALIZED; /* TODO: CHECK!! */
 
 	return TEE_SUCCESS;
 }
