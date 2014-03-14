@@ -19,3 +19,4 @@
 
 TAs/*
 *.qbs.user
+*.pyc
