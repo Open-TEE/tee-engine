@@ -23,5 +23,6 @@
 #include "../internal_api/time_api.h"
 #include "../internal_api/tee_storage_api.h"
 #include "../internal_api/tee_panic.h"
+#include "../internal_api/tee_bigint.h"
 
 #endif
