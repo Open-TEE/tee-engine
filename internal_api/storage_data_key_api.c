@@ -1,4 +1,4 @@
- /***************************************************************************
+/*****************************************************************************
 ** Copyright (C) 2013 ICRI.                                                 **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
@@ -22,14 +22,16 @@
 #include <openssl/dsa.h>
 #include <openssl/dh.h>
 
-#include <sqlite3.h>
-
+#include <sys/stat.h>
+#include <limits.h>
 #include <stdio.h>
 #include <syslog.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
+#include <dirent.h>
 
 #include "storage_data_key_api.h"
 #include "tee_memory.h"
@@ -41,417 +43,262 @@ struct __TEE_ObjectHandle {
 	uint32_t maxObjSizeBytes;
 	char per_obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
 	size_t per_obj_id_len;
+	FILE* per_obj_file_handler;
+	long data_begin;
 };
 
-#ifndef DB_PATH
-#define DB_PATH "/home/dettenbo/TEE_secure_storage/"
+struct persistant_object {
+	TEE_ObjectInfo info;
+	uint32_t attrs_count;
+	char per_obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
+	size_t obj_id_len;
+};
+
+struct __TEE_ObjectEnumHandle {
+	DIR *dir;
+};
+
+#ifndef SECURE_STORAGE_PATH
+#define SECURE_STORAGE_PATH "/home/dettenbo/TEE_secure_storage/"
 #endif
+
 static const uint32_t EMU_ALL = 0xF000001F;
-static char UUID_test[] = "56c5d1b260704de30fe7"; /* For testing */
 
-
-/*
- * ## TEMP ##
- */
-static bool multiple_of_8(uint32_t number); /* ok */
-static bool multiple_of_64(uint32_t number); /* ok */
-static bool is_value_attribute(uint32_t attr_ID); /* ok */
-static void reset_attrs(TEE_ObjectHandle obj); /* ok */
-static void free_attrs(TEE_ObjectHandle object); /* ok */
-static bool malloc_for_attrs(TEE_ObjectHandle object, uint32_t attrs_count);
-static bool valid_object_max_size(object_type obj, uint32_t size); /* ok */
-static int valid_obj_type_and_attr_count(object_type obj); /* ok */
-static int get_attr_index(TEE_ObjectHandle object, uint32_t attributeID); /* ok */
-static int gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size);
-static int gen_10_key(TEE_ObjectHandle object, uint32_t keySize);
-static int gen_dsa_keypair(TEE_ObjectHandle object, TEE_Attribute* params, uint32_t paramCount);
-static int gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute* params, uint32_t paramCount);
-static int bn2ref_to_obj(BIGNUM *bn, uint32_t ID, TEE_ObjectHandle obj, int i);
-static int extract_attr_to_object(uint32_t ID, TEE_Attribute* params, uint32_t paramCount, TEE_ObjectHandle object, uint32_t index);
-static int does_arr_contain_attrID(uint32_t ID, TEE_Attribute* attrs, uint32_t attrCount);
-static int copy_obj_attr_to_obj(TEE_ObjectHandle srcObj, uint32_t attrID, TEE_ObjectHandle destObj, uint32_t destIndex);
-static void openssl_cleanup();
-
-static int query_for_access(void* objectID, size_t objectIDLen, size_t seek_access); /* place holder */
-static void release_file(void* objectID, size_t objectIDLen); /* place holder */
-static int is_object_id_in_use(void *objectID, size_t objectIDLen); /* place holder */
-
-static int create_tables(sqlite3 *db_conn);
-static int insert_user_data(sqlite3 *db_conn, void *objectID, size_t objectIDLen, void* initialData, size_t initialDataLen);
-static int insert_object_handler(sqlite3 *db_conn, void* objectID, size_t objectIDLen, TEE_ObjectHandle obj);
-static int insert_attributes(sqlite3 *db_conn, void *objectID, size_t objectIDLen, TEE_ObjectHandle obj);
-
-static int load_object_handler(sqlite3 *db_conn, void *objectID, size_t objectIDLen, TEE_ObjectHandle obj);
-static int load_attributes(sqlite3 *db_conn, void *objectID, size_t objectIDLen, TEE_ObjectHandle obj);
-static int load_user_info(sqlite3 *db_conn, void *objectID, size_t objectIDLen, TEE_ObjectHandle obj);
+static void free_attrs(TEE_ObjectHandle object);
+static bool is_value_attribute(uint32_t attr_ID);
+static int get_attr_index(TEE_ObjectHandle object, uint32_t attributeID);
 
 
 /*
  * ## Non internal API functions ##
  */
+static int is_directory_empty(char *dir_path)
+{
+	struct dirent *entry;
+	int file_count = 0;
+	DIR *dir = opendir(dir_path);
+	if (dir == NULL)
+		return 0;
+	while ((entry = readdir(dir)) != NULL) {
+		++file_count;
+		if(file_count > 2) {
+			closedir(dir);
+			return 0;
+		}
+	}
+
+	closedir(dir);
+	return 1; //Directory Empty
+}
+
+static void get_uuid(char *uuid)
+{
+	char UUID_test[]  = "123456789012345"; /* For testing */
+	memcpy(uuid, UUID_test, sizeof(TEE_UUID));
+}
 
 static void openssl_cleanup()
 {
 	CRYPTO_cleanup_all_ex_data();
 }
 
-static int load_user_info(sqlite3 *db_conn, void *objectID, size_t objectIDLen, TEE_ObjectHandle obj)
+static TEE_Result load_attributes(TEE_ObjectHandle obj)
 {
-	int sql_ret = SQLITE_OK;
-	char *sql = "SELECT * FROM user_data WHERE id=?;";
-	int i;
-	sqlite3_stmt *stmt;
+	size_t i;
 
-	sql_ret = sqlite3_prepare_v2(db_conn, sql, -1, &stmt, NULL);
-	if(sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt, 1, objectID, objectIDLen, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	while ((sql_ret = sqlite3_step(stmt)) == SQLITE_ROW) {
-		for (i = 0; i < sqlite3_column_count(stmt); ++i) {
-			if (strcmp(sqlite3_column_name(stmt, i), "data") == 0) {
-				obj->objectInfo.dataSize = sqlite3_column_bytes(stmt, i);
-			}
-		}
+	if (obj == NULL || obj->per_obj_file_handler == NULL) {
+		syslog(LOG_ERR, "Something went wrong with persistant object attribute loading\n");
+		return TEE_ERROR_GENERIC;
 	}
-
-	if (sql_ret != SQLITE_DONE)
-		goto err;
-
-	sqlite3_finalize(stmt);
-	return sql_ret;
-
-err:
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sqlite3_errmsg(db_conn));
-	return sql_ret;
-}
-
-static int load_attributes(sqlite3 *db_conn, void *objectID, size_t objectIDLen, TEE_ObjectHandle obj)
-{
-	int sql_ret = SQLITE_OK;
-	int attr_count;
-	char *sql = "SELECT * FROM attributes WHERE id=?;";
-	int i;
-	uint32_t rows = 0;
-	sqlite3_stmt *stmt;
-
-	attr_count = valid_obj_type_and_attr_count(obj->objectInfo.objectType);
-	if (attr_count == -1)
-		goto err_generic;
 
 	/* Alloc memory for attributes (pointers) */
-	obj->attrs = TEE_Malloc(attr_count * sizeof(TEE_Attribute), 0);
+	obj->attrs = TEE_Malloc(obj->attrs_count * sizeof(TEE_Attribute), 0);
 	if (obj->attrs == NULL)
-		goto out_of_mem_attrs_ptr;
-/*
-	switch(obj->objectInfo.objectType) {
-	case TEE_TYPE_AES:
-	case TEE_TYPE_DES:
-	case TEE_TYPE_DES3:
-	case TEE_TYPE_HMAC_MD5:
-	case TEE_TYPE_HMAC_SHA1:
-	case TEE_TYPE_HMAC_SHA224:
-	case TEE_TYPE_HMAC_SHA256:
-	case TEE_TYPE_HMAC_SHA384:
-	case TEE_TYPE_HMAC_SHA512:
-	case TEE_TYPE_GENERIC_SECRET:
-	case TEE_TYPE_RSA_KEYPAIR:
-	case TEE_TYPE_DSA_PUBLIC_KEY:
-	case TEE_TYPE_DSA_KEYPAIR:
-		if (!malloc_for_attrs(obj, attr_count))
-			goto out_of_mem_attrs;
-		break;
-
-	case TEE_TYPE_DH_KEYPAIR:
-		if (!malloc_for_attrs(obj, attr_count-1))
-			goto out_of_mem_attrs;
-		break;
-
-	default:
-		goto out_of_mem_attrs;
-		break;
-	}
-*/
-	sql_ret = sqlite3_prepare_v2(db_conn, sql, -1, &stmt, NULL);
-	if(sql_ret != SQLITE_OK )
-		goto db_err;
-
-	sql_ret = sqlite3_bind_blob(stmt, 1, objectID, objectIDLen, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto db_err;
-
-	while ((sql_ret = sqlite3_step(stmt)) == SQLITE_ROW) {
-		for (i = 0; i < sqlite3_column_count(stmt); ++i) {
-			if (strcmp(sqlite3_column_name(stmt, i), "info") == 0) {
-				memcpy(&obj->attrs[rows], sqlite3_column_blob(stmt, i), sqlite3_column_bytes(stmt, i));
-			}
-
-			if (strcmp(sqlite3_column_name(stmt, i), "content") == 0) {
-				obj->attrs[rows].content.ref.buffer = TEE_Malloc(sqlite3_column_bytes(stmt, i), 0);
-				if (obj->attrs[rows].content.ref.buffer == NULL)
-					goto db_err;
-
-				memcpy(obj->attrs[rows].content.ref.buffer, sqlite3_column_blob(stmt, i), sqlite3_column_bytes(stmt, i));
-			}
-		}
-		++rows;
-		if (rows > obj->attrs_count)
-			goto db_err; /* should never ever get here */
-	}
-
-	if (sql_ret != SQLITE_DONE)
-		goto db_err;
-
-	sqlite3_finalize(stmt);
-	return sql_ret;
-
-db_err:
-	free_attrs(obj);
-	free(obj->attrs);
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sqlite3_errmsg(db_conn));
-	return sql_ret;
-
-out_of_mem_attrs_ptr:
-	syslog(LOG_ERR, "Out of memory\n");
-	return TEE_ERROR_OUT_OF_MEMORY;
-
-err_generic:
-	syslog(LOG_ERR, "Something went wrong with persistant object attribute loading\n");
-	return TEE_ERROR_GENERIC;
-}
-
-static int load_object_handler(sqlite3 *db_conn, void *objectID, size_t objectIDLen, TEE_ObjectHandle obj)
-{
-	char *sql = "SELECT * FROM object_handler WHERE id=?;";
-	sqlite3_stmt *stmt;
-	int i;
-	const void *ret_handler;
-	int sql_ret = SQLITE_OK;
-
-	sql_ret = sqlite3_prepare_v2(db_conn, sql, -1, &stmt, NULL);
-	if(sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt, 1, objectID, objectIDLen, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	while ((sql_ret = sqlite3_step(stmt)) == SQLITE_ROW) {
-		for (i = 0; i < sqlite3_column_count(stmt); ++i) {
-			if (!strcmp(sqlite3_column_name(stmt, i), "object_handler")) {
-				ret_handler = sqlite3_column_blob(stmt, i);
-				if (ret_handler != NULL)
-					memcpy(obj, ret_handler, sizeof(struct __TEE_ObjectHandle));
-			}
-		}
-	}
-
-	sqlite3_finalize(stmt);
-	return sql_ret;
-
-err:
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sqlite3_errmsg(db_conn));
-	return sql_ret;
-}
-
-static int insert_user_data(sqlite3 *db_conn, void *objectID, size_t objectIDLen, void* initialData, size_t initialDataLen)
-{
-	char *sql = "INSERT INTO user_data (id, data) VALUES (?, ?);";
-	sqlite3_stmt *stmt;
-	int sql_ret = SQLITE_OK;
-
-	if (db_conn == NULL)
-		return TEE_ERROR_GENERIC;
-
-	sql_ret = sqlite3_prepare_v2(db_conn, sql, -1, &stmt, NULL);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt, 1, objectID, objectIDLen, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	if (initialData != NULL) {
-		sql_ret = sqlite3_bind_blob(stmt, 2, initialData, initialDataLen, SQLITE_TRANSIENT);
-		if (sql_ret != SQLITE_OK)
-			goto err;
-	}
-	else {
-		sql_ret = sqlite3_bind_zeroblob(stmt, 2, 0);
-		if (sql_ret != SQLITE_OK)
-			goto err;
-	}
-
-	sql_ret = sqlite3_step(stmt);
-	if (sql_ret != SQLITE_DONE)
-		goto err;
-
-	sqlite3_finalize(stmt);
-	return sql_ret;
-
-err:
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sqlite3_errmsg(db_conn));
-	return sql_ret;
-}
-
-
-static int insert_attributes(sqlite3 *db_conn, void *objectID, size_t objectIDLen, TEE_ObjectHandle obj)
-{
-	char *sql = "INSERT INTO attributes (id, info, content) VALUES (?, ?, ?);";
-	size_t i;
-	sqlite3_stmt *stmt;
-	int sql_ret = SQLITE_OK;
-
-	if (db_conn == NULL)
-		return TEE_ERROR_GENERIC;
-
-	if (obj == NULL)
-		return sql_ret;
-
-	sql_ret = sqlite3_prepare_v2(db_conn, sql, -1, &stmt, NULL);
-	if (sql_ret != SQLITE_OK)
-		goto err;
+		return TEE_ERROR_OUT_OF_MEMORY;
 
 	for (i = 0; i < obj->attrs_count; ++i) {
-		sql_ret = sqlite3_bind_blob(stmt, 1, objectID, objectIDLen, SQLITE_TRANSIENT);
-		if (sql_ret != SQLITE_OK)
-			goto err;
+		if (fread(&obj->attrs[i], sizeof(TEE_Attribute), 1, obj->per_obj_file_handler) != 1)
+			goto err_at_read;
 
-		sql_ret = sqlite3_bind_blob(stmt, 2, &obj->attrs[i], sizeof(TEE_Attribute), SQLITE_TRANSIENT);
-		if (sql_ret != SQLITE_OK)
-			goto err;
+		if (!is_value_attribute(obj->attrs[i].attributeID)) {
+			obj->attrs[i].content.ref.buffer = TEE_Malloc(obj->maxObjSizeBytes, 0);
+			if (obj->attrs[i].content.ref.buffer == NULL) {
+				free_attrs(obj);
+				free(obj->attrs);
+				return TEE_ERROR_OUT_OF_MEMORY;
+			}
 
-		if (is_value_attribute(obj->attrs[i].attributeID)) {
-			sql_ret = sqlite3_bind_null(stmt, 3);
-			if (sql_ret != SQLITE_OK)
-				goto err;
+			if (fread(obj->attrs[i].content.ref.buffer, obj->attrs[i].content.ref.length, 1, obj->per_obj_file_handler) != 1)
+				goto err_at_read;
 		}
-		else {
-			sql_ret = sqlite3_bind_blob(stmt, 3, obj->attrs[i].content.ref.buffer, obj->attrs[i].content.ref.length, SQLITE_TRANSIENT);
-			if (sql_ret != SQLITE_OK)
-				goto err;
-		}
-
-		sql_ret = sqlite3_step(stmt);
-		if (sql_ret != SQLITE_DONE)
-			goto err;
-
-		sqlite3_reset(stmt);
 	}
 
-	sqlite3_finalize(stmt);
-	return sql_ret;
+	return TEE_SUCCESS;
 
-err:
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sqlite3_errmsg(db_conn));
-	return sql_ret;
-}
-
-static int insert_object_handler(sqlite3 *db_conn, void *objectID, size_t objectIDLen, TEE_ObjectHandle obj)
-{
-	char *sql = "INSERT INTO object_handler (id, object_handler) VALUES (?, ?);";
-	sqlite3_stmt *stmt;
-	int sql_ret = SQLITE_OK;
-
-	if (db_conn == NULL)
-		return TEE_ERROR_GENERIC;
-
-	sql_ret = sqlite3_prepare_v2(db_conn, sql, -1, &stmt, NULL);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt, 1, objectID, objectIDLen, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	if (obj != NULL) {
-		sql_ret = sqlite3_bind_blob(stmt, 2, obj, sizeof(struct __TEE_ObjectHandle), SQLITE_TRANSIENT);
-		if (sql_ret != SQLITE_OK)
-			goto err;
-
-	}
-	else {
-		sql_ret = sqlite3_bind_null(stmt, 2);
-		if (sql_ret != SQLITE_OK)
-			goto err;
-	}
-
-	sql_ret = sqlite3_step(stmt);
-	if (sql_ret != SQLITE_DONE)
-		goto err;
-
-	sqlite3_finalize(stmt);
-	return sql_ret;
-
-err:
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sqlite3_errmsg(db_conn));
-	return sql_ret;
-}
-
-static int create_tables(sqlite3 *db_conn)
-{
-	char *create_objec_handler = "CREATE TABLE IF NOT EXISTS object_handler (id BLOB PRIMARY KEY, object_handler BLOB);";
-	char *create_user_data = "CREATE TABLE IF NOT EXISTS user_data (id BLOB PRIMARY KEY, data BLOB);";
-	char *create_attributes = "CREATE TABLE IF NOT EXISTS attributes (id BLOB, info BLOB, content BLOB);";
-	int sql_ret = SQLITE_OK;
-	char *sql_err;
-
-	if (db_conn == NULL)
-		return TEE_ERROR_GENERIC;
-
-	sql_ret = sqlite3_exec(db_conn, create_objec_handler, NULL, NULL, &sql_err);
-	if (sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_exec(db_conn, create_user_data, NULL, NULL, &sql_err);
-	if (sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_exec(db_conn, create_attributes, NULL, NULL, &sql_err);
-	if (sql_ret != SQLITE_OK )
-		goto err;
-
-	return sql_ret;
-
-err:
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sql_err);
-	sqlite3_free(sql_err);
-	return sql_ret;
+err_at_read:
+	syslog(LOG_ERR, "Error at fwrite\n");
+	free_attrs(obj);
+	free(obj->attrs);
+	return TEE_ERROR_GENERIC;
 }
 
 static void release_file(void* objectID, size_t objectIDLen)
 {
+	/* TEST!! Emulate/simulate manager call/return.. */
 	objectID = objectID;
 	objectIDLen = objectIDLen;
-
-	/* Do something.. call manager? :) */
 }
 
-static int query_for_access(void *objectID, size_t objectIDLen, size_t seek_access)
+
+static FILE *query_for_access(void *objectID, size_t objectIDLen, size_t seek_access)
 {
-	/* TEST!! Emulate/simulate manager call.. */
-	objectID = objectID;
+	static FILE* tmp_per_obj = NULL;
 	seek_access = seek_access;
+	char *name_with_dir_path;
+	char *dir_path;
 	size_t i;
 	char hex_ID[TEE_OBJECT_ID_MAX_LEN * 2 + 1];
+	char UUID[sizeof(TEE_UUID)];
+	DIR *dir;
+
+	get_uuid(UUID);
+	printf("%s\n", UUID);
 
 	for (i = 0; i < objectIDLen; ++i)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char*)objectID + i));
 
-	return 0;
+	if (asprintf(&dir_path, "%s%s", SECURE_STORAGE_PATH, UUID) == -1) {
+		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	if (asprintf(&name_with_dir_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, hex_ID) == -1) {
+		free(dir_path);
+		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	if ((seek_access & TEE_DATA_FLAG_EXCLUSIVE) && (access(name_with_dir_path, F_OK) == 0)) {
+		syslog(LOG_ERR, "Access conflict: File exists\n");
+		goto ret;
+	}
+
+	/* Create secure storage directory */
+	dir = opendir(SECURE_STORAGE_PATH);
+	if (dir) {
+		closedir(dir);
+	}
+	else if (ENOENT == errno) {
+		if (mkdir(SECURE_STORAGE_PATH, 0777) != 0) {
+			syslog(LOG_ERR, "Cannot create secure storage directory: %s\n", strerror(errno));
+			goto ret;
+		}
+	}
+	else {
+		syslog(LOG_ERR, "Something went wrong in dir opening/creating\n");
+		goto ret;
+	}
+
+	dir = opendir(dir_path);
+	if (dir) {
+		closedir(dir);
+	}
+	else if (ENOENT == errno) {
+		if (mkdir(dir_path, 0777) != 0) {
+			syslog(LOG_ERR, "Cannot create UUID directory: %s\n", strerror(errno));
+			goto ret;
+		}
+	}
+	else {
+		syslog(LOG_ERR, "Something went wrong in dir opening/creating\n");
+		goto ret;
+	}
+
+	if (seek_access & TEE_DATA_FLAG_ACCESS_WRITE_META || seek_access & TEE_DATA_FLAG_ACCESS_WRITE) {
+		remove(name_with_dir_path); /* testing */
+		tmp_per_obj = fopen(name_with_dir_path, "wb");
+	}
+
+	if (seek_access & TEE_DATA_FLAG_ACCESS_READ) {
+		tmp_per_obj = fopen(name_with_dir_path, "rb");
+	}
+
+ret:
+	free(name_with_dir_path);
+	free(dir_path);
+	return tmp_per_obj;
 }
 
-static int is_object_id_in_use(void *objectID, size_t objectIDLen)
+static void delete_file(void* objectID, size_t objectIDLen)
 {
-	objectID = objectID;
-	objectIDLen = objectIDLen;
+	char *name_with_dir_path;
+	char *dir_path;
+	size_t i;
+	char hex_ID[TEE_OBJECT_ID_MAX_LEN * 2 + 1];
+	char UUID[sizeof(TEE_UUID)];
 
-	/* TEST!! Emulate/simulate manager call.. */
+	get_uuid(UUID);
 
-	return 0;
+	for (i = 0; i < objectIDLen; ++i)
+		sprintf(hex_ID + i * 2, "%02x", *((unsigned char*)objectID + i));
+
+	if (asprintf(&dir_path, "%s%s", SECURE_STORAGE_PATH, UUID) == -1) {
+		return; // TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	if (asprintf(&name_with_dir_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, hex_ID) == -1) {
+		free(dir_path);
+		return; // TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	remove(name_with_dir_path);
+
+	if (is_directory_empty(dir_path))
+		rmdir(dir_path);
+
+	free(name_with_dir_path);
+	free(dir_path);
+}
+
+static FILE *is_object_id_in_use(TEE_ObjectHandle object, void *objectID, size_t objectIDLen)
+{
+	FILE *tmp_file;
+	char *name_with_dir_path;
+	char *new_name_with_dir_path;
+	char hex_ID[TEE_OBJECT_ID_MAX_LEN * 2 + 1];
+	char new_hex_ID[TEE_OBJECT_ID_MAX_LEN * 2 + 1];
+	size_t i;
+	char UUID[sizeof(TEE_UUID)];
+
+	get_uuid(UUID);
+
+	for (i = 0; i < object->per_obj_id_len; ++i)
+		sprintf(hex_ID + i * 2, "%02x", *((unsigned char*)object->per_obj_id + i));
+
+	for (i = 0; i < objectIDLen; ++i)
+		sprintf(new_hex_ID + i * 2, "%02x", *((unsigned char*)objectID + i));
+
+	if (asprintf(&name_with_dir_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, hex_ID) == -1) {
+		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	if (asprintf(&new_name_with_dir_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, new_hex_ID) == -1) {
+		free(name_with_dir_path);
+		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	fclose(object->per_obj_file_handler);
+	rename(name_with_dir_path, new_name_with_dir_path);
+
+	if (object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META || object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE) {
+		tmp_file = fopen(new_name_with_dir_path, "wb");
+	}
+
+	if (object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_READ) {
+		tmp_file = fopen(new_name_with_dir_path, "rb");
+	}
+
+	free(name_with_dir_path);
+	free(new_name_with_dir_path);
+	return tmp_file;
 }
 
 static int does_arr_contain_attrID(uint32_t ID, TEE_Attribute* attrs, uint32_t attrCount)
@@ -701,15 +548,11 @@ static void free_attrs(TEE_ObjectHandle object)
 	size_t i;
 
 	for (i = 0; i < object->attrs_count; ++i) {
-
-		if (is_value_attribute(object->attrs[i].attributeID)) {
-			object->attrs->content.value.a = 0;
-			object->attrs->content.value.b = 0;
-			continue;
+		if (!is_value_attribute(object->attrs[i].attributeID)) {
+			memset(object->attrs[i].content.ref.buffer, 0, object->attrs[i].content.ref.length);
+			free(object->attrs[i].content.ref.buffer);
 		}
-
-		object->attrs[i].content.ref.length = 0;
-		free(object->attrs[i].content.ref.buffer);
+		memset(&object->attrs[i], 0, sizeof(TEE_Attribute));
 	}
 
 }
@@ -965,8 +808,10 @@ void TEE_CloseObject(TEE_ObjectHandle object)
 {
 	if (object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT) {
 		release_file(object->per_obj_id, object->per_obj_id_len);
+		fclose(object->per_obj_file_handler);
 		free_attrs(object);
 		free(object->attrs);
+		memset(object, 0, sizeof(TEE_ObjectHandle));
 		free(object);
 		return;
 	}
@@ -1063,6 +908,7 @@ void TEE_FreeTransientObject(TEE_ObjectHandle object)
 
 	free_attrs(object);
 	free(object->attrs);
+	memset(object, 0, sizeof(TEE_ObjectHandle));
 	free(object);
 }
 
@@ -1329,15 +1175,11 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void* objectID, size_t objectIDLen, uint32_t flags, TEE_ObjectHandle* object)
 {
 	TEE_ObjectHandle tmp_handle;
-	char hex_UUID[sizeof(TEE_UUID) * 2 + 1];
-	sqlite3 *db;
-	size_t i;
-	int ret_val;
-	char *db_name_with_path;
-
-	/* test */
-	void *test_UUID = (void*)UUID_test;
-	/* test */
+	struct persistant_object tmp_persistant_object;
+	FILE* tmp_per_obj_file;
+	TEE_Result ret_val;
+	long data_begin;
+	long data_size;
 
 	if (object == NULL)
 		return TEE_ERROR_GENERIC;
@@ -1354,77 +1196,68 @@ TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void* objectID, size_t o
 		return TEE_ERROR_GENERIC; /* replace to panic(), when implemented */
 	}
 
-	if (query_for_access(objectID, objectIDLen, flags)) {
+	tmp_per_obj_file = query_for_access(objectID, objectIDLen, flags);
+	if (tmp_per_obj_file == NULL) {
 		/* This should also check, if objID exists */
 		syslog(LOG_ERR, "Access conflict\n");
 		return TEE_ERROR_ACCESS_CONFLICT;
 	}
 
-	/* Open connection to database */
-	for (i = 0; i < sizeof(TEE_UUID); ++i)
-		sprintf(hex_UUID + i * 2, "%02x", *((unsigned char*)test_UUID + i));
+	tmp_handle = TEE_Malloc(sizeof(struct __TEE_ObjectHandle), 0);
+	if (tmp_handle == NULL)
+		return TEE_ERROR_OUT_OF_MEMORY;
 
-	if (asprintf(&db_name_with_path, "%s%s.db", DB_PATH, hex_UUID) == -1)
-		goto out_of_mem_handler;
+	tmp_handle->per_obj_file_handler = tmp_per_obj_file;
 
-	if (sqlite3_open(db_name_with_path, &db) == -1) {
-		syslog(LOG_ERR, "Can not connect or create database\n");
-		free(db_name_with_path);
+	memset(&tmp_persistant_object, 0, sizeof(struct persistant_object));
+	if (fread(&tmp_persistant_object, sizeof(struct persistant_object), 1, tmp_handle->per_obj_file_handler) != 1)
+		goto err_at_meta_read;
+
+	memcpy(&tmp_handle->objectInfo, &tmp_persistant_object.info, sizeof(struct persistant_object));
+	tmp_handle->attrs_count = tmp_persistant_object.attrs_count;
+	
+	if (tmp_handle->attrs_count > 0) {
+		tmp_handle->maxObjSizeBytes = (tmp_persistant_object.info.maxObjectSize + 7) / 8;
+		ret_val = load_attributes(tmp_handle);
+		if (ret_val == TEE_ERROR_OUT_OF_MEMORY || ret_val == TEE_ERROR_GENERIC) {
+			free(tmp_handle);
+			return ret_val;
+		}
+	}
+
+	data_begin = ftell(tmp_handle->per_obj_file_handler);
+	fseek(tmp_handle->per_obj_file_handler, 0, SEEK_END);
+	data_size = ftell(tmp_handle->per_obj_file_handler) - data_begin;
+	fseek(tmp_handle->per_obj_file_handler, data_begin, SEEK_SET);
+
+	if (data_size >= UINT32_MAX) {
+		syslog(LOG_ERR, "Data size too large\n");
 		return TEE_ERROR_GENERIC;
 	}
 
-	free(db_name_with_path);
-
-	tmp_handle = TEE_Malloc(sizeof(struct __TEE_ObjectHandle), 0);
-	if (tmp_handle == NULL)
-		goto out_of_mem_handler;
-
-	ret_val = load_object_handler(db, objectID, objectIDLen, tmp_handle);
-	if (ret_val != SQLITE_OK && ret_val != SQLITE_DONE && ret_val != TEE_SUCCESS)
-		goto load_err;
-
-	ret_val = load_attributes(db, objectID, objectIDLen, tmp_handle);
-	if (ret_val != SQLITE_OK && ret_val != SQLITE_DONE && ret_val != TEE_SUCCESS)
-		goto load_err;
-
-	ret_val = load_user_info(db, objectID, objectIDLen, tmp_handle);
-	if (ret_val != SQLITE_OK && ret_val != SQLITE_DONE && ret_val != TEE_SUCCESS)
-		goto load_err;
+	tmp_handle->objectInfo.dataSize = data_size;
+	tmp_handle->objectInfo.dataPosition = data_begin;
+	tmp_handle->data_begin = data_begin;
 
 	memcpy(tmp_handle->per_obj_id, objectID, objectIDLen);
 	tmp_handle->per_obj_id_len = objectIDLen;
 
 	tmp_handle->objectInfo.handleFlags |= (TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED);
 	*object = tmp_handle;
-	sqlite3_close(db);
 
 	return TEE_SUCCESS;
 
-out_of_mem_handler:
-	syslog(LOG_ERR, "Out of memory\n");
-	sqlite3_close(db);
-	return TEE_ERROR_OUT_OF_MEMORY;
-
-load_err:
+err_at_meta_read:
 	free(tmp_handle);
-	syslog(LOG_ERR, "Out of memory\n");
-	sqlite3_close(db);
 	return TEE_ERROR_GENERIC;
 }
 
 TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void* objectID, size_t objectIDLen, uint32_t flags, TEE_ObjectHandle attributes, void* initialData, size_t initialDataLen, TEE_ObjectHandle* object)
 {
-	char hex_UUID[sizeof(TEE_UUID) * 2 + 1];
-	sqlite3 *db;
-	char *db_name_with_path;
-	int sql_ret;
-	char *sql_err;
+	struct persistant_object tmp_per_obj;
 	size_t i;
-	uint32_t ret_val;
-
-	/* test */
-	void *test_UUID = (void*)UUID_test;
-	/* test */
+	FILE* tmp_per_obj_file;
+	TEE_Result ret_val;
 
 	if (storageID != TEE_STORAGE_PRIVATE)
 		return TEE_ERROR_ITEM_NOT_FOUND;
@@ -1442,108 +1275,89 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void* objectID, size_t
 		return TEE_ERROR_GENERIC; /* replace to panic(), when implemented */
 	}
 
-	if (query_for_access(objectID, objectIDLen, flags)) {
+	tmp_per_obj_file = query_for_access(objectID, objectIDLen, flags);
+	if (tmp_per_obj_file == NULL) {
 		syslog(LOG_ERR, "Access conflict\n");
 		return TEE_ERROR_ACCESS_CONFLICT;
 	}
 
-	/* Open connection to database */
-	for (i = 0; i < sizeof(TEE_UUID); ++i)
-		sprintf(hex_UUID + i * 2, "%02x", *((unsigned char*)test_UUID + i));
-
-	if (asprintf(&db_name_with_path, "%s%s.db", DB_PATH, hex_UUID) == -1) {
-		return TEE_ERROR_OUT_OF_MEMORY;
+	memset(&tmp_per_obj, 0, sizeof(struct persistant_object));
+	if (attributes != NULL) {
+		memcpy(&tmp_per_obj.info, &attributes->objectInfo, sizeof(TEE_ObjectInfo));
+		tmp_per_obj.attrs_count = attributes->attrs_count;
+	}
+	else {
+		tmp_per_obj.attrs_count = 0;
 	}
 
-	/* TEST !!! */
-	//remove(db_name_with_path);
-	/* TEST !!! */
+	memcpy(tmp_per_obj.per_obj_id, objectID, objectIDLen);
+	tmp_per_obj.obj_id_len = objectIDLen;
 
-	if (sqlite3_open(db_name_with_path, &db) == -1) {
-		syslog(LOG_ERR, "Can not connect or create database\n");
-		free(db_name_with_path);
-		return TEE_ERROR_GENERIC;
+	if (fwrite(&tmp_per_obj, sizeof(struct persistant_object), 1, tmp_per_obj_file) != 1)
+		goto err_at_meta_data_write;
+
+	if (attributes != NULL && attributes->attrs_count > 0) {
+		for (i = 0; i < attributes->attrs_count; ++i) {
+			if (fwrite(&attributes->attrs[i], sizeof(TEE_Attribute), 1, tmp_per_obj_file) != 1)
+				goto err_at_meta_data_write;
+
+			if (!is_value_attribute(attributes->attrs[i].attributeID))
+				if (fwrite(attributes->attrs[i].content.ref.buffer, attributes->attrs[i].content.ref.length, 1, tmp_per_obj_file) != 1)
+					goto err_at_meta_data_write;
+		}
 	}
 
-	free(db_name_with_path);
+	if (initialData != NULL) {
+		fwrite(initialData, initialDataLen, 1, tmp_per_obj_file);
+	}
 
-	/* Make more err checks */
-	sql_ret = sqlite3_exec(db, "BEGIN IMMEDIATE;", NULL, NULL, &sql_err);
-	if (sql_ret != SQLITE_OK)
-		goto db_err;
-
-	ret_val = create_tables(db);
-	if (ret_val != SQLITE_OK && ret_val != SQLITE_DONE && ret_val != TEE_SUCCESS)
-		goto func_err;
-
-	ret_val = insert_object_handler(db, objectID, objectIDLen, attributes);
-	if (ret_val != SQLITE_OK && ret_val != SQLITE_DONE && ret_val != TEE_SUCCESS)
-		goto func_err;
-
-	ret_val = insert_attributes(db, objectID, objectIDLen, attributes);
-	if (ret_val != SQLITE_OK && ret_val != SQLITE_DONE && ret_val != TEE_SUCCESS)
-		goto func_err;
-
-	ret_val = insert_user_data(db, objectID, objectIDLen, initialData, initialDataLen);
-	if (ret_val != SQLITE_OK && ret_val != SQLITE_DONE && ret_val != TEE_SUCCESS)
-		goto func_err;
-
-	/* Make more err checks */
-	sql_ret = sqlite3_exec(db, "COMMIT;", NULL, NULL, &sql_err);
-	if (sql_ret != SQLITE_OK)
-		goto db_err;
-
-	sqlite3_close(db);
+	fflush(tmp_per_obj_file);
 
 	if (object != NULL) {
-		/* open v2 */
+		*object = TEE_Malloc(sizeof(struct __TEE_ObjectHandle), 0);
+		if (*object == NULL)
+			return TEE_ERROR_OUT_OF_MEMORY;
+
+		memcpy(attributes, *object, sizeof(struct __TEE_ObjectHandle));
+		(*object)->per_obj_file_handler = tmp_per_obj_file;
+
+		if ((*object)->attrs_count > 0) {
+			ret_val = load_attributes((*object));
+			if (ret_val == TEE_ERROR_OUT_OF_MEMORY || ret_val == TEE_ERROR_GENERIC) {
+				free((*object));
+				return ret_val;
+			}
+		}
+
+		(*object)->objectInfo.handleFlags |= (TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED);
+		(*object)->data_begin = ftell((*object)->per_obj_file_handler);
+		(*object)->objectInfo.dataSize = initialDataLen;
+		if ((*object)->data_begin >= UINT32_MAX) {
+			syslog(LOG_ERR, "Data size too large\n");
+			TEE_CloseAndDeletePersistentObject((*object));
+			return TEE_ERROR_GENERIC;
+		}
+		(*object)->objectInfo.dataPosition = (*object)->data_begin;
+		memcpy((*object)->per_obj_id, objectID, objectIDLen);
+		(*object)->per_obj_id_len = objectIDLen;
+
 	}
 	else {
 		release_file(objectID, objectIDLen);
+		fclose(tmp_per_obj_file); /* Replace with NULL in future */
 	}
 
 	return TEE_SUCCESS;
 
-db_err:
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sql_err);
-	sqlite3_free(sql_err);
-
-func_err:
-	sqlite3_exec(db, "ROLLBACK", 0, 0, 0);
-	sqlite3_close(db);
-	release_file(objectID, objectIDLen);
-
-	/* Error has been logged and this is notification to user */
-	if (ret_val == SQLITE_FULL)
-		return TEE_ERROR_STORAGE_NO_SPACE;
-
-	if (ret_val == SQLITE_NOMEM)
-		return TEE_ERROR_OUT_OF_MEMORY;
-
-	if (ret_val == TEE_ERROR_OUT_OF_MEMORY)
-		return TEE_ERROR_OUT_OF_MEMORY;
-
+err_at_meta_data_write:
+	delete_file(objectID, objectIDLen);
+	syslog(LOG_ERR, "Error with write\n");
 	return TEE_ERROR_GENERIC;
 }
 
 TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void* newObjectID, size_t newObjectIDLen)
 {
-	char *update_objec_handler = "UPDATE object_handler SET id=? WHERE id=?;";
-	char *update_user_data = "UPDATE user_data SET id=? WHERE id=?;";
-	char *update_attributes = "UPDATE attributes SET id=? WHERE id=?;";
-	sqlite3_stmt *stmt_update_objec_handler;
-	sqlite3_stmt *stmt_update_user_data;
-	sqlite3_stmt *stmt_update_attributes;
-	char hex_UUID[sizeof(TEE_UUID) * 2 + 1];
-	sqlite3 *db;
-	char *db_name_with_path;
-	int sql_ret;
-	char *sql_err;
-	size_t i;
-
-	/* test */
-	void *test_UUID = (void*)UUID_test;
-	/* test */
+	FILE *tmp;
 
 	if (object == NULL || !(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
 		syslog(LOG_ERR, "ObjectID buffer is NULL or not persistant object\n");
@@ -1554,365 +1368,270 @@ TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void* newObjectID
 		return TEE_ERROR_GENERIC; /* replace to panic(), when implemented */
 	}
 
-	if (object != NULL && !(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED)) {
+	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META) || object->per_obj_file_handler == NULL) {
+		syslog(LOG_ERR, "TEE_RenamePerObj: No rights or not valid object\n");
 		return TEE_ERROR_GENERIC; /* replace to panic(), when implemented */
 	}
 
-	if (query_for_access(object->per_obj_id, object->per_obj_id_len, TEE_DATA_FLAG_ACCESS_WRITE_META)) {
-		syslog(LOG_ERR, "Access conflict\n");
-		return TEE_ERROR_ACCESS_CONFLICT;
-	}
-
-	if (is_object_id_in_use(newObjectID, newObjectIDLen)) {
+	tmp = is_object_id_in_use(object, newObjectID, newObjectIDLen);
+	if (tmp == NULL) {
 		syslog(LOG_ERR, "Access conflict: ID exists\n");
 		return TEE_ERROR_ACCESS_CONFLICT;
 	}
 
-	/* Open connection to database */
-	for (i = 0; i < sizeof(TEE_UUID); ++i)
-		sprintf(hex_UUID + i * 2, "%02x", *((unsigned char*)test_UUID + i));
-
-	if (asprintf(&db_name_with_path, "%s%s.db", DB_PATH, hex_UUID) == -1) {
-		return TEE_ERROR_OUT_OF_MEMORY;
-	}
-
-	if (sqlite3_open(db_name_with_path, &db) == -1) {
-		syslog(LOG_ERR, "Can not connect or create database\n");
-		free(db_name_with_path);
-		return TEE_ERROR_GENERIC;
-	}
-
-	free(db_name_with_path);
-
-	/* Object handler table */
-	sql_ret = sqlite3_exec(db, "BEGIN IMMEDIATE;", NULL, NULL, &sql_err);
-	if (sql_ret != SQLITE_OK)
-		goto db_err;
-
-	sql_ret = sqlite3_prepare_v2(db, update_objec_handler, -1, &stmt_update_objec_handler, NULL);
-	if(sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt_update_objec_handler, 1, newObjectID, newObjectIDLen, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt_update_objec_handler, 2, object->per_obj_id, object->per_obj_id_len, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_step(stmt_update_objec_handler);
-	if (sql_ret != SQLITE_DONE)
-		goto err;
-
-	sqlite3_finalize(stmt_update_objec_handler);
-
-	/* Attributes table */
-	sql_ret = sqlite3_prepare_v2(db, update_attributes, -1, &stmt_update_attributes, NULL);
-	if(sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt_update_attributes, 1, newObjectID, newObjectIDLen, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt_update_attributes, 2, object->per_obj_id, object->per_obj_id_len, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_step(stmt_update_attributes);
-	if (sql_ret != SQLITE_DONE)
-		goto err;
-
-	sqlite3_finalize(stmt_update_attributes);
-
-	/* User data table */
-	sql_ret = sqlite3_prepare_v2(db, update_user_data, -1, &stmt_update_user_data, NULL);
-	if(sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt_update_user_data, 1, newObjectID, newObjectIDLen, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt_update_user_data, 2, object->per_obj_id, object->per_obj_id_len, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_step(stmt_update_user_data);
-	if (sql_ret != SQLITE_DONE)
-		goto err;
-
-	sqlite3_finalize(stmt_update_user_data);
-
-	sql_ret = sqlite3_exec(db, "COMMIT;", NULL, NULL, &sql_err);
-	if (sql_ret != SQLITE_OK)
-		goto db_err;
-
-	sqlite3_close(db);
-	release_file(object->per_obj_id, object->per_obj_id_len);
-
+	object->per_obj_file_handler = tmp;
+	fseek(object->per_obj_file_handler, object->data_begin, SEEK_SET);
 	memcpy(object->per_obj_id, newObjectID, newObjectIDLen);
 	object->per_obj_id_len = newObjectIDLen;
 
 	return TEE_SUCCESS;
-
-err:
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sqlite3_errmsg(db));
-	return TEE_ERROR_GENERIC;
-
-db_err:
-	sqlite3_exec(db, "ROLLBACK", 0, 0, 0);
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sql_err);
-	sqlite3_free(sql_err);
-	sqlite3_close(db);
-	release_file(object->per_obj_id, object->per_obj_id_len);
-	return TEE_ERROR_GENERIC;
 }
 
 void TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object)
 {
-	char *delete_objec_handler = "DELETE FROM object_handler WHERE id=?;";
-	char *delete_user_data = "DELETE FROM user_data WHERE id=?;";
-	char *delete_attributes = "DELETE FROM attributes WHERE id=?;";
-	sqlite3_stmt *stmt_delete_objec_handler;
-	sqlite3_stmt *stmt_delete_user_data;
-	sqlite3_stmt *stmt_delete_attributes;
-	char hex_UUID[sizeof(TEE_UUID) * 2 + 1];
-	sqlite3 *db;
-	char *db_name_with_path;
-	int sql_ret;
-	char *sql_err;
-	size_t i;
-
-	/* test */
-	void *test_UUID = (void*)UUID_test;
-	/* test */
-
 	if (object == NULL || !(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
 		syslog(LOG_ERR, "ObjectID buffer is NULL or not persistant object\n");
 		return; /* replace to panic(), when implemented */
 	}
 
-	if (query_for_access(object->per_obj_id, object->per_obj_id_len, TEE_DATA_FLAG_ACCESS_WRITE_META)) {
-		syslog(LOG_ERR, "Access conflict\n");
-		return ;
+	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META) || object->per_obj_file_handler == NULL) {
+		syslog(LOG_ERR, "TEE_RenamePerObj: No rights or not valid object\n");
+		return; /* replace to panic(), when implemented */
 	}
 
-	/* Open connection to database */
-	for (i = 0; i < sizeof(TEE_UUID); ++i)
-		sprintf(hex_UUID + i * 2, "%02x", *((unsigned char*)test_UUID + i));
-
-	if (asprintf(&db_name_with_path, "%s%s.db", DB_PATH, hex_UUID) == -1) {
-		return;
-	}
-
-	if (sqlite3_open(db_name_with_path, &db) == -1) {
-		syslog(LOG_ERR, "Can not connect or create database\n");
-		free(db_name_with_path);
-		return;
-	}
-
-	free(db_name_with_path);
-
-	/* Object handler table */
-	sql_ret = sqlite3_exec(db, "BEGIN IMMEDIATE;", NULL, NULL, &sql_err);
-	if (sql_ret != SQLITE_OK)
-		goto db_err;
-
-	sql_ret = sqlite3_prepare_v2(db, delete_objec_handler, -1, &stmt_delete_objec_handler, NULL);
-	if(sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt_delete_objec_handler, 1, &object->per_obj_id, object->per_obj_id_len, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_step(stmt_delete_objec_handler);
-	if (sql_ret != SQLITE_DONE)
-		goto err;
-
-	sqlite3_finalize(stmt_delete_objec_handler);
-
-	/* Attributes table */
-	sql_ret = sqlite3_prepare_v2(db, delete_attributes, -1, &stmt_delete_attributes, NULL);
-	if(sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt_delete_attributes, 1, &object->per_obj_id, object->per_obj_id_len, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_step(stmt_delete_attributes);
-	if (sql_ret != SQLITE_DONE)
-		goto err;
-
-	sqlite3_finalize(stmt_delete_attributes);
-
-	/* User data table */
-	sql_ret = sqlite3_prepare_v2(db, delete_user_data, -1, &stmt_delete_user_data, NULL);
-	if(sql_ret != SQLITE_OK )
-		goto err;
-
-	sql_ret = sqlite3_bind_blob(stmt_delete_user_data, 1, &object->per_obj_id, object->per_obj_id_len, SQLITE_TRANSIENT);
-	if (sql_ret != SQLITE_OK)
-		goto err;
-
-	sql_ret = sqlite3_step(stmt_delete_user_data);
-	if (sql_ret != SQLITE_DONE)
-		goto err;
-
-	sqlite3_finalize(stmt_delete_user_data);
-
-	sql_ret = sqlite3_exec(db, "COMMIT;", NULL, NULL, &sql_err);
-	if (sql_ret != SQLITE_OK)
-		goto db_err;
-
-	sqlite3_close(db);
-	release_file(object->per_obj_id, object->per_obj_id_len);
-
-	TEE_CloseObject(object);
-
-	return;
-
-err:
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sqlite3_errmsg(db));
-	return;
-
-db_err:
-	sqlite3_exec(db, "ROLLBACK", 0, 0, 0);
-	syslog(LOG_ERR, "Database error: %i : %s\n", sql_ret, sql_err);
-	sqlite3_free(sql_err);
-	sqlite3_close(db);
-	release_file(object->per_obj_id, object->per_obj_id_len);
-	return;
+	delete_file(object->per_obj_id, object->per_obj_id_len);
+	fclose(object->per_obj_file_handler); /*replace with NULL*/
+	free_attrs(object);
+	free(object->attrs);
+	free(object);
 }
 
-/* TEST !! */
-int main() {
-	printf(" ## Starting ##\n");
+TEE_Result TEE_AllocatePersistentObjectEnumerator(TEE_ObjectEnumHandle* objectEnumerator)
+{
+	if (objectEnumerator == NULL)
+		return TEE_ERROR_GENERIC;
 
-	openlog(NULL, 0, 0);
-
-	TEE_Result ret;
-	TEE_ObjectHandle handler;
-	TEE_ObjectHandle handler2;
-	TEE_ObjectHandle han;
-	TEE_ObjectHandle han2;
-	size_t key_size = 256;
-	char objID[] = "56c5d1b260704de30fe7af67e5b9327613abebe6172a2b4e949d84b8e561e2fb";
-	char objID2[] = "65c5d1b260704de30fe7af67e5b9327613abebe6172a2b4e949d84b8e561e2fb";
-	size_t objID_len = 64;
-	uint32_t flags = 0xffffffff ^ TEE_DATA_FLAG_EXCLUSIVE;
-	void * data;
-	size_t data_len = 12;
-	size_t i, j;
-
-	data = malloc(data_len);
-	if (data == NULL)
-		return 0;
-	RAND_bytes(data, data_len);
-
-	ret = TEE_AllocateTransientObject(TEE_TYPE_AES, key_size, &handler);
-	if (ret == TEE_ERROR_OUT_OF_MEMORY) {
-		printf("Fail: no mem\n");
-		return 0;
+	*objectEnumerator = TEE_Malloc(sizeof(struct __TEE_ObjectEnumHandle), 0);
+	if (*objectEnumerator == NULL) {
+		*objectEnumerator = NULL;
+		return TEE_ERROR_OUT_OF_MEMORY;
 	}
 
-	if (ret == TEE_ERROR_NOT_SUPPORTED) {
-		printf("Fail: no sup\n");
-		free(data);
-		return 0;
-	}
-
-	ret = TEE_GenerateKey(handler, key_size, NULL, 0);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: bad para\n");
-		return 0;
-	}
-
-	ret = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, (void *)objID, objID_len, flags, handler, data, data_len, NULL);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: per creation\n");
-		return 0;
-	}
-
-	ret = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, (void *)objID, objID_len, flags, &handler2);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: per open\n");
-		return 0;
-	}
-/*
-	for (j = 0; j < handler->attrs_count; j++) {
-		printf("org: ");
-		for (i = 0; i < handler->attrs[j].content.ref.length; i++) {
-			printf("%02x", ((unsigned char *) handler->attrs[j].content.ref.buffer) [i]);
-		}
-		printf("\n");
-		printf("ret: ");
-		for (i = 0; i < handler2->attrs[j].content.ref.length; i++) {
-			printf("%02x", ((unsigned char *) handler2->attrs[j].content.ref.buffer) [i]);
-		}
-		printf("\n");
-	}
-*/
-	TEE_CloseObject(handler);
-	TEE_CloseAndDeletePersistentObject(handler2);
-
-	/* Another one */
-	ret = TEE_AllocateTransientObject(TEE_TYPE_AES, key_size, &han);
-	if (ret == TEE_ERROR_OUT_OF_MEMORY) {
-		printf("Fail: no mem\n");
-		return 0;
-	}
-
-	if (ret == TEE_ERROR_NOT_SUPPORTED) {
-		printf("Fail: no sup\n");
-		free(data);
-		return 0;
-	}
-
-	ret = TEE_GenerateKey(han, key_size, NULL, 0);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: bad para\n");
-		return 0;
-	}
-
-	ret = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, (void *)objID2, objID_len, flags, han, data, data_len, NULL);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: per creation\n");
-		return 0;
-	}
-
-	ret = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, (void *)objID2, objID_len, flags, &han2);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: per open\n");
-		return 0;
-	}
-/*
-	for (j = 0; j < handler->attrs_count; j++) {
-		printf("org: ");
-		for (i = 0; i < handler->attrs[j].content.ref.length; i++) {
-			printf("%02x", ((unsigned char *) handler->attrs[j].content.ref.buffer) [i]);
-		}
-		printf("\n");
-		printf("ret: ");
-		for (i = 0; i < handler2->attrs[j].content.ref.length; i++) {
-			printf("%02x", ((unsigned char *) handler2->attrs[j].content.ref.buffer) [i]);
-		}
-		printf("\n");
-	}
-*/
-
-	TEE_CloseObject(han);
-	TEE_CloseObject(han2);
-
-	free(data);
-
-	closelog();
-
-	return 1;
+	return TEE_SUCCESS;
 }
+
+void TEE_FreePersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumerator)
+{
+	if (objectEnumerator == NULL)
+		return;
+
+	closedir(objectEnumerator->dir);
+	free(objectEnumerator);
+}
+
+void TEE_ResetPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumerator)
+{
+	if (objectEnumerator == NULL)
+		return;
+
+	closedir(objectEnumerator->dir);
+	memset(objectEnumerator, 0, sizeof(struct __TEE_ObjectEnumHandle));
+}
+
+TEE_Result TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumerator, uint32_t storageID)
+{
+	char *dir_path = NULL;
+	char UUID[sizeof(TEE_UUID)];
+
+	if (storageID != TEE_STORAGE_PRIVATE)
+		return TEE_ERROR_ITEM_NOT_FOUND;
+
+	if (objectEnumerator == NULL)
+		return TEE_ERROR_GENERIC;
+
+	get_uuid(UUID);
+
+	if (asprintf(&dir_path, "%s%s/", SECURE_STORAGE_PATH, UUID) == -1) {
+		return TEE_ERROR_GENERIC; // TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	objectEnumerator->dir = opendir(dir_path);
+	free(dir_path);
+
+	return TEE_SUCCESS;
+}
+
+TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator, TEE_ObjectInfo objectInfo, void* objectID, size_t* objectIDLen)
+{
+	struct persistant_object per_obj;
+	struct dirent *entry;
+	char *name_with_path = NULL;
+	FILE *tmp_file;
+	char UUID[sizeof(TEE_UUID)];
+
+	get_uuid(UUID);
+
+	if (objectEnumerator == NULL || objectID == NULL || objectIDLen == NULL)
+		return TEE_ERROR_GENERIC;
+
+	if (objectEnumerator->dir == NULL) {
+		syslog(LOG_ERR, "Enumeration is not started\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+next_file:
+
+	while ((entry = readdir(objectEnumerator->dir)) != NULL) {
+		if (entry->d_name[0] == '.')
+			continue;
+	}
+
+	if (entry == NULL) {
+		syslog(LOG_DEBUG, "Enumeration has reached end\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	if (asprintf(&name_with_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, entry->d_name) == -1) {
+		return TEE_ERROR_GENERIC; // TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	tmp_file = fopen(name_with_path, "rb");
+	if (tmp_file == NULL) {
+		syslog(LOG_ERR, "Cannot peek into file (enumeration)\n");
+		goto next_file;
+	}
+
+	free(name_with_path);
+
+	if (fread(&per_obj, 1, sizeof(struct persistant_object), tmp_file) != 1) {
+		syslog(LOG_ERR, "Cannot read file (enumeration)\n");
+		fclose(tmp_file);
+		return TEE_ERROR_GENERIC;
+	}
+
+	fclose(tmp_file);
+
+	memcpy(&objectInfo, &per_obj.info, sizeof(TEE_ObjectInfo));
+	if (per_obj.obj_id_len > *objectIDLen)
+		return TEE_ERROR_GENERIC;
+
+	memcpy(objectID, per_obj.per_obj_id, per_obj.obj_id_len);
+	*objectIDLen = per_obj.obj_id_len;
+
+	return TEE_SUCCESS;
+}
+
+TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void* buffer, size_t size, uint32_t* count)
+{
+	if (object == NULL || object->per_obj_file_handler == NULL)
+		return TEE_ERROR_GENERIC;
+
+	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_READ)) {
+		syslog(LOG_ERR, "Can not read persistant object data: Not proper access rights\n");
+		return TEE_ERROR_GENERIC; /* replace to panic(), when implemented */
+	}
+
+	*count = fread(buffer, 1, size, object->per_obj_file_handler);
+
+	object->objectInfo.dataPosition += *count;
+
+	return TEE_SUCCESS;
+}
+
+TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void* buffer, size_t size)
+{
+	size_t write_bytes;
+
+	if (object == NULL || object->per_obj_file_handler == NULL)
+		return TEE_ERROR_GENERIC;
+
+	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE)) {
+		syslog(LOG_ERR, "Can not write persistant object data: Not proper access rights\n");
+		return TEE_ERROR_GENERIC; /* replace to panic(), when implemented */
+	}
+
+	write_bytes = fwrite(buffer, 1, size, object->per_obj_file_handler);
+
+	object->objectInfo.dataPosition += write_bytes;
+	object->objectInfo.dataSize += write_bytes;
+
+	return TEE_SUCCESS;
+}
+
+TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)
+{
+	if (object == NULL || object->per_obj_file_handler == NULL)
+		return TEE_ERROR_GENERIC;
+
+	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE)) {
+		syslog(LOG_ERR, "Can not write persistant object data: Not proper access rights\n");
+		return TEE_ERROR_GENERIC; /* replace to panic(), when implemented */
+	}
+
+	if (size >= object->data_begin)
+		ftruncate(fileno(object->per_obj_file_handler), size);
+	else
+		ftruncate(fileno(object->per_obj_file_handler), object->data_begin);
+
+	if (size < (object->objectInfo.dataPosition - object->data_begin))
+		fseek(object->per_obj_file_handler, size + object->data_begin, SEEK_SET);
+
+	return TEE_SUCCESS;
+}
+
+TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whence whence)
+{
+	if (object == NULL || object->per_obj_file_handler == NULL)
+		return TEE_ERROR_GENERIC;
+
+	if (whence == TEE_DATA_SEEK_CUR) {
+		if (offset < 0) {
+			if (abs(offset) > object->objectInfo.dataPosition - object->data_begin) {
+				fseek(object->per_obj_file_handler, object->data_begin, SEEK_SET);
+				return TEE_SUCCESS;
+			}
+		}
+		else {
+			if (offset > object->objectInfo.dataSize - object->data_begin) {
+				fseek(object->per_obj_file_handler, object->objectInfo.dataSize + object->data_begin, SEEK_SET);
+				return TEE_SUCCESS;
+			}
+		}
+		fseek(object->per_obj_file_handler, offset, SEEK_CUR);
+	}
+	else if (whence == TEE_DATA_SEEK_END) {
+		if (offset > 0) {
+			fseek(object->per_obj_file_handler, object->objectInfo.dataSize + object->data_begin, SEEK_END);
+			return TEE_SUCCESS;
+		}
+		else {
+			if ((long)offset > object->objectInfo.dataSize) {
+				fseek(object->per_obj_file_handler, object->data_begin, SEEK_SET);
+				return TEE_SUCCESS;
+			}
+		}
+		fseek(object->per_obj_file_handler, offset, SEEK_END);
+	}
+	else if (whence == TEE_DATA_SEEK_SET) {
+		if (offset < 0) {
+			fseek(object->per_obj_file_handler, object->data_begin, SEEK_SET);
+			return TEE_SUCCESS;
+		}
+		else {
+			if ((long)offset > object->objectInfo.dataSize) {
+				fseek(object->per_obj_file_handler, object->objectInfo.dataSize + object->data_begin, SEEK_SET);
+				return TEE_SUCCESS;
+			}
+		}
+		fseek(object->per_obj_file_handler, object->data_begin + offset, SEEK_SET);
+	}
+	else {
+		return TEE_ERROR_GENERIC;
+	}
+
+	return TEE_SUCCESS;
+}
+
 
 
 
