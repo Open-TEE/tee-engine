@@ -10,5 +10,6 @@ Project {
         "launcher/launcher.qbs",
         "TAs/TrustedApplications.qbs",
         "tests/storage_test.qbs",
+        "tests/crypto_test.qbs",
     ]
 }

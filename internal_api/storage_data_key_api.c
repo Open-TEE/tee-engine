@@ -38,23 +38,7 @@
 #include "storage_key_apis_external_funcs.h"
 #include "tee_panic.h"
 #include "tee_storage_common.h"
-
-struct persistant_object_info {
-	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
-	size_t obj_id_len;
-	FILE *object_file;
-	long data_begin;
-	long data_size;
-	long data_position;
-};
-
-struct __TEE_ObjectHandle {
-	struct persistant_object_info per_object;
-	TEE_ObjectInfo objectInfo;
-	TEE_Attribute *attrs;
-	uint32_t attrs_count;
-	uint32_t maxObjSizeBytes;
-};
+#include "tee_object_handle.h"
 
 struct __TEE_ObjectEnumHandle {
 	uint32_t ID;
