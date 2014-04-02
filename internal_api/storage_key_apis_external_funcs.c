@@ -27,7 +27,7 @@
 #include <unistd.h>
 
 #include "data_types.h"
-#include "storage_data_key_api.h"
+#include "tee_storage_api.h"
 #include "tee_panic.h"
 #include "tee_memory.h"
 #include "tee_storage_common.h"
@@ -167,11 +167,15 @@ static FILE *request_file(char *file_name_with_path, size_t request_access)
 	if (request_access & TEE_DATA_FLAG_ACCESS_WRITE_META ||
 	    request_access & TEE_DATA_FLAG_ACCESS_WRITE) {
 		test_exist = fopen(file_name_with_path, "rb+");
+
 		if (test_exist == NULL)
 			return fopen(file_name_with_path, "w+b");
+
 		return test_exist;
+
 	} else if (request_access & TEE_DATA_FLAG_ACCESS_READ) {
 		return fopen(file_name_with_path, "rb");
+
 	} else {
 		syslog(LOG_ERR, "Cannot open file\n");
 		return NULL;
@@ -322,6 +326,9 @@ bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID
 bool ext_alloc_for_enumerator(uint32_t *ID)
 {
 	struct storage_enumerator *new_enumerator;
+
+	if (ID == NULL)
+		return false;
 
 	/* MAlloc for handle and fill */
 	new_enumerator = TEE_Malloc(sizeof(struct storage_enumerator), 0);

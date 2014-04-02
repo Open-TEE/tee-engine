@@ -4,6 +4,7 @@ CppApplication {
     name: "crypto_test"
     type: "application"
 
+    cpp.debugInformation: true
     cpp.libraryPaths: ["/home/dettenbo/project-build/qtc_Desktop-release/"]
     cpp.dynamicLibraries: ["InternalApi", "ssl", "crypto" ]
 

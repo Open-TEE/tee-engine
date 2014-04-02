@@ -18,7 +18,7 @@
 #define __TEE_OBJECT_ENUM_HANDLE_H__
 
 #include "data_types.h"
-#include "storage_data_key_api.h"
+#include "tee_storage_api.h"
 
 struct storage_obj_meta_data {
 	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];

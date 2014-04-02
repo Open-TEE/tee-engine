@@ -51,7 +51,7 @@ struct key {
 	EVP_CIPHER_CTX *ctx;
 };
 
-struct __TEE_OperationHandle{
+struct __TEE_OperationHandle {
 	TEE_OperationInfo operation_info;
 	struct key key;
 };
@@ -280,117 +280,6 @@ err:
 	free(init_data);
 }
 
-static void AES_256_ctr_enc_and_dec()
-{
-	printf("  ####   AES_256_ctr_enc_and_dec   ####\n");
-
-	TEE_Result ret;
-	TEE_ObjectHandle key_handler = NULL;
-	size_t key_size = 256;
-	TEE_OperationHandle enc_handle = NULL;
-	TEE_OperationHandle dec_handle = NULL;
-	void *plain = NULL;
-	size_t plain_len = 100;
-	void *cipher = NULL;
-	size_t cipher_len = key_size;
-	void *IV = NULL;
-	size_t IVlen = key_size;
-	size_t write_bytes = 0;
-
-	IV = TEE_Malloc(IVlen, 0);
-	plain = TEE_Malloc(plain_len, 0);
-	cipher = TEE_Malloc(cipher_len, 0);
-	if (!IV || !plain || !cipher) {
-		printf("Fail: IV || plain || cipher alloc\n");
-		goto err;
-	}
-	RAND_bytes(IV, IVlen);
-	RAND_bytes(plain, plain_len);
-
-	printf("plain: \n");
-	pri_void_buf(plain, plain_len);
-
-
-	ret = TEE_AllocateTransientObject(TEE_TYPE_AES, key_size, &key_handler);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: transient alloc\n");
-		goto err;
-	}
-
-	ret = TEE_GenerateKey(key_handler, key_size, NULL, 0);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: gen key\n");
-		goto err;
-	}
-
-	ret = TEE_AllocateOperation(&enc_handle, TEE_ALG_AES_CTR, TEE_MODE_ENCRYPT, key_size);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: alloc enc handle\n");
-		goto err;
-	}
-
-	ret = TEE_AllocateOperation(&dec_handle, TEE_ALG_AES_CTR, TEE_MODE_DECRYPT, key_size);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: alloc dec handle\n");
-		goto err;
-	}
-
-	ret = TEE_SetOperationKey(enc_handle, key_handler);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: set enc key\n");
-		goto err;
-	}
-
-	ret = TEE_SetOperationKey(dec_handle, key_handler);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: set dec key\n");
-		goto err;
-	}
-
-	TEE_CipherInit(enc_handle, NULL, 0);
-	TEE_CipherInit(dec_handle, NULL, 0);
-
-	ret = TEE_CipherUpdate(enc_handle, plain, plain_len, cipher, &write_bytes);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: update enc\n");
-		goto err;
-	}
-
-	ret = TEE_CipherDoFinal(enc_handle, NULL, 0,
-				(unsigned char *)cipher + write_bytes, &write_bytes);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: update enc\n");
-		goto err;
-	}
-
-	printf("cipher: \n");
-	pri_void_buf(cipher, cipher_len);
-	memset(plain, 0, plain_len);
-	printf("plain zero: \n");
-	pri_void_buf(plain, plain_len);
-
-	ret = TEE_CipherUpdate(dec_handle, cipher, cipher_len, plain, &write_bytes);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: update enc\n");
-		goto err;
-	}
-
-	ret = TEE_CipherDoFinal(enc_handle, NULL, 0,
-				(unsigned char *)plain + write_bytes, &write_bytes);
-	if (ret != TEE_SUCCESS) {
-		printf("Fail: update enc\n");
-		goto err;
-	}
-
-	printf("dec plain: \n");
-	pri_void_buf(plain, plain_len);
-
-err:
-	TEE_FreeTransientObject(key_handler);
-	TEE_FreeOperation(enc_handle);
-	TEE_FreeOperation(dec_handle);
-}
-
 static void set_RSA_key_to_operation()
 {
 	printf("  ####   set_RSA_key_to_operation   ####\n");
@@ -439,27 +328,32 @@ static void AES_256_xts_enc_and_dec()
 	TEE_ObjectHandle key2 = NULL;
 	TEE_OperationHandle enc_handle = NULL;
 	TEE_OperationHandle dec_handle = NULL;
+
 	void *plain = NULL;
-	size_t plain_len = 100;
 	void *cipher = NULL;
-	size_t cipher_len = key_size + 1; /* +1 if you like add \n */
 	void *IV = NULL;
+	void *dec_plain = NULL;
+
+	size_t plain_len = 100;
+	size_t cipher_len = plain_len + 800; /* +1 if you like add \n */
+	size_t dec_plain_len = 100;
 	size_t IVlen = key_size;
+
 	size_t write_bytes = 0;
+	size_t write_to_cipher = 0;
+	size_t write_to_dec_plain = 0;
 	size_t total_write_bytes = 0;
 
 	IV = TEE_Malloc(IVlen, 0);
 	plain = TEE_Malloc(plain_len, 0);
 	cipher = TEE_Malloc(cipher_len, 0);
-	if (!IV || !plain || !cipher) {
-		printf("Fail: IV || plain || cipher alloc\n");
+	dec_plain = TEE_Malloc(dec_plain_len, 0);
+	if (!IV || !plain || !cipher || !dec_plain) {
+		printf("Fail: IV || plain || cipher || dec_plain alloc\n");
 		goto err;
 	}
 	RAND_bytes(IV, IVlen);
 	RAND_bytes(plain, plain_len);
-
-	printf("plain: \n");
-	pri_void_buf(plain, plain_len);
 
 	/* Alloc and gen keys */
 	ret = TEE_AllocateTransientObject(TEE_TYPE_AES, key_size, &key1);
@@ -516,6 +410,87 @@ static void AES_256_xts_enc_and_dec()
 	TEE_CipherInit(dec_handle, IV, IVlen);
 
 	/* Decrypt */
+	write_bytes = cipher_len;
+	ret = TEE_CipherUpdate(enc_handle, plain, plain_len, cipher, &write_bytes);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: update enc\n");
+		goto err;
+	}
+
+	write_to_cipher += write_bytes;
+	write_bytes = cipher_len - write_to_cipher;
+	ret = TEE_CipherDoFinal(enc_handle, NULL, 0,
+				(unsigned char *)cipher + write_to_cipher, &write_bytes);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: update enc\n");
+		goto err;
+	}
+
+	cipher_len = write_to_cipher + write_bytes;
+
+	/* Encrypt */
+	write_bytes = dec_plain_len;
+	ret = TEE_CipherUpdate(dec_handle, cipher, cipher_len, dec_plain, &write_bytes);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: update enc\n");
+		goto err;
+	}
+
+	write_to_dec_plain += write_bytes;
+
+	write_bytes = dec_plain_len - write_to_dec_plain;
+	ret = TEE_CipherDoFinal(enc_handle, NULL, 0,
+				(unsigned char *)dec_plain + write_to_dec_plain, &write_bytes);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: update enc\n");
+		goto err;
+	}
+
+	dec_plain_len = write_to_dec_plain + write_bytes;
+
+	if (bcmp(dec_plain, plain, write_to_dec_plain)) {
+		printf("Fail: can't dec from enc\n");
+		goto err;
+	}
+
+err:
+	TEE_FreeTransientObject(key1);
+	TEE_FreeTransientObject(key2);
+	TEE_FreeOperation(enc_handle);
+	TEE_FreeOperation(dec_handle);
+	TEE_Free(IV);
+	TEE_Free(cipher);
+	TEE_Free(plain);
+	TEE_Free(dec_plain);
+}
+
+static bool warp_sym_enc(TEE_ObjectHandle key, void *IV, size_t IV_len, uint32_t alg,
+		     void *plain, size_t plain_len, void *cipher, size_t *cipher_len)
+{
+	TEE_Result ret;
+	TEE_OperationHandle enc_handle = NULL;
+	size_t write_bytes = 0;
+	size_t total_write_bytes = 0;
+	TEE_ObjectInfo info;
+
+	TEE_GetObjectInfo(key, &info);
+
+	ret = TEE_AllocateOperation(&enc_handle, alg, TEE_MODE_ENCRYPT, info.maxObjectSize);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: alloc enc handle\n");
+		goto err;
+	}
+
+	ret = TEE_SetOperationKey(enc_handle, key);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: set enc key\n");
+		goto err;
+	}
+
+	TEE_CipherInit(enc_handle, IV, IV_len);
+
+	write_bytes = *cipher_len;
+
 	ret = TEE_CipherUpdate(enc_handle, plain, plain_len, cipher, &write_bytes);
 	if (ret != TEE_SUCCESS) {
 		printf("Fail: update enc\n");
@@ -532,41 +507,202 @@ static void AES_256_xts_enc_and_dec()
 	}
 
 	total_write_bytes += write_bytes;
-	printf("cipher: \n");
-	pri_void_buf(cipher, cipher_len);
-	memset(plain, 0, plain_len);
+	*cipher_len = total_write_bytes;
 
-	/* Encrypt */
-	ret = TEE_CipherUpdate(dec_handle, cipher, total_write_bytes, plain, &write_bytes);
+	TEE_FreeOperation(enc_handle);
+	return true;
+err:
+	TEE_FreeOperation(enc_handle);
+	return false;
+}
+
+static bool warp_sym_dec(TEE_ObjectHandle key, void *IV, size_t IV_len, uint32_t alg,
+			 void *cipher, size_t cipher_len, void *plain, size_t *plain_len)
+{
+	TEE_Result ret = TEE_SUCCESS;
+	TEE_OperationHandle dec_handle = NULL;
+	size_t write_bytes = 0;
+	size_t total_write_bytes = 0;
+	TEE_ObjectInfo info;
+
+	TEE_GetObjectInfo(key, &info);
+
+	ret = TEE_AllocateOperation(&dec_handle, alg, TEE_MODE_DECRYPT, info.maxObjectSize);
 	if (ret != TEE_SUCCESS) {
-		printf("Fail: update enc\n");
+		printf("Fail: alloc dec handle\n");
 		goto err;
 	}
 
-	ret = TEE_CipherDoFinal(enc_handle, NULL, 0,
+	ret = TEE_SetOperationKey(dec_handle, key);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: set dec key\n");
+		goto err;
+	}
+
+	TEE_CipherInit(dec_handle, IV, IV_len);
+
+	write_bytes = *plain_len;
+	ret = TEE_CipherUpdate(dec_handle, cipher, cipher_len, plain, &write_bytes);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: update dec\n");
+		goto err;
+	}
+
+	total_write_bytes += write_bytes;
+
+	ret = TEE_CipherDoFinal(dec_handle, NULL, 0,
 				(unsigned char *)plain + write_bytes, &write_bytes);
 	if (ret != TEE_SUCCESS) {
-		printf("Fail: update enc\n");
+		printf("Fail: update dec\n");
 		goto err;
 	}
 
-	/* free stuff */
+	total_write_bytes += write_bytes;
+	*plain_len = total_write_bytes;
 
-	printf("dec plain: \n");
-	pri_void_buf(plain, plain_len);
+	TEE_FreeOperation(dec_handle);
+	return true;
+err:
+	TEE_FreeOperation(dec_handle);
+	return false;
+}
+
+static void des3_cbc_enc_dec()
+{
+	printf("  ####   des3_cbc_enc_dec   ####\n");
+
+	TEE_Result ret = TEE_SUCCESS;
+	size_t key_size = 112;
+	TEE_ObjectHandle key = NULL;
+
+	size_t plain_len = 240;
+	size_t cipher_len = 300;
+	size_t dec_plain_len = plain_len + 8;
+	size_t IVlen = key_size + 16;
+
+	void *plain = NULL;
+	void *cipher = NULL;
+	void *dec_plain = NULL;
+	void *IV = NULL;
+
+	size_t write_to_cipher = 0;
+	size_t write_to_dec_plain = 0;
+
+	IV = TEE_Malloc(IVlen, 0);
+	plain = TEE_Malloc(plain_len, 0);
+	cipher = TEE_Malloc(cipher_len, 0);
+	dec_plain = TEE_Malloc(dec_plain_len, 0);
+	if (!IV || !plain || !cipher || !dec_plain) {
+		printf("Fail: IV || plain || cipher alloc || dec_plain\n");
+		goto err;
+	}
+	RAND_bytes(IV, IVlen);
+	RAND_bytes(plain, plain_len);
+
+	/* Alloc and gen keys */
+	ret = TEE_AllocateTransientObject(TEE_TYPE_DES3, key_size, &key);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: transient alloc key\n");
+		goto err;
+	}
+
+	ret = TEE_GenerateKey(key, key_size, NULL, 0);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: gen key\n");
+		goto err;
+	}
+
+	write_to_cipher = cipher_len;
+	if (!warp_sym_enc(key, IV, IVlen, TEE_ALG_DES3_CBC_NOPAD, plain, plain_len, cipher, &write_to_cipher))
+		goto err;
+
+	cipher_len = write_to_cipher;
+
+	write_to_dec_plain = dec_plain_len;
+	if (!warp_sym_dec(key, IV, IVlen, TEE_ALG_DES3_CBC_NOPAD, cipher, cipher_len, dec_plain, &write_to_dec_plain))
+		goto err;
+
+	if (bcmp(dec_plain, plain, plain_len)) {
+		printf("Fail: can't dec from enc\n");
+		goto err;
+	}
 
 err:
-	return;
-	/*
-	TEE_FreeTransientObject(key1);
-	TEE_FreeTransientObject(key2);
-	TEE_FreeOperation(enc_handle);
-	TEE_FreeOperation(dec_handle);
+	TEE_FreeTransientObject(key);
+	TEE_Free(plain);
 	TEE_Free(IV);
 	TEE_Free(cipher);
-	TEE_Free(plain);
-*/
+	TEE_Free(dec_plain);
 }
+
+static void AES_256_ctr_enc_and_dec()
+{
+	printf("  ####   AES_256_ctr_enc_and_dec   ####\n");
+
+	TEE_Result ret = TEE_SUCCESS;
+	size_t key_size = 256;
+	TEE_ObjectHandle key = NULL;
+
+	size_t plain_len = 20;
+	size_t cipher_len = 20;
+	size_t dec_plain_len = plain_len;
+	size_t IVlen = key_size;
+
+	void *plain = NULL;
+	void *cipher = NULL;
+	void *dec_plain = NULL;
+	void *IV = NULL;
+
+	size_t write_to_cipher = 0;
+	size_t write_to_dec_plain = 0;
+
+	IV = TEE_Malloc(IVlen, 0);
+	plain = TEE_Malloc(plain_len, 0);
+	cipher = TEE_Malloc(cipher_len, 0);
+	dec_plain = TEE_Malloc(dec_plain_len, 0);
+	if (!IV || !plain || !cipher || !dec_plain) {
+		printf("Fail: IV || plain || cipher alloc || dec_plain\n");
+		goto err;
+	}
+	RAND_bytes(IV, IVlen);
+	RAND_bytes(plain, plain_len);
+
+	/* Alloc and gen keys */
+	ret = TEE_AllocateTransientObject(TEE_TYPE_AES, key_size, &key);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: transient alloc key\n");
+		goto err;
+	}
+
+	ret = TEE_GenerateKey(key, key_size, NULL, 0);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: gen key\n");
+		goto err;
+	}
+
+	write_to_cipher = cipher_len;
+	if (!warp_sym_enc(key, IV, IVlen, TEE_ALG_AES_CTR, plain, plain_len, cipher, &write_to_cipher))
+		goto err;
+
+	cipher_len = write_to_cipher;
+
+	write_to_dec_plain = dec_plain_len;
+	if (!warp_sym_dec(key, IV, IVlen, TEE_ALG_AES_CTR, cipher, cipher_len, dec_plain, &write_to_dec_plain))
+		goto err;
+
+	if (bcmp(dec_plain, plain, write_to_dec_plain)) {
+		printf("Fail: can't dec from enc\n");
+		goto err;
+	}
+
+err:
+	TEE_FreeTransientObject(key);
+	TEE_Free(plain);
+	TEE_Free(IV);
+	TEE_Free(cipher);
+	TEE_Free(dec_plain);
+}
+
 
 int main()
 {
@@ -574,9 +710,10 @@ int main()
 
 	printf(" #!# Start test #!#\n");
 
-	//set_RSA_key_to_operation();
-	//AES_256_ctr_enc_and_dec();
+	des3_cbc_enc_dec();
+	AES_256_ctr_enc_and_dec();
 	AES_256_xts_enc_and_dec();
+	//set_RSA_key_to_operation();
 
 	printf(" #!# Test has reached end! #!#\n");
 

@@ -21,7 +21,7 @@
 #include <stdbool.h>
 
 #include "data_types.h"
-#include "storage_data_key_api.h"
+#include "tee_storage_api.h"
 
 
 /*
@@ -87,7 +87,7 @@ void TEE_FreeOperation(TEE_OperationHandle operation);
  * \brief TEE_ResetOperation
  * \param operation
  */
-//void TEE_ResetOperation(TEE_OperationHandle operation);
+void TEE_ResetOperation(TEE_OperationHandle operation);
 
 /*!
  * \brief TEE_SetOperationKey
@@ -366,7 +366,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void* srcData, size_
  * \param randomBuffer
  * \param randomBufferLen
  */
-//void TEE_GenerateRandom( void* randomBuffer, size_t randomBufferLen);
+//void TEE_GenerateRandom(void* randomBuffer, size_t randomBufferLen);
 
 
 
