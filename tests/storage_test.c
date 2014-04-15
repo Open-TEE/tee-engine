@@ -9,9 +9,8 @@
 
 /* Extreme simply smoke tests. If something than function name is printed -> FAIL */
 
-/* NOTICE
- * Change our path */
-#include "/home/dettenbo/opentee/emulator/include/tee_internal_api.h"
+/* NOTICE */
+#include "../include/tee_internal_api.h"
 
  /* Useful functions */
 static void pri_obj_attr(TEE_ObjectHandle object);
