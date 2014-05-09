@@ -9,6 +9,7 @@ Project {
         "manager/manager.qbs",
         "launcher/launcher.qbs",
         "TAs/TrustedApplications.qbs",
-        "tests/storage_test.qbs",
+        "tests/crypto_test.qbs",
+        "tests/storage_test.qbs"
     ]
 }
