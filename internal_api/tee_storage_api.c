@@ -21,6 +21,7 @@
 #include <openssl/rsa.h>
 #include <openssl/dsa.h>
 #include <openssl/dh.h>
+#include <openssl/des.h>
 
 #include <limits.h>
 #include <stdio.h>
@@ -38,23 +39,7 @@
 #include "storage_key_apis_external_funcs.h"
 #include "tee_panic.h"
 #include "tee_storage_common.h"
-
-struct persistant_object_info {
-	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
-	size_t obj_id_len;
-	FILE *object_file;
-	long data_begin;
-	long data_size;
-	long data_position;
-};
-
-struct __TEE_ObjectHandle {
-	struct persistant_object_info per_object;
-	TEE_ObjectInfo objectInfo;
-	TEE_Attribute *attrs;
-	uint32_t attrs_count;
-	uint32_t maxObjSizeBytes;
-};
+#include "tee_object_handle.h"
 
 struct __TEE_ObjectEnumHandle {
 	uint32_t ID;
@@ -343,12 +328,13 @@ static bool copy_attr_from_attrArr_to_object(TEE_Attribute* params, uint32_t par
 	if (is_value_attribute(params[attr_index].attributeID)) {
 		memcpy(&object->attrs[dest_index], &params[attr_index], sizeof(TEE_Attribute));
 	} else {
-		object->attrs[dest_index].attributeID = params->attributeID;
+		object->attrs[dest_index].attributeID = params[attr_index].attributeID;
 
 		if (params[attr_index].content.ref.length > object->maxObjSizeBytes)
 			object->attrs[dest_index].content.ref.length = object->maxObjSizeBytes;
 		else
-			object->attrs[dest_index].content.ref.length = params->content.ref.length;
+			object->attrs[dest_index].content.ref.length =
+					params[attr_index].content.ref.length;
 
 		memcpy(object->attrs[dest_index].content.ref.buffer,
 		       params[attr_index].content.ref.buffer,
@@ -372,6 +358,41 @@ static bool bn_to_obj_ref_attr(BIGNUM *bn, uint32_t atrr_ID, TEE_ObjectHandle ob
 	}
 
 	return true;
+}
+
+static TEE_Result gen_des_key(TEE_ObjectHandle object, uint32_t keySize)
+{
+	DES_cblock key1;
+	DES_cblock key2;
+	DES_cblock key3;
+
+	object->attrs->attributeID = TEE_ATTR_SECRET_VALUE;
+
+	/* 56 des key */
+	DES_random_key(&key1);
+	memcpy(object->attrs->content.ref.buffer, key1, sizeof(key1));
+
+	if (keySize <= 56) {
+		object->attrs->content.ref.length = sizeof(key1);
+		return TEE_SUCCESS;
+	}
+
+	DES_random_key(&key2);
+	memcpy((unsigned char *)object->attrs->content.ref.buffer + sizeof(key1),
+	       key2, sizeof(key2));
+
+	if (keySize <= 112) {
+		object->attrs->content.ref.length = sizeof(key1) + sizeof(key2);
+		return TEE_SUCCESS;
+	}
+
+	DES_random_key(&key3);
+	memcpy((unsigned char *)object->attrs->content.ref.buffer + sizeof(key1) + sizeof(key2),
+	       key3, sizeof(key3));
+	object->attrs->content.ref.length = sizeof(key1) + sizeof(key2) + sizeof(key3);
+
+	return TEE_SUCCESS;
+
 }
 
 static TEE_Result gen_symmetric_key(TEE_ObjectHandle object, uint32_t keySize)
@@ -412,9 +433,10 @@ static TEE_Result gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size,
 	}
 
 	if (pub_exp_index_at_params != -1) {
-		if (BN_bin2bn(params[pub_exp_index_at_params].content.ref.buffer,
-			      params[pub_exp_index_at_params].content.ref.length,
-			      bn_pub_exp) == 0) {
+		bn_pub_exp = BN_bin2bn(params[pub_exp_index_at_params].content.ref.buffer,
+				       params[pub_exp_index_at_params].content.ref.length,
+				       bn_pub_exp);
+		if (bn_pub_exp == NULL){
 			syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
 			ret_val = TEE_ERROR_GENERIC;
 			goto ret;
@@ -485,24 +507,27 @@ static TEE_Result gen_dsa_keypair(TEE_ObjectHandle object,
 	}
 
 	attr_index = get_attr_index(object, TEE_ATTR_DSA_PRIME);
-	if (!BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
-		       object->attrs[attr_index].content.ref.length, dsa_key->p)) {
+	dsa_key->p = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
+			       object->attrs[attr_index].content.ref.length, dsa_key->p);
+	if (dsa_key->p == NULL) {
 		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
 
 	attr_index = get_attr_index(object, TEE_ATTR_DSA_SUBPRIME);
-	if (!BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
-		       object->attrs[attr_index].content.ref.length, dsa_key->q)) {
+	dsa_key->q = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
+			       object->attrs[attr_index].content.ref.length, dsa_key->q);
+	if (!dsa_key->q) {
 		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
 
 	attr_index = get_attr_index(object, TEE_ATTR_DSA_BASE);
-	if (!BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
-		       object->attrs[attr_index].content.ref.length, dsa_key->g)) {
+	dsa_key->g = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
+			       object->attrs[attr_index].content.ref.length, dsa_key->g);
+	if (!dsa_key->g){
 		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
@@ -548,23 +573,25 @@ static TEE_Result gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute* params,
 	}
 
 	attr_index = get_attr_index(object, TEE_ATTR_DH_PRIME);
-	if (!BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
-		       object->attrs[attr_index].content.ref.length, dh_key->p)) {
+	dh_key->p = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
+			      object->attrs[attr_index].content.ref.length, dh_key->p);
+	if (dh_key->p == NULL) {
 		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
 
 	attr_index = get_attr_index(object, TEE_ATTR_DH_BASE);
-	if (!BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
-		       object->attrs[attr_index].content.ref.length, dh_key->g)) {
+	dh_key->g = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
+			      object->attrs[attr_index].content.ref.length, dh_key->g);
+	if (dh_key->g == NULL) {
 		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
 
 	if (!DH_generate_key(dh_key)) {
-		syslog(LOG_ERR, "DSA key generation failed (openssl failure)\n");
+		syslog(LOG_ERR, "DH key generation failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -893,6 +920,39 @@ static uint32_t object_attribute_size(TEE_ObjectHandle object)
 	return (object_attr_size + object->attrs_count * sizeof(TEE_Attribute));
 }
 
+static uint32_t key_raw_size(uint32_t objectType, uint32_t key)
+{
+	switch(objectType) {
+	case TEE_TYPE_AES:
+	case TEE_TYPE_DES:
+		/* Always 56 bit 8 parity bit = 64bit */
+		return KEY_IN_BYTES(key) + 1;
+
+	case TEE_TYPE_DES3:
+		if (key == 112)
+			return KEY_IN_BYTES(key) + 2;
+
+		if (key == 168)
+			return KEY_IN_BYTES(key) + 3;
+
+	case TEE_TYPE_HMAC_MD5:
+	case TEE_TYPE_HMAC_SHA1:
+	case TEE_TYPE_HMAC_SHA224:
+	case TEE_TYPE_HMAC_SHA256:
+	case TEE_TYPE_HMAC_SHA384:
+	case TEE_TYPE_HMAC_SHA512:
+	case TEE_TYPE_GENERIC_SECRET:
+	case TEE_TYPE_RSA_KEYPAIR:
+	case TEE_TYPE_RSA_PUBLIC_KEY:
+	case TEE_TYPE_DSA_PUBLIC_KEY:
+	case TEE_TYPE_DSA_KEYPAIR:
+	case TEE_TYPE_DH_KEYPAIR:
+	default:
+		return KEY_IN_BYTES(key);
+	}
+
+}
+
 
 
 
@@ -1073,7 +1133,7 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 	tmp_handle->objectInfo.dataSize = 0;
 	tmp_handle->objectInfo.handleFlags = 0x00000000;
 	tmp_handle->attrs_count = attr_count;
-	tmp_handle->maxObjSizeBytes = KEY_IN_BYTES(maxObjectSize);
+	tmp_handle->maxObjSizeBytes = key_raw_size(objectType, maxObjectSize);
 
 	/* Alloc memory for attributes (pointers) */
 	tmp_handle->attrs = TEE_Malloc(attr_count * sizeof(TEE_Attribute), 0);
@@ -1373,9 +1433,12 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize,
 	}
 
 	switch(object->objectInfo.objectType) {
-	case TEE_TYPE_AES:
 	case TEE_TYPE_DES:
 	case TEE_TYPE_DES3:
+		ret_val = gen_des_key(object, keySize);
+		break;
+
+	case TEE_TYPE_AES:
 	case TEE_TYPE_HMAC_MD5:
 	case TEE_TYPE_HMAC_SHA1:
 	case TEE_TYPE_HMAC_SHA224:
@@ -1408,8 +1471,7 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize,
 
 	if (ret_val == TEE_ERROR_GENERIC) {
 		syslog(LOG_ERR, "Something went wrong in key generation\n");
-		TEE_ResetTransientObject(object);
-		return TEE_ERROR_GENERIC;
+		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
 	object->objectInfo.handleFlags |= TEE_HANDLE_FLAG_INITIALIZED;

@@ -28,5 +28,5 @@ void  TEE_Panic(TEE_Result panicCode)
 
 	syslog(LOG_DEBUG, "TA panicked and panic func has been reached\n");
 
-	exit(64213);
+	exit(panicCode);
 }
