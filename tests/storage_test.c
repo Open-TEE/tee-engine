@@ -11,6 +11,7 @@
 
 /* NOTICE */
 #include "../include/tee_internal_api.h"
+#include "../internal_api/tee_object_handle.h"
 
  /* Useful functions */
 static void pri_obj_attr(TEE_ObjectHandle object);
@@ -24,24 +25,7 @@ static void free_attr(TEE_Attribute *params, size_t count);
 
 #define KEY_IN_BYTES(key_in_bits) ((key_in_bits + 7) / 8)
 
-struct persistant_object_info {
-	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
-	size_t obj_id_len;
-	FILE *object_file;
-	long data_begin;
-	long data_size;
-	long data_position;
-};
-
-struct __TEE_ObjectHandle {
-	struct persistant_object_info per_object;
-	TEE_ObjectInfo objectInfo;
-	TEE_Attribute *attrs;
-	uint32_t attrs_count;
-	uint32_t maxObjSizeBytes;
-};
-
-/* pri_obj_attr - function is only for testing. Before merge, remove! */
+/* pri_obj_attr */
 static void pri_obj_attr(TEE_ObjectHandle object)
 {
 	size_t i,j;
@@ -56,7 +40,7 @@ static void pri_obj_attr(TEE_ObjectHandle object)
 	}
 }
 
-/* pri_and_cmp_attr - function is only for testing. Before merge, remove! */
+/* pri_and_cmp_attr */
 static void pri_and_cmp_attr(TEE_ObjectHandle obj1, TEE_ObjectHandle obj2)
 {
 	size_t i,j, attr_count, cmp_len;
@@ -752,6 +736,60 @@ err:
 	free(new_ID);
 }
 
+static void gen_des_key_56_112_168()
+{
+	printf("  ####   gen_des_key_56_112_168   ####\n");
+
+	TEE_Result ret;
+	TEE_ObjectHandle des;
+	TEE_ObjectHandle des3_112;
+	TEE_ObjectHandle des3_168;
+
+	/* des */
+	ret = TEE_AllocateTransientObject(TEE_TYPE_DES, 56, &des);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: des alloc\n");
+		goto err;
+	}
+
+	ret = TEE_GenerateKey(des, 56, NULL, 0);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: gen des\n");
+		goto err;
+	}
+
+	/* des3 112 */
+	ret = TEE_AllocateTransientObject(TEE_TYPE_DES3, 112, &des3_112);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: des3_112 alloc\n");
+		goto err;
+	}
+
+	ret = TEE_GenerateKey(des3_112, 112, NULL, 0);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: gen des3_112\n");
+		goto err;
+	}
+
+	/* des3 168 */
+	ret = TEE_AllocateTransientObject(TEE_TYPE_DES3, 168, &des3_168);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: des3_168 alloc\n");
+		goto err;
+	}
+
+	ret = TEE_GenerateKey(des3_168, 168, NULL, 0);
+	if (ret != TEE_SUCCESS) {
+		printf("Fail: gen des3_168\n");
+		goto err;
+	}
+
+err:
+	TEE_FreeTransientObject(des);
+	TEE_FreeTransientObject(des3_112);
+	TEE_FreeTransientObject(des3_168);
+}
+
 int main()
 {
 	openlog(NULL, 0, 0);
@@ -765,6 +803,7 @@ int main()
 	pure_data_obj_and_truncate_and_write();
 	gen_per_objs_and_iter_with_enum();
 	rename_per_obj_and_enum_and_open_renameObj();
+	gen_des_key_56_112_168();
 
 	printf(" #!# Test has reached end! #!#\n");
 
