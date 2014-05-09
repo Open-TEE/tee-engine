@@ -25,7 +25,6 @@ void  TEE_Panic(TEE_Result panicCode)
 	panicCode = panicCode;
 
 	printf("P A N I C !\n");
-
 	syslog(LOG_DEBUG, "TA panicked and panic func has been reached\n");
 
 	exit(panicCode);
