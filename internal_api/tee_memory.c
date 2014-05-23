@@ -53,11 +53,11 @@ TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buf, size_t s
 		}
 
 		if (perms[0] == 'r')
-			mem_perms |= (TEE_ACCESS_READ & accessFlags);
+			mem_perms |= (TEE_MEMORY_ACCESS_READ & accessFlags);
 		if (perms[1] == 'w')
-			mem_perms |= (TEE_ACCESS_WRITE & accessFlags);
+			mem_perms |= (TEE_MEMORY_ACCESS_WRITE & accessFlags);
 		if (perms[3] == 's')
-			shared = TEE_ACCESS_ANY_OWNER;
+			shared = TEE_MEMORY_ACCESS_ANY_OWNER;
 
 		/* if we have a shared memory address then we must be allowed to access it based
 		 * on the accessFlags. Section 4.11.1 defines the following as the logic for this:
@@ -67,7 +67,7 @@ TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buf, size_t s
 		 *           true                      false (local mem address)    Allowed
 		 *           false                     false (      "          )    Allowed
 		 */
-		mem_perms |= ((accessFlags & TEE_ACCESS_ANY_OWNER) | shared);
+		mem_perms |= ((accessFlags & TEE_MEMORY_ACCESS_ANY_OWNER) | shared);
 		break;
 	}
 
