@@ -3031,7 +3031,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void* srcData, uint3
 	int total_int_destLen = 0;
 	TEE_Result ret = TEE_SUCCESS;
 
-	if (!destData || !operation) {
+	if (!destData || !operation || !destLen) {
 		syslog(LOG_ERR, "Cipher final: Error with parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -3044,8 +3044,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void* srcData, uint3
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
-	if (destLen)
-		int_destLen = uint322int(*destLen); /* EVP operates with int */
+	int_destLen = uint322int(*destLen); /* EVP operates with int */
 
 	/* Handle last src data */
 	if (srcLen > 0) {
@@ -3056,7 +3055,8 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void* srcData, uint3
 			return ret;
 		}
 
-		total_int_destLen += int_destLen;
+		total_int_destLen += *destLen;
+		int_destLen -= *destLen;
 	}
 
 	/* Do final */
@@ -3085,8 +3085,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void* srcData, uint3
 	}
 
 	total_int_destLen += int_destLen;
-	if (destLen)
-		*destLen = int2uint32(total_int_destLen);
+	*destLen = int2uint32(total_int_destLen);
 
 	TEE_ResetOperation(operation);
 	return ret;
