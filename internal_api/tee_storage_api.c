@@ -1336,6 +1336,7 @@ void TEE_InitRefAttribute(TEE_Attribute* attr, uint32_t attributeID, void* buffe
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
+	attr->attributeID = attributeID;
 	attr->content.ref.buffer = buffer;
 	attr->content.ref.length = length;
 }
@@ -1350,6 +1351,7 @@ void TEE_InitValueAttribute(TEE_Attribute* attr, uint32_t attributeID, uint32_t 
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
+	attr->attributeID = attributeID;
 	attr->content.value.a = a;
 	attr->content.value.b = b;
 }
