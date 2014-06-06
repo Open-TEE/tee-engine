@@ -13,6 +13,10 @@
 ** See the License for the specific language governing permissions and      **
 ** limitations under the License.                                           **
 *****************************************************************************/
+#include "subprocess.h"
+#include "epoll_wrapper.h"
+#include "process_manager.h"
+#include "elf_reader.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,13 +26,17 @@
 #include <sys/un.h>
 #include <string.h>
 #include <errno.h>
-
-#include "subprocess.h"
-#include "epoll_wrapper.h"
-#include "process_manager.h"
+#include <linux/inotify.h>
+#include <dirent.h>
 
 #define MAX_CURR_EVENTS 5
 #define MAX_ERR_STRING 100
+
+/* Buffer space is allocated for 5 events. */
+#define EVENT_BUF_LEN  (MAX_CURR_EVENTS * ((sizeof(struct inotify_event)) + 16))
+
+// TODO: Path needs to be changed.
+const char *dir_path = "/home/swapnil/tmp/so/";
 
 /*!
  * \brief init_sock
@@ -65,8 +73,101 @@ static int init_sock(int *pub_sockfd)
 		syslog(LOG_ERR, "Listen socket %s", strerror(errno));
 		return -1;
 	}
-
 	return 0;
+}
+
+/*!
+ * \brief is_so_file
+ * From the file extension, function determines if it is a .so file.
+ * \param file_name The name of the file
+ * \returns '1' when file is an .so file, -1 otherwise.
+ */
+bool is_so_file(char *file_name)
+{
+	char *file_extension;
+	/* get pointer to the last occurance of '.', which  becomes an extension. */
+	file_extension = strrchr(file_name, '.');
+
+	syslog(LOG_INFO, "File extension is %s.\n", file_extension);
+	if (strcmp(".so", file_extension) == 0) {
+		syslog(LOG_INFO, "File extension matches.\n");
+		return true;
+	} else {
+		syslog(LOG_INFO, "File extension does not matches.\n");
+		return false;
+	}
+}
+
+/*!
+ * \brief concat
+ * Concats two strings and create a new string.
+ * \param s1, s2 strings to be appended.
+ * \returns Concatenated string.
+ */
+char* concat(const char *s1, char *s2)
+{
+	size_t len1 = strlen(s1);
+	size_t len2 = strlen(s2);
+	char *result = malloc(len1+len2+1);
+
+	memcpy(result, s1, len1);
+	memcpy(result+len1, s2, len2+1);
+	return result;
+}
+
+void read_existing_so_files(const char *dir_path)
+{
+	DIR *d;
+	struct dirent *dir;
+	char *elf_file_path;
+
+	d = opendir(dir_path);
+	if (d) {
+		while ((dir = readdir(d)) != NULL) {
+			elf_file_path = concat(dir_path, dir->d_name);
+			if (is_so_file(elf_file_path)) {
+				read_metadata(elf_file_path);
+			} else {
+				syslog(LOG_INFO, "%s is not a .so file\n", elf_file_path);
+			}
+		}
+		closedir(d);
+	} else {
+		syslog(LOG_ERR, "Error while opening directory %S\n", dir_path);
+	}
+}
+
+void extract_inotify_event(int inotify_fd, const char* dir_path)
+{
+	int num_read;
+	char inotify_buffer[EVENT_BUF_LEN];
+	struct inotify_event *intfy_event;
+	char *elf_file_path;
+	char *tmp_str;
+
+	num_read = read(inotify_fd, inotify_buffer, EVENT_BUF_LEN);
+	if (num_read == 0) {
+		syslog(LOG_ERR, "Error while reading event.\n");
+		return;
+	} else if (num_read == -1) {
+		syslog(LOG_ERR, "Error while reading event.\n");
+		return;
+	}
+
+	for (tmp_str = inotify_buffer; tmp_str < inotify_buffer + num_read; ) {
+		intfy_event = (struct inotify_event *) tmp_str;
+		if (intfy_event->len > 0) {
+			elf_file_path = concat(dir_path, intfy_event->name);
+
+			if (is_so_file(elf_file_path)) {
+				syslog(LOG_INFO, "File added : %s\n", elf_file_path);
+				/* When newly added file read immediately, it throws an error. */
+				sleep(1);
+				read_metadata(elf_file_path);
+			}
+		}
+		tmp_str += sizeof(struct inotify_event) + intfy_event->len;
+	}
 }
 
 int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
@@ -76,6 +177,29 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
 	char errbuf[MAX_ERR_STRING];
 	proc_t new_client;
+	int inotify_fd;
+	int inotify_wd;	
+
+	/* Read existing files in the monitored directory. */
+	read_existing_so_files(dir_path);
+
+	/* Initializing inotify */
+	inotify_fd = inotify_init();
+	if (inotify_fd < 0 ) {
+		syslog(LOG_ERR, "inotify initialization failed.\n");
+		return -1;
+	} else {
+		syslog(LOG_INFO, "inotify initialized successful.\n");
+	}
+
+	/* Add a directory watch for addition of new file */
+	inotify_wd = inotify_add_watch(inotify_fd, dir_path, IN_CREATE);
+	if (inotify_wd == -1) {
+		syslog(LOG_ERR, "inotify add watch for directory failed.\n");
+		return -1;
+	} else {
+		syslog(LOG_INFO, "inotify add watch for directory is successful.\n");
+	}
 
 	if (init_epoll())
 		return -1;
@@ -89,6 +213,10 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 
 	/* listen for communications from the launcher process */
 	if (epoll_reg_fd(sockpair_fd, EPOLLIN))
+		return -1;
+
+	/* listen for addition of files in a directory */
+	if (epoll_reg_fd(inotify_fd, EPOLLIN))
 		return -1;
 
 	/* NB everything after this point must be thread safe */
@@ -134,6 +262,8 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 
 				if (epoll_reg_data(clientfd, EPOLLIN, (void *)new_client))
 					return -1;
+			} else if (cur_events[i].data.fd == inotify_fd) {
+				extract_inotify_event(inotify_fd, dir_path);
 			} else {
 				pm_handle_connection(cur_events[i].events, cur_events[i].data.ptr);
 			}
