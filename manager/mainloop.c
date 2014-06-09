@@ -133,7 +133,7 @@ void read_existing_so_files(const char *dir_path)
 		}
 		closedir(d);
 	} else {
-		syslog(LOG_ERR, "Error while opening directory %S\n", dir_path);
+		syslog(LOG_ERR, "Error while opening directory %s\n", dir_path);
 	}
 }
 
@@ -153,18 +153,39 @@ void extract_inotify_event(int inotify_fd, const char* dir_path)
 		syslog(LOG_ERR, "Error while reading event.\n");
 		return;
 	}
-
 	for (tmp_str = inotify_buffer; tmp_str < inotify_buffer + num_read; ) {
 		intfy_event = (struct inotify_event *) tmp_str;
-		if (intfy_event->len > 0) {
+		/* Irrespective of an event if the event is related to
+		 * .so file.
+		 */
+		if ((intfy_event->len > 0) && (is_so_file(intfy_event->name))) {
 			elf_file_path = concat(dir_path, intfy_event->name);
-
-			if (is_so_file(elf_file_path)) {
-				syslog(LOG_INFO, "File added : %s\n", elf_file_path);
-				/* When newly added file read immediately, it throws an error. */
+			if (intfy_event->mask & IN_CREATE) {
+				syslog(LOG_INFO, "EVENT : IN_CREATE\n");
+				syslog(LOG_INFO, "File created : %s\n", elf_file_path);
+				/* When newly added file read immediately, it throws an error.
+				 * during parsing.
+				 */
 				sleep(1);
 				read_metadata(elf_file_path);
+			} else if (intfy_event->mask & IN_DELETE) {
+				syslog(LOG_INFO, "EVENT : IN_DELETE (can occur when .so file is deleted.)\n");
+				syslog(LOG_INFO, "ELF file %s has been deleted.\n", elf_file_path);
+				remove_metadata(elf_file_path);
+			} else if (intfy_event->mask & IN_MOVED_FROM) {
+				syslog(LOG_INFO, "EVENT : IN_MOVED_FROM  (can occur when .so file is renamed or deleted.)\n");
+				syslog(LOG_INFO, "ELF file %s has been renamed or deleted.\n", elf_file_path);
+				remove_metadata(elf_file_path);
+			} else if (intfy_event->mask & IN_MOVED_TO) {
+				syslog(LOG_INFO, "EVENT : IN_MOVED_TO (can occur when .so file is renamed or replaced.)\n");
+				if(remove_metadata(elf_file_path) == 0) {
+					syslog(LOG_INFO, "ELF file %s has been replaced.\n", elf_file_path);
+				} else {
+					syslog(LOG_INFO, "ELF file %s has been renamed.\n", elf_file_path);
+				}
+				read_metadata(elf_file_path);
 			}
+
 		}
 		tmp_str += sizeof(struct inotify_event) + intfy_event->len;
 	}
@@ -192,8 +213,12 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 		syslog(LOG_INFO, "inotify initialized successful.\n");
 	}
 
-	/* Add a directory watch for addition of new file */
-	inotify_wd = inotify_add_watch(inotify_fd, dir_path, IN_CREATE);
+	/* Add a directory watch for addition of new file
+	 * In Linux when 'rm' command is used to delete the file, this event is registered as
+	 * 'IN_DELETE', however when file is deleted using UI it is registered as 'IN_MOVED_FROM'.
+	 * When file is replaced 'IN_MOVED_TO' and 'IN_MOVED_FROM' events are triggerred.
+	 */
+	inotify_wd = inotify_add_watch(inotify_fd, dir_path, IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_MOVED_FROM);
 	if (inotify_wd == -1) {
 		syslog(LOG_ERR, "inotify add watch for directory failed.\n");
 		return -1;
