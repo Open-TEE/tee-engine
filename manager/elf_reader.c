@@ -24,10 +24,19 @@
 
 const char *TA_SECTION_NAME = ".ta_config";
 
-struct ta_metadata_list *head = NULL;
-struct ta_metadata_list *current = NULL;
+struct list_head *head = NULL;
 
-void print_ta_metadata(ta_metadata *ta_mdata) {
+static int initialize_list() {	
+	head = (struct list_head *) malloc(sizeof(struct list_head));
+	if (head == NULL) {
+		syslog(LOG_ERR, "Error while initializing list.");
+		return -1;
+	}
+	INIT_LIST(head);	
+	return 0;
+}
+
+static void print_ta_metadata(struct ta_metadata *ta_mdata) {
 	int i = 0;
 	printf("------------------------------------------------------------------\n");
 	printf("ELF file name : %s\n", ta_mdata->elf_file_name);
@@ -47,159 +56,47 @@ void print_ta_metadata(ta_metadata *ta_mdata) {
 	printf("------------------------------------------------------------------\n");
 }
 
-int add_to_metadata_list(ta_metadata *ta_mdata)
+static int add_to_metadata_list(struct ta_metadata *ta_mdata)
 {
-	struct ta_metadata_list *node;
-	if(head == NULL) {
-		// List has not been created.
-		head = (struct ta_metadata_list *)malloc(sizeof(struct ta_metadata_list));
-		if(head == NULL) {
-			syslog(LOG_ERR, "Node creation failed.\n");
-			return -1;
-		}
-		head->ta_mdata = ta_mdata;
-		head->next = NULL;
-		current = head;
-	} else {
-		node = (struct ta_metadata_list *)malloc(sizeof(struct ta_metadata_list));
-		if (node == NULL ) {
-			syslog(LOG_ERR, "Node creation failed.\n");
-			return -1;
-		}
-		node->ta_mdata = ta_mdata;
-		node->next = NULL;
-		current->next = node;
-		current = node;
+	struct ta_metadata_list *element;
+	element = (struct ta_metadata_list*) malloc(sizeof(struct ta_metadata_list));
+	if (element == NULL) {
+		syslog(LOG_ERR, "Error while creating node for a list.\n");
+		return -1;
 	}	
+	element->ta_mdata = ta_mdata;
+
+	element->list = (struct list_head *){ &element->list, &element->list };
+
+	if (head == NULL) {
+		/* List has not been initialized. */
+		if(initialize_list() == 0) {
+			syslog(LOG_INFO, "List initialization successful.");
+		} else {
+			syslog(LOG_ERR, "List initialization unsuccessful.");
+			return -1;
+		}
+	}	
+	list_add_after(element->list, head);
 	return 0;
 }
 
-void print_ta_metadata_list()
+static void print_ta_metadata_list()
 {
-	struct ta_metadata_list *node = head;
-	while(node != NULL) {
-		print_ta_metadata(node->ta_mdata);
-		node = node->next;
-	}
+	printf("head address : %x\n", head);
+	printf("head next address : %x\n", head->next);
+	printf("head prev address : %x\n", head->prev);
+
+	struct list_head *pos;
+	struct ta_metadata_list *element;
+	LIST_FOR_EACH(pos, head) {
+		element = LIST_ENTRY(pos, struct ta_metadata_list, list);
+		print_ta_metadata(element->ta_mdata);
+		printf("node address : %x\n", &element->list);
+		printf("node next address : %x\n", element->list->next);
+		printf("node prev address : %x\n", element->list->prev);
+	}	
 	return;
-}
-
-size_t extract_data_and_stack_size(unsigned char *sec_data, int index, bool is_32bit, bool is_little_endian)
-{
-	size_t tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8;
-	size_t value;
-	if (is_32bit) {
-		if (is_little_endian) {
-			tmp1 = (size_t)sec_data[index + 3];
-			tmp2 = (size_t)sec_data[index + 2];
-			tmp3 = (size_t)sec_data[index + 1];
-			tmp4 = (size_t)sec_data[index];
-		} else {
-			tmp1 = (size_t)sec_data[index];
-			tmp2 = (size_t)sec_data[index + 1];
-			tmp3 = (size_t)sec_data[index + 2];
-			tmp4 = (size_t)sec_data[index + 3];
-		}
-		value = (size_t)((tmp1 << 24) | (tmp2 << 16) | (tmp3 << 8) | (tmp4));
-	} else {
-		if (is_little_endian) {
-			tmp1 = (size_t)sec_data[index + 7];
-			tmp2 = (size_t)sec_data[index + 6];
-			tmp3 = (size_t)sec_data[index + 5];
-			tmp4 = (size_t)sec_data[index + 4];
-			tmp5 = (size_t)sec_data[index + 3];
-			tmp6 = (size_t)sec_data[index + 2];
-			tmp7 = (size_t)sec_data[index + 1];
-			tmp8 = (size_t)sec_data[index];
-
-		} else {
-			tmp1 = (size_t)sec_data[index];
-			tmp2 = (size_t)sec_data[index + 1];
-			tmp3 = (size_t)sec_data[index + 2];
-			tmp4 = (size_t)sec_data[index + 3];
-			tmp5 = (size_t)sec_data[index + 4];
-			tmp6 = (size_t)sec_data[index + 5];
-			tmp7 = (size_t)sec_data[index + 6];
-			tmp8 = (size_t)sec_data[index + 7];
-		}
-		value = (size_t)((tmp1 << 56) | (tmp2 << 48) | (tmp3 << 40) | (tmp4 << 32) |
-				 (tmp5 << 24) | (tmp6 << 16) | (tmp7 << 8) | tmp8);
-	}
-	return value;
-}
-
-uint32_t get_timeLow(unsigned char *section_data)
-{
-	uint32_t timeLow, tmp1, tmp2, tmp3, tmp4;
-	tmp1 = (uint32_t)section_data[0];
-	tmp2 = (uint32_t)section_data[1];
-	tmp3 = (uint32_t)section_data[2];
-	tmp4 = (uint32_t)section_data[3];
-	timeLow = (tmp1 << 24) | (tmp2 << 16) | (tmp3 << 8) | (tmp4);
-	syslog(LOG_INFO, "timelow : %x\n", timeLow);
-	return timeLow;
-}
-
-uint16_t get_timeMid(unsigned char *section_data)
-{
-	uint16_t timeMid, tmp1, tmp2;
-	tmp1 = (uint16_t)section_data[4];
-	tmp2 = (uint16_t)section_data[5];
-	timeMid = (tmp1 << 8) | (tmp2);
-	syslog(LOG_INFO, "timeMid : %x\n", timeMid);
-	return timeMid;
-}
-
-uint16_t get_timeHiAndVersion(unsigned char *section_data)
-{
-	uint16_t timeHiAndVersion, tmp1, tmp2;
-	tmp1 = (uint16_t)section_data[6];
-	tmp2 = (uint16_t)section_data[7];
-	timeHiAndVersion = (tmp1 << 8) | (tmp2);
-	syslog(LOG_INFO, "timeHiAndVersion : %x\n", timeHiAndVersion);
-	return timeHiAndVersion;
-}
-
-size_t get_dataSize(unsigned char *section_data, bool is_32bit, bool is_little_endian)
-{
-	size_t dataSize = extract_data_and_stack_size(section_data, 16, is_32bit, is_little_endian);
-	syslog(LOG_INFO, "dataSize: %zx\n", dataSize);
-	return dataSize;
-}
-
-size_t get_stackSize(unsigned char *section_data, bool is_32bit, bool is_little_endian)
-{
-	int start_index = is_32bit ? 20 : 24;
-	size_t stackSize = extract_data_and_stack_size(section_data, start_index, is_32bit, is_little_endian);
-	syslog(LOG_INFO, "stackSize: %zu\n", stackSize);
-	return stackSize;
-}
-
-bool get_singletonInstance(unsigned char *section_data, bool is_32bit)
-{
-	bool singletonInstance;
-	int index = is_32bit ? 24 : 32 ;
-	singletonInstance = ((int)section_data[index]) == 0 ? false : true;
-	syslog(LOG_INFO, "singletonInstance: %d \n", singletonInstance);
-	return singletonInstance;
-}
-
-bool get_multiSession(unsigned char *section_data, bool is_32bit)
-{
-	bool multiSession;
-	int index = is_32bit ? 25 : 33 ;
-	multiSession = ((int)section_data[index]) == 0 ? false : true;
-	syslog(LOG_INFO, "multiSession: %d \n", multiSession);
-	return multiSession;
-}
-
-bool get_instanceKeepAlive(unsigned char *section_data, bool is_32bit)
-{
-	bool instanceKeepAlive;
-	int index = is_32bit ? 26 : 34 ;
-	instanceKeepAlive = ((int)section_data[index]) == 0 ? false : true;
-	syslog(LOG_INFO, "instanceKeepAlive: %d \n", instanceKeepAlive);
-	return instanceKeepAlive;
 }
 
 /*!
@@ -210,19 +107,16 @@ bool get_instanceKeepAlive(unsigned char *section_data, bool is_32bit)
 int read_metadata(char *elf_file)
 {
 	int elf_file_fd;
-	int elf_class;
 	Elf *elf;
 	char *section_name;
 	unsigned char *section_data;
 	Elf_Scn *elf_scn;
 	Elf_Data *elf_data ;
 	GElf_Shdr section_hdr;
-	size_t shstrndx;
-	bool is_32bit;
-	bool is_little_endian;
-	char *ident;
+	size_t shstrndx;	
 	unsigned int i = 0;
-	ta_metadata *ta_mdata;
+	struct ta_metadata *ta_mdata;
+	size_t ta_metadata_size;
 
 	/* Initialize ELF library. */
 	if (elf_version(EV_CURRENT) == EV_NONE) {
@@ -254,31 +148,6 @@ int read_metadata(char *elf_file)
 		syslog(LOG_INFO, "Confirmed %s is an ELF object.\n", elf_file);
 	}
 
-	if ((elf_class = gelf_getclass(elf)) == ELFCLASSNONE) {
-		syslog(LOG_ERR, "getclass() failed : %s. \n", elf_errmsg(-1));
-		return -1;
-	}
-
-	if (elf_class == ELFCLASS32) {
-		is_32bit = true;
-		syslog(LOG_INFO, "ELF object %s is 32 bit compliant.\n", elf_file);
-	} else {
-		is_32bit = false;
-		syslog(LOG_INFO, "ELF object %s is 64 bit compliant.\n", elf_file);
-	}
-
-	ident = elf_getident(elf, (size_t *)NULL);
-	if (ident[EI_DATA] == ELFDATA2LSB) {
-		is_little_endian = true;
-		syslog(LOG_INFO, "ELF object %s is little endian.\n", elf_file);
-	} else if (ident[EI_DATA] == ELFDATA2MSB) {
-		is_little_endian = false;
-		syslog(LOG_INFO, "ELF object %s is big endian.\n", elf_file);
-	} else {
-		syslog(LOG_ERR, "Failed to get the byte order of ELF file. %s.\n", elf_errmsg(-1));
-		return -1;
-	}
-
 	if (elf_getshdrstrndx(elf, &shstrndx ) != 0) {
 		syslog(LOG_ERR, "elf_getshdrstrndx () failed : %s.\n", elf_errmsg(-1));
 		return -1;
@@ -303,81 +172,50 @@ int read_metadata(char *elf_file)
 			elf_data = NULL;
 			/* Retrieve data of an identified section.*/
 			while ((elf_data = elf_getdata(elf_scn, elf_data)) != NULL) {
-				section_data = (unsigned char *) elf_data-> d_buf;
+				section_data = (unsigned char *) elf_data->d_buf;
 				i = 0;
 				syslog(LOG_INFO,"Section data in hex format : ");
 				for(; i < elf_data->d_size; i++) {
 					syslog(LOG_INFO,"%x",section_data[i]);
-				}
-				syslog(LOG_INFO,"\n");
-
-				ta_mdata = (ta_metadata*) malloc(sizeof(ta_metadata));
+				}				
+				ta_mdata = (struct ta_metadata*) malloc(sizeof(struct ta_metadata));
 				ta_mdata->elf_file_name = elf_file;
 
-				/* Extract timeLow */
-				ta_mdata->appID.timeLow = get_timeLow(section_data);
-				/* Extract timeMid */
-				ta_mdata->appID.timeMid = get_timeMid(section_data);
-				/* Extract timeHiAndVersion */
-				ta_mdata->appID.timeHiAndVersion = get_timeHiAndVersion(section_data);
+				ta_metadata_size = sizeof(TEE_UUID) + (2 * sizeof(size_t)) +
+					      (3 * sizeof(bool));
+				memcpy(ta_mdata, section_data, ta_metadata_size);
 
-				/* Extract clockSeqAndNode */
-				syslog(LOG_INFO, "clockSeqAndNode : [ ");
-				for(i = 0; i < 8; i++) {
-					ta_mdata->appID.clockSeqAndNode[i] = (uint8_t)(section_data[8+i]);
-					syslog(LOG_INFO, "%x ",ta_mdata->appID.clockSeqAndNode[i]);
-				}
-				syslog(LOG_INFO, "]\n");
-
-				/* get data size */
-				ta_mdata->dataSize = get_dataSize(section_data, is_32bit, is_little_endian);
-				/* get stack size */
-				ta_mdata->stackSize = get_stackSize(section_data, is_32bit, is_little_endian);
-				/* get singletonInstance */
-				ta_mdata->singletonInstance = get_singletonInstance(section_data, is_32bit);
-				/* get multiSession */
-				ta_mdata->multiSession = get_multiSession(section_data, is_32bit);
-				/* get instanceKeepAlive */
-				ta_mdata->instanceKeepAlive = get_instanceKeepAlive(section_data, is_32bit);
 				/* Add TA metadata to list. */
 				add_to_metadata_list(ta_mdata);
-				/* REMOVE */
-				/* print_ta_metadata_list(); */
+				// REMOVE
+				print_ta_metadata_list();
 			}
 		}
-	}
+	}	
 	elf_end(elf);
-	close(elf_file_fd);
+	close(elf_file_fd);	
 	return 0;	
 }
 
-struct ta_metadata_list* get_identified_TAs() {
-	return head;
-}
-
-int remove_metadata(char *elf_file) {
-	struct ta_metadata_list *node = head;
-	struct ta_metadata_list *prev_node = NULL;
-	while (node != NULL) {
-		if (strcmp(node->ta_mdata->elf_file_name, elf_file) == 0) {
-			if (prev_node == NULL) {
-				/* The node to be deleted is the first node */
-				head = node->next;
-			} else {
-				if (node->next == NULL) {
-					/* The node to be deleted is the last node. */
-					current = prev_node;
-				}
-				prev_node->next = node->next;
-			}
-			free(node);
-			/* REMOVE */
-			/* print_ta_metadata_list(); */
-			return 0;
-		} else {
-			prev_node = node;
-			node = node->next;
+int remove_metadata(char *elf_file) {	
+	struct list_head *pos;
+	struct ta_metadata_list *node = NULL;
+	struct ta_metadata_list *tmp;
+	LIST_FOR_EACH(pos, head) {
+		tmp = LIST_ENTRY(pos, struct ta_metadata_list, list);
+		if (strcmp(tmp->ta_mdata->elf_file_name, elf_file) == 0) {
+			node = tmp;
+			break;
 		}
+	}
+	if(node != NULL) {
+		list_unlink(node->list);
+		printf("TA metadata to be removed %s\n", elf_file);
+		print_ta_metadata(node->ta_mdata);
+		free(node);
+		printf("TA metadata of file %s is removed\n", elf_file);
+		print_ta_metadata_list();
+		return 0;
 	}
 	return -1;
 }
@@ -401,13 +239,14 @@ bool tee_uuid_matches(TEE_UUID tee_uuid1, TEE_UUID tee_uuid2) {
 	return true;
 }
 
-struct ta_metadata_list* search_ta_by_uuid(TEE_UUID tee_uuid) {
-	struct ta_metadata_list *node = head;
-	while(node != NULL) {
+struct ta_metadata* search_ta_by_uuid(TEE_UUID tee_uuid) {
+	struct list_head *pos;
+	struct ta_metadata_list *node;
+	LIST_FOR_EACH(pos, head) {
+		node = LIST_ENTRY(pos, struct ta_metadata_list, list);
 		if(tee_uuid_matches(node->ta_mdata->appID, tee_uuid)) {
-			return node;
-		}
-		node = node->next;
+			return node->ta_mdata;
+		}		
 	}
 	return NULL;
 }

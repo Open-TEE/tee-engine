@@ -104,7 +104,7 @@ bool is_so_file(char *file_name)
  * \param s1, s2 strings to be appended.
  * \returns Concatenated string.
  */
-char* concat(const char *s1, char *s2)
+static char* concat(const char *s1, char *s2)
 {
 	size_t len1 = strlen(s1);
 	size_t len2 = strlen(s2);
@@ -125,8 +125,8 @@ void read_existing_so_files(const char *dir_path)
 	if (d) {
 		while ((dir = readdir(d)) != NULL) {
 			elf_file_path = concat(dir_path, dir->d_name);
-			if (is_so_file(elf_file_path)) {
-				read_metadata(elf_file_path);
+			if (is_so_file(elf_file_path)) {				
+				read_metadata(elf_file_path);				
 			} else {
 				syslog(LOG_INFO, "%s is not a .so file\n", elf_file_path);
 			}
@@ -173,8 +173,8 @@ void extract_inotify_event(int inotify_fd, const char* dir_path)
 				syslog(LOG_INFO, "ELF file %s has been deleted.\n", elf_file_path);
 				remove_metadata(elf_file_path);
 			} else if (intfy_event->mask & IN_MOVED_FROM) {
-				syslog(LOG_INFO, "EVENT : IN_MOVED_FROM  (can occur when .so file is renamed or deleted.)\n");
-				syslog(LOG_INFO, "ELF file %s has been renamed or deleted.\n", elf_file_path);
+				printf("EVENT : IN_MOVED_FROM  (can occur when .so file is renamed or deleted.)\n");
+				printf("ELF file %s has been renamed or deleted.\n", elf_file_path);
 				remove_metadata(elf_file_path);
 			} else if (intfy_event->mask & IN_MOVED_TO) {
 				syslog(LOG_INFO, "EVENT : IN_MOVED_TO (can occur when .so file is renamed or replaced.)\n");
@@ -229,16 +229,16 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 	if (init_epoll())
 		return -1;
 
-	if (init_sock(&public_sockfd))
+	/*if (init_sock(&public_sockfd))
 		return -1;
 
-	/* listen to inbound connections from userspace clients */
+	listen to inbound connections from userspace clients
 	if (epoll_reg_fd(public_sockfd, EPOLLIN))
 		return -1;
 
-	/* listen for communications from the launcher process */
+	listen for communications from the launcher process
 	if (epoll_reg_fd(sockpair_fd, EPOLLIN))
-		return -1;
+		return -1; */
 
 	/* listen for addition of files in a directory */
 	if (epoll_reg_fd(inotify_fd, EPOLLIN))
