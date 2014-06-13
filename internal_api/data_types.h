@@ -17,6 +17,8 @@
 #ifndef __TEE_INTERNAL_DATA_TYPES_H__
 #define __TEE_INTERNAL_DATA_TYPES_H__
 
+#include "tee_list.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -167,7 +169,7 @@ typedef enum {
 	TEE_TYPE_DSA_PUBLIC_KEY = 0xA0000031,
 	TEE_TYPE_DSA_KEYPAIR = 0xA1000031,
 	TEE_TYPE_DH_KEYPAIR = 0xA1000032,
-	TEE_TYPE_GENERIC_SECRET = 0xA0000000,
+	TEE_TYPE_GENERIC_SECRET = 0xA0000000
 } object_type;
 
 typedef enum {
@@ -192,12 +194,23 @@ typedef enum {
 	TEE_ATTR_DH_PUBLIC_VALUE = 0xD0000132,
 	TEE_ATTR_DH_PRIVATE_VALUE = 0xC0000232,
 	TEE_ATTR_RSA_OAEP_LABEL = 0xD0000930,
-	TEE_ATTR_RSA_PSS_SALT_LENGTH = 0xF0000A30,
+	TEE_ATTR_RSA_PSS_SALT_LENGTH = 0xF0000A30
 } obj_func_atribute;
 
 typedef enum {
 	TEE_ATTR_FLAG_VALUE = 0x20000000,
 	TEE_ATTR_FLAG_PUBLIC = 0x10000000
 } attr_id_flag;
+
+struct ta_metadata {
+	TEE_UUID appID;
+	size_t dataSize;
+	size_t stackSize;
+	bool singletonInstance;
+	bool multiSession;
+	bool instanceKeepAlive;
+	char *elf_file_name;
+	struct list_head list;
+};
 
 #endif
