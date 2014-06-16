@@ -36,6 +36,11 @@ struct list_head {
 	} while (0)
 
 /*!
+ * Initialize element before adding into list
+ */
+#define LIST_HEAD_INIT(list) { &(list), &(list) };
+
+/*!
  * \brief Get the pointer to the structure based on an element in that structure
  * \param ptr The position of the list_head entry in the data structure
  * \param type The type of structure that the struct list_head is embedded in

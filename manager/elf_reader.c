@@ -21,10 +21,13 @@
 #include <fcntl.h>
 #include <gelf.h>
 #include <syslog.h>
+#include <pthread.h>
 
 const char *ta_section_name = ".ta_config";
 
 struct list_head *head;
+
+pthread_mutex_t list_mutex;
 
 /*!
  *  \brief Initializes a list.
@@ -33,50 +36,10 @@ struct list_head *head;
 static int initialize_list()
 {
 	head = (struct list_head *) malloc(sizeof(struct list_head));
-	if (!head) {
-		syslog(LOG_ERR, "Error while initializing list.");
+	if (head == NULL)
 		return -1;
-	}
 	INIT_LIST(head);
 	return 0;
-}
-
-/*!
- *  \brief Prints all parameters of TA metadata. Implemented for debugging purpose.
- */
-static void print_ta_metadata(struct ta_metadata *ta_mdata)
-{
-	int i = 0;
-	printf("------------------------------------------------------------------\n");
-	printf("ELF file name : %s\n", ta_mdata->elf_file_name);
-	printf("timelow : %x\n", ta_mdata->appID.timeLow);
-	printf("timeMid : %x\n", ta_mdata->appID.timeMid);
-	printf("timeHiAndVersion : %x\n", ta_mdata->appID.timeHiAndVersion);
-	printf("clockSeqAndNode : [ ");
-	for (; i < 8; i++) {
-		printf("%x ", ta_mdata->appID.clockSeqAndNode[i]);
-	}
-	printf("]\n");
-	printf("dataSize: %zx \n", ta_mdata->dataSize);
-	printf("stackSize: %zu \n",ta_mdata->stackSize);
-	printf("singletonInstance: %d \n", ta_mdata->singletonInstance);
-	printf("multiSession: %d \n", ta_mdata->multiSession);
-	printf("instanceKeepAlive: %d \n", ta_mdata->instanceKeepAlive);
-	printf("------------------------------------------------------------------\n");
-}
-
-/*!
- *  \brief Prints elements of a list. Implemented for debugging purpose.
- */
-static void print_ta_metadata_list()
-{
-	struct list_head *pos;
-	struct ta_metadata *element;
-	LIST_FOR_EACH (pos, head) {
-		element = LIST_ENTRY(pos, struct ta_metadata, list);
-		print_ta_metadata(element);
-	}
-	return;
 }
 
 /*!
@@ -86,17 +49,18 @@ static void print_ta_metadata_list()
  */
 static int add_to_metadata_list(struct ta_metadata *ta_mdata)
 {
-	if (head == NULL) {
+	if (!head) {
 		/* List has not been initialized. */
-		if (initialize_list() == 0) {
-			syslog(LOG_INFO, "List initialization successful.");
-		} else {
-			syslog(LOG_ERR, "List initialization unsuccessful.");
+		if (initialize_list() == -1) {
+			syslog(LOG_ERR, "List initialization failed.");
 			return -1;
 		}
 	}
-	ta_mdata->list = (struct list_head){ &ta_mdata->list, &ta_mdata->list };
+	ta_mdata->list = (struct list_head) LIST_HEAD_INIT(ta_mdata->list);
+
+	pthread_mutex_lock(&list_mutex);
 	list_add_after(&ta_mdata->list, head);
+	pthread_mutex_unlock(&list_mutex);
 	return 0;
 }
 
@@ -109,46 +73,37 @@ int read_metadata(char *elf_file)
 	Elf_Scn *elf_scn;
 	Elf_Data *elf_data;
 	GElf_Shdr section_hdr;
-	size_t shstrndx;	
-	unsigned int i = 0;
+	size_t shstrndx;
 	struct ta_metadata *ta_mdata;
 	size_t ta_metadata_size;
 
 	/* Initialize ELF library. */
 	if (elf_version(EV_CURRENT) == EV_NONE) {
 		printf("ELF library initialization failed : %s.\n" , elf_errmsg(-1));
-		return -1;
-	} else {
-		syslog(LOG_INFO,"ELF library initialization successful \n");
+		goto err_cleanup;
 	}
 
 	/* Open ELF file for reading */
-	if ((elf_file_fd = open(elf_file, O_RDONLY, 0)) < 0) {
+	elf_file_fd = open(elf_file, O_RDONLY, 0);
+	if (elf_file_fd < 0) {
 		syslog(LOG_ERR, "ope()n ELF file %s failed.\n", elf_file);
-		return -1;
-	} else {
-		syslog(LOG_INFO, "open() ELF file %s successful.\n", elf_file);
+		goto err_cleanup;
 	}
 
-	if ((elf = elf_begin(elf_file_fd, ELF_C_READ, NULL)) == NULL) {
+	elf = elf_begin(elf_file_fd, ELF_C_READ, NULL);
+	if (elf == NULL) {
 		syslog(LOG_ERR, "elf_begin() failed : %s.\n", elf_errmsg(-1));
-		return -1;
-	} else {
-		syslog(LOG_INFO, "elf_begin() successful.\n");
+		goto err_cleanup;
 	}
 
 	if (elf_kind(elf) != ELF_K_ELF) {
 		syslog(LOG_ERR, "%s is not an ELF object.\n", elf_file);
-		return -1;
-	} else {
-		syslog(LOG_INFO, "Confirmed %s is an ELF object.\n", elf_file);
+		goto err_cleanup;
 	}
 
-	if (elf_getshdrstrndx(elf, &shstrndx ) != 0) {
-		syslog(LOG_ERR, "elf_getshdrstrndx () failed : %s.\n", elf_errmsg(-1));
-		return -1;
-	} else {
-		syslog(LOG_INFO, "elf_getshdrstrndx () successfull.\n");
+	if (elf_getshdrstrndx(elf, &shstrndx) != 0) {
+		syslog(LOG_ERR, "elf_getshdrstrndx() failed : %s.\n", elf_errmsg(-1));
+		goto err_cleanup;
 	}
 
 	elf_scn = NULL;
@@ -156,36 +111,51 @@ int read_metadata(char *elf_file)
 	while ((elf_scn = elf_nextscn(elf, elf_scn)) != NULL) {
 		/* Get section header */
 		if (gelf_getshdr(elf_scn, &section_hdr) != &section_hdr) {
-			syslog(LOG_INFO, "getshdr() failed : %s \n", elf_errmsg (-1));
+			syslog(LOG_ERR, "getshdr()failed : %s\n", elf_errmsg(-1));
+			continue;
 		}
 		/* Get section name */
-		if ((section_name = elf_strptr(elf, shstrndx, section_hdr.sh_name)) == NULL) {
-			syslog(LOG_INFO, "elf_strptr() failed : %s \n", elf_errmsg(-1));
+		section_name = elf_strptr(elf, shstrndx, section_hdr.sh_name);
+		if (section_name == NULL) {
+			syslog(LOG_ERR, "elf_strptr() failed : %s\n", elf_errmsg(-1));
+			continue;
 		}
 		/* Compare section name. */
 		if (strcmp(ta_section_name, section_name) == 0) {
-			syslog(LOG_INFO, "Identified section .ta_config.\n");
 			elf_data = NULL;
 			/* Retrieve data of an identified section.*/
 			while ((elf_data = elf_getdata(elf_scn, elf_data)) != NULL) {
 				section_data = (unsigned char *) elf_data->d_buf;
-				i = 0;
-				syslog(LOG_INFO,"Section data in hex format : ");
-				for(; i < elf_data->d_size; i++) {
-					syslog(LOG_INFO,"%x",section_data[i]);
+				ta_mdata = (struct ta_metadata *)
+					   malloc(sizeof(struct ta_metadata));
+				if (ta_mdata == NULL) {
+					syslog(LOG_ERR, "Out of memory.");
+					goto err_cleanup;
 				}
-				ta_mdata = (struct ta_metadata *) malloc(sizeof(struct ta_metadata));
 				ta_mdata->elf_file_name = elf_file;
 
-				ta_metadata_size = sizeof(TEE_UUID) + (2 * sizeof(size_t)) +
-					      (3 * sizeof(bool));
+				/* data from section data needs to be copied just for parameters
+				 * appID, dataSize, stackSize, singletonInstance, multiSession,
+				 * instanceKeepAlive. Therefore while copying data from
+				 * section_data size of char * (elf_file_name) and list_head
+				 * is excluded from the total size of ta_metadata.
+				 */
+				ta_metadata_size = sizeof(struct ta_metadata) -
+						   sizeof(char *) -
+						   sizeof(struct list_head);
 				memcpy(ta_mdata, section_data, ta_metadata_size);
-
 				/* Add TA metadata to list. */
 				add_to_metadata_list(ta_mdata);
 			}
 		}
 	}
+err_cleanup:
+	if (!elf)
+		elf_end(elf);
+	if (elf_file_fd)
+		close(elf_file_fd);
+	return -1;
+
 	elf_end(elf);
 	close(elf_file_fd);
 	return 0;
@@ -194,58 +164,31 @@ int read_metadata(char *elf_file)
 int remove_metadata(char *elf_file)
 {
 	struct list_head *pos;
-	struct ta_metadata *node = NULL;
-	struct ta_metadata *tmp;
-	LIST_FOR_EACH (pos, head) {
-		tmp = LIST_ENTRY(pos, struct ta_metadata, list);
-		if (strcmp(tmp->elf_file_name, elf_file) == 0) {
-			node = tmp;
-			break;
+	struct ta_metadata *remove_node;
+
+	LIST_FOR_EACH(pos, head) {
+		remove_node = LIST_ENTRY(pos, struct ta_metadata, list);
+		if (strcmp(remove_node->elf_file_name, elf_file) == 0) {
+			pthread_mutex_lock(&list_mutex);
+			list_unlink(&remove_node->list);
+			pthread_mutex_unlock(&list_mutex);
+
+			free(remove_node);
+			return 0;
 		}
-	}
-	if (node != NULL) {
-		list_unlink(&node->list);		
-		free(node);
-		syslog(LOG_INFO, "TA metadata of file %s is removed\n", elf_file);
-		return 0;
 	}
 	return -1;
 }
 
-/*!
- *  \brief Matches TEE_UUIDs
- *  \param TEE_UUIDs to be compared.
- *  \return true when TEE UUIDs matches, -1 otherwise.
- */
-bool tee_uuid_matches(TEE_UUID tee_uuid1, TEE_UUID tee_uuid2)
-{
-	int i = 0;
-	if (tee_uuid1.timeHiAndVersion != tee_uuid2.timeHiAndVersion) {
-		return false;
-	}
-	if (tee_uuid1.timeLow != tee_uuid2.timeLow) {
-		return false;
-	}
-	if (tee_uuid1.timeMid != tee_uuid2.timeMid) {
-		return false;
-	}
-	for ( ;i < 8; i++) {
-		if (tee_uuid1.clockSeqAndNode[i] != tee_uuid2.clockSeqAndNode[i]) {
-			return false;
-		}
-	}
-	return true;
-}
-
-struct ta_metadata* search_ta_by_uuid(TEE_UUID tee_uuid)
+struct ta_metadata *search_ta_by_uuid(TEE_UUID tee_uuid)
 {
 	struct list_head *pos;
 	struct ta_metadata *node;
+
 	LIST_FOR_EACH(pos, head) {
 		node = LIST_ENTRY(pos, struct ta_metadata, list);
-		if(tee_uuid_matches(node->appID, tee_uuid)) {
+		if (bcmp(&node->appID, &tee_uuid, sizeof(TEE_UUID)) == 0)
 			return node;
-		}
 	}
 	return NULL;
 }

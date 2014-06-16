@@ -17,6 +17,7 @@
 #include "epoll_wrapper.h"
 #include "process_manager.h"
 #include "elf_reader.h"
+#include "conf_parser.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,9 +35,6 @@
 
 /* Buffer space is allocated for 5 events. */
 #define EVENT_BUF_LEN  (MAX_CURR_EVENTS * ((sizeof(struct inotify_event)) + 16))
-
-// TODO: Path needs to be changed.
-const char *dir_path = "/home/swapnil/tmp/so/";
 
 /*!
  * \brief init_sock
@@ -98,26 +96,53 @@ bool is_so_file(char *file_name)
 }
 
 /*!
- * \brief Concats two strings and create a new string.
- * \param s1, s2 strings to be appended.
- * \returns Concatenated string.
+ * Concats directory path and file name to form absolute path
+ * of an ELF file. Also, checks if dir_path is terminating with
+ * file separator, if not add file separator.
+ * \param dir_path The ta directory path.
+ * \param file_name The file name.
+ * \returns Concatenated directory path and file name.
  */
-static char *concat(const char *s1, char *s2)
+char *get_elf_file_path(const char *dir_path, char *file_name)
 {
-	size_t len1 = strlen(s1);
-	size_t len2 = strlen(s2);
-	char *result = malloc(len1+len2+1);
+	bool file_sep_req;
+	char *elf_file_name;
+	size_t dir_path_len, file_name_len, dest_str_size;
 
-	memcpy(result, s1, len1);
-	memcpy(result+len1, s2, len2+1);
-	return result;
+	dir_path_len = strlen(dir_path);
+	file_name_len = strlen(file_name);
+	dest_str_size = dir_path_len + file_name_len + 1;
+
+	/* Check if file separator is required between directory path and file name. */
+	file_sep_req = dir_path[dir_path_len - 1] == '/' ? false : true;
+
+	/* Destination string length will be one more, if file separator
+	 * needs to be added in between.
+	 */
+	if (file_sep_req)
+		dest_str_size = dest_str_size + 1;
+
+	elf_file_name = malloc(dest_str_size);
+	if (elf_file_name == NULL) {
+		printf("Out of memory.");
+		return NULL;
+	}
+
+	memcpy(elf_file_name, dir_path, dir_path_len);
+	if (file_sep_req) {
+		memcpy(elf_file_name + dir_path_len, "/", 1);
+		memcpy(elf_file_name + dir_path_len + 1, file_name, file_name_len + 1);
+	} else
+		memcpy(elf_file_name + dir_path_len, file_name, file_name_len + 1);
+
+	return elf_file_name;
 }
 
 /*!
  * \brief Finds .so file in the directory, reads them and add their TA metadata in a list.
  * \param The directory in which .so files will be searched.
  */
-void read_existing_so_files(const char *dir_path)
+static int read_existing_so_files(const char *dir_path)
 {
 	DIR *d;
 	struct dirent *dir;
@@ -126,17 +151,17 @@ void read_existing_so_files(const char *dir_path)
 	d = opendir(dir_path);
 	if (d) {
 		while ((dir = readdir(d)) != NULL) {
-			elf_file_path = concat(dir_path, dir->d_name);
+			elf_file_path = get_elf_file_path(dir_path, dir->d_name);
+			if (elf_file_path == NULL)
+				continue;
+
 			if (is_so_file(elf_file_path))
 				read_metadata(elf_file_path);
-			else
-				syslog(LOG_INFO, "%s is not a .so file\n", elf_file_path);
-
 		}
 		closedir(d);
-	} else {
-		syslog(LOG_ERR, "Error while opening directory %s\n", dir_path);
-	}
+		return 0;
+	} else
+		return -1;
 }
 
 /*!
@@ -145,7 +170,7 @@ void read_existing_so_files(const char *dir_path)
  * \param The inotify file descriptor.
  * \param The directory which is being monitored.
  */
-void extract_inotify_event(int inotify_fd, const char* dir_path)
+static int extract_inotify_event(int inotify_fd, const char *dir_path)
 {
 	int num_read;
 	char inotify_buffer[EVENT_BUF_LEN];
@@ -154,48 +179,39 @@ void extract_inotify_event(int inotify_fd, const char* dir_path)
 	char *tmp_str;
 
 	num_read = read(inotify_fd, inotify_buffer, EVENT_BUF_LEN);
-	if (num_read == 0) {
+	if (num_read == -1) {
 		syslog(LOG_ERR, "Error while reading event.\n");
-		return;
-	} else if (num_read == -1) {
-		syslog(LOG_ERR, "Error while reading event.\n");
-		return;
+		return -1;
 	}
+
 	for (tmp_str = inotify_buffer; tmp_str < inotify_buffer + num_read; ) {
 		intfy_event = (struct inotify_event *) tmp_str;
 		/* Irrespective of an event if the event is related to
 		 * .so file.
 		 */
 		if ((intfy_event->len > 0) && (is_so_file(intfy_event->name))) {
-			elf_file_path = concat(dir_path, intfy_event->name);
+			elf_file_path = get_elf_file_path(dir_path, intfy_event->name);
+			if (elf_file_path == NULL)
+				return -1;
+
 			if (intfy_event->mask & IN_CREATE) {
-				syslog(LOG_INFO, "EVENT : IN_CREATE\n");
-				syslog(LOG_INFO, "File created : %s\n", elf_file_path);
 				/* When newly added file read immediately, it throws an error.
 				 * during parsing.
 				 */
 				sleep(1);
 				read_metadata(elf_file_path);
-			} else if (intfy_event->mask & IN_DELETE) {
-				syslog(LOG_INFO, "EVENT : IN_DELETE (can occur when .so file is deleted.)\n");
-				syslog(LOG_INFO, "ELF file %s has been deleted.\n", elf_file_path);
+			} else if (intfy_event->mask & (IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO)) {
+				/* Events may occur when file is deleted, renamed or replaced. */
 				remove_metadata(elf_file_path);
-			} else if (intfy_event->mask & IN_MOVED_FROM) {
-				printf("EVENT : IN_MOVED_FROM  (when .so file is renamed or deleted.)\n");
-				printf("ELF file %s has been renamed or deleted.\n", elf_file_path);
-				remove_metadata(elf_file_path);
-			} else if (intfy_event->mask & IN_MOVED_TO) {
-				syslog(LOG_INFO, "EVENT : IN_MOVED_TO (can occur when .so file is renamed or replaced.)\n");
-				if(remove_metadata(elf_file_path) == 0) {
-					syslog(LOG_INFO, "ELF file %s has been replaced.\n", elf_file_path);
-				} else {
-					syslog(LOG_INFO, "ELF file %s has been renamed.\n", elf_file_path);
+				if (intfy_event->mask & IN_MOVED_TO) {
+					/* When file is replaced read that file again. */
+					read_metadata(elf_file_path);
 				}
-				read_metadata(elf_file_path);
 			}
 		}
 		tmp_str += sizeof(struct inotify_event) + intfy_event->len;
 	}
+	return 0;
 }
 
 int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
@@ -206,18 +222,20 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 	char errbuf[MAX_ERR_STRING];
 	proc_t new_client;
 	int inotify_fd;
-	int inotify_wd;	
+	int inotify_wd;
+	char *dir_path;
+
+	/* Read ta_dir_path from configuration */
+	dir_path = config_parser_get_value("ta_dir_path");
 
 	/* Read existing files in the monitored directory. */
 	read_existing_so_files(dir_path);
 
 	/* Initializing inotify */
 	inotify_fd = inotify_init();
-	if (inotify_fd < 0 ) {
+	if (inotify_fd < 0) {
 		syslog(LOG_ERR, "inotify initialization failed.\n");
 		return -1;
-	} else {
-		syslog(LOG_INFO, "inotify initialized successful.\n");
 	}
 
 	/* Add a directory watch for addition of new file
@@ -225,12 +243,11 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 	 * 'IN_DELETE', however when file is deleted using UI it is registered as 'IN_MOVED_FROM'.
 	 * When file is replaced 'IN_MOVED_TO' and 'IN_MOVED_FROM' events are triggerred.
 	 */
-	inotify_wd = inotify_add_watch(inotify_fd, dir_path, IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_MOVED_FROM);
+	inotify_wd = inotify_add_watch(inotify_fd, dir_path,
+				       IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_MOVED_FROM);
 	if (inotify_wd == -1) {
 		syslog(LOG_ERR, "inotify add watch for directory failed.\n");
 		return -1;
-	} else {
-		syslog(LOG_INFO, "inotify add watch for directory is successful.\n");
 	}
 
 	if (init_epoll())

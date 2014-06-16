@@ -42,6 +42,6 @@ int remove_metadata(char *);
  *  \param TEE_UUID which is to be matched with the TEE_UUID of metadata in a list.
  *  \return When found returns ta metadata, NULL otherwise.
  */
-struct ta_metadata* search_ta_by_uuid(TEE_UUID tee_uuid);
+struct ta_metadata *search_ta_by_uuid(TEE_UUID tee_uuid);
 
 #endif
