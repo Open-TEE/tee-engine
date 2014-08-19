@@ -11,6 +11,8 @@ DynamicLibrary {
         cpp.includePaths: ["../include"]
     }
 
+    destinationDirectory: '.'
+
     cpp.dynamicLibraries: ["dl"]
 
     files: ["launcher_mainloop.c", "dynamic_loader.c", "dynamic_loader.h",

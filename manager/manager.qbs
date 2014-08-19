@@ -5,6 +5,8 @@ DynamicLibrary {
     Depends { name: "cpp" }
     Depends { name: "CommonApi" }
 
+    destinationDirectory: '.'
+
     cpp.includePaths: ["../include"]
 
     files: ["mainloop.c",

@@ -9,6 +9,8 @@ DynamicLibrary {
         cpp.includePaths: ["../include", "."]
     }
 
+    destinationDirectory: '.'
+
     cpp.includePaths: ["../include"]
 
     files: ["../include/tee_list.h", "../include/conf_parser.h", "conf_parser.c", "tee_list.c",

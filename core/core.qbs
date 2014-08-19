@@ -5,6 +5,8 @@ CppApplication {
     type: "application"
     Depends { name: "CommonApi" }
 
+    destinationDirectory: '.'
+
     cpp.dynamicLibraries: ["dl"]
     cpp.includePaths: ["../include"]
 

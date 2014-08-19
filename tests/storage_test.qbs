@@ -7,5 +7,7 @@ CppApplication {
     Depends { name: "InternalApi" }
     Depends { name: "OpenSSL" }
 
+    destinationDirectory: '.'
+
     files: ["storage_test.c"]
 }
