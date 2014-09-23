@@ -7,8 +7,9 @@ CppApplication {
 
     destinationDirectory: '.'
 
-    cpp.dynamicLibraries: ["dl"]
+    cpp.dynamicLibraries: ["dl", "pthread"]
     cpp.includePaths: ["../include"]
+    cpp.linkerFlags: "-rdynamic"
 
-    files: ["main.c"]
+    files: ["main.c", "main_shared_var.h"]
 }

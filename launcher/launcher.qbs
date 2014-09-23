@@ -6,15 +6,18 @@ DynamicLibrary {
     Depends { name: "CommonApi" }
     Depends { name: "InternalApi" }
 
+    destinationDirectory: '.'
+
     Export {
         Depends { name: "cpp" }
         cpp.includePaths: ["../include"]
     }
 
-    destinationDirectory: '.'
-
-    cpp.dynamicLibraries: ["dl"]
+    cpp.dynamicLibraries: ["dl", "pthread", "rt"]
+    cpp.warningLevel: "none"
 
     files: ["launcher_mainloop.c", "dynamic_loader.c", "dynamic_loader.h",
-            "ta_process.h", "ta_process.c"]
+            "ta_process.h", "ta_process.c", "utils.h", "utils.c",
+            "../include/trusted_app_properties.h", "../core/main_shared_var.h", "../core/main.c"
+    ]
 }

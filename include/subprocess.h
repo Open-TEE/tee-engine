@@ -17,9 +17,17 @@
 #ifndef __TEE_SUBPROCESS_H__
 #define __TEE_SUBPROCESS_H__
 
-typedef void (*sig_status_cb)(void);
+#include <stdint.h>
 
-typedef int (*main_loop_cb)(sig_status_cb handler, int sockpair_fd);
+static const uint32_t TEE_SIG_CHILD	= 0x00000001;
+static const uint32_t TEE_SIG_TERM	= 0x00000002;
+static const uint32_t TEE_SIG_HUP	= 0x00000004;
+static const uint32_t TEE_SIG_INT	= 0x00000008;
+static const uint32_t TEE_SIG_USR1	= 0x00000010;
+
+typedef void (*sig_status_cb)();
+
+typedef int (*main_loop_cb)(int sockpair_fd);
 
 /*!
  * \brief lib_main_loop
@@ -28,6 +36,6 @@ typedef int (*main_loop_cb)(sig_status_cb handler, int sockpair_fd);
  * \param sockpair_fd The socket handle that is used to communicate between manager and launcher
  * \return This function should never return unless a major error occurs, and then -1.
  */
-int lib_main_loop(sig_status_cb handler, int sockpair_fd);
+int lib_main_loop(int sockpair_fd);
 
 #endif

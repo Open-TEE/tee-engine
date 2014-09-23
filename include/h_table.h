@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Tanel Dettenborn		                            **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,27 +14,39 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_INTERNAL_MEMORY_H__
-#define __TEE_INTERNAL_MEMORY_H__
+/* TODO: Buckets are alloced dynamically, but hashtable not. Not the best soluiton if
+ * hashtable size cannot be estimated at creation */
 
-#include "tee_internal_data_types.h"
+/* TODO: Use kernel list */
 
-TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buffer, size_t size);
+/* NOTE: Not a thread safe! */
 
-void TEE_SetInstanceData(void *instanceData);
+#ifndef __H_TABLE_H__
+#define	__H_TABLE_H__
 
-void *TEE_GetInstanceData();
+#include <stdint.h>
 
-void *TEE_Malloc(size_t size, uint32_t hint);
+typedef struct __HashTableHandler *HASHTABLE;
+typedef struct bucket BUCKET;
 
-void *TEE_Realloc(void *buffer, uint32_t newSize);
+struct bucket {
+	BUCKET *next;
+	uint32_t buck_fill; /* 1 = fill, 0 = empty */
+	char *key;
+	size_t key_len;
+	void *data;
+};
 
-void TEE_Free(void *buffer);
+void h_table_create(HASHTABLE *table, size_t size);
+int h_table_insert(HASHTABLE table, unsigned char *key, size_t key_len, void *data);
+void *h_table_get(HASHTABLE table, unsigned char *key, size_t key_len);
+int h_table_remove(HASHTABLE table, unsigned char *key, size_t key_len);
+void h_table_free(HASHTABLE table);
 
-void TEE_MemMove(void *dest, void *src, uint32_t size);
+/* Iteration funcs */
+void h_table_init_stepper(HASHTABLE table);
+void *h_table_step(HASHTABLE table);
+int h_table_empty(HASHTABLE table);
 
-int32_t TEE_MemCompare(void *buffer1, void *buffer2, uint32_t size);
 
-void TEE_MemFill(void *buffer, uint32_t x, uint32_t size);
-
-#endif
+#endif /* __H_TABLE_H__ */

@@ -1,5 +1,6 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Secure Systems Group.                                 **
+** Copyright (C) 2014 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,27 +15,24 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_INTERNAL_MEMORY_H__
-#define __TEE_INTERNAL_MEMORY_H__
+/* Placeholder */
 
-#include "tee_internal_data_types.h"
+#ifndef __TA_ELF_STUFF__
+#define __TA_ELF_STUFF__
 
-TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buffer, size_t size);
+#include "general_data_types.h"
 
-void TEE_SetInstanceData(void *instanceData);
+#define MAX_TA_PATH_NAME 255
 
-void *TEE_GetInstanceData();
+struct trusted_app_properties {
+	bool singleton_instance;
+	bool instance_keep_alive;
+	bool multi_session;
+	TEE_UUID uuid;
+	char ta_so_name_with_path[MAX_TA_PATH_NAME];
+};
 
-void *TEE_Malloc(size_t size, uint32_t hint);
+/* Retun 1, if TA is not found at TA folder */
+int get_ta_properties(TEE_UUID *get_ta_uuid, struct trusted_app_properties *ta_properties);
 
-void *TEE_Realloc(void *buffer, uint32_t newSize);
-
-void TEE_Free(void *buffer);
-
-void TEE_MemMove(void *dest, void *src, uint32_t size);
-
-int32_t TEE_MemCompare(void *buffer1, void *buffer2, uint32_t size);
-
-void TEE_MemFill(void *buffer, uint32_t x, uint32_t size);
-
-#endif
+#endif /* __TA_ELF_STUFF__ */

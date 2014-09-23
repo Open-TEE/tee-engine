@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,27 +14,23 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_INTERNAL_MEMORY_H__
-#define __TEE_INTERNAL_MEMORY_H__
+#ifndef __MAIN_SHARED_VAR_H__
+#define __MAIN_SHARED_VAR_H__
 
-#include "tee_internal_data_types.h"
+#include <signal.h>
+#include <unistd.h>
 
-TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buffer, size_t size);
+#define MAX_PR_NAME			16
+#define TA_EXIT_INTERNAL_ERROR		34
+#define TA_EXIT_CREATE_ENTRY_FAILED	35
+#define TA_EXIT_SUCCESS			36
 
-void TEE_SetInstanceData(void *instanceData);
+extern volatile sig_atomic_t sig_vector;
+extern char *argv0;
+extern int argv0_len;
+extern pid_t manager_pid;
+extern pid_t launcher_pid;
+extern int self_pipe_fd;
+extern void check_and_reset_signal_status();
 
-void *TEE_GetInstanceData();
-
-void *TEE_Malloc(size_t size, uint32_t hint);
-
-void *TEE_Realloc(void *buffer, uint32_t newSize);
-
-void TEE_Free(void *buffer);
-
-void TEE_MemMove(void *dest, void *src, uint32_t size);
-
-int32_t TEE_MemCompare(void *buffer1, void *buffer2, uint32_t size);
-
-void TEE_MemFill(void *buffer, uint32_t x, uint32_t size);
-
-#endif
+#endif /* __MAIN_SHARED_VAR_H__ */

@@ -14,87 +14,203 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
+#define _GNU_SOURCE
+
 #include <syslog.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <sys/prctl.h>
+#include <sched.h>
+#include <syscall.h>
 
 #include "subprocess.h"
 #include "socket_help.h"
 #include "ta_process.h"
+#include "trusted_app_properties.h"
+#include "com_protocol.h"
+#include "../core/main_shared_var.h"
+#include "epoll_wrapper.h"
 
-int lib_main_loop(sig_status_cb check_signal_status, int manager_sock)
+#define MAX_CURR_EVENTS 5
+
+int lib_main_loop(int manager_sock)
 {
-	struct ta_path lib_path;
-	ssize_t to_read = sizeof(struct ta_path);
-	ssize_t num_r;
 	int sockfd[2];
+	pid_t new_proc_pid;
+	struct com_msg_open_session *recv_open_msg = NULL;
+	struct com_msg_ta_created created_ta;
+	int recv_bytes, ret, event_count, i;
+	sigset_t sig_empty_set, sig_block_set;
+	struct epoll_event cur_events[MAX_CURR_EVENTS];
+
+	if (sigemptyset(&sig_empty_set)) {
+		syslog(LOG_ERR, "lib_main_loop: Sigempty set failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (sigfillset(&sig_block_set)) {
+		syslog(LOG_ERR, "lib_main_loop: Sigempty set failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (init_epoll())
+		exit(EXIT_FAILURE);
+
+	/* listen to inbound connections from the manager */
+	if (epoll_reg_fd(manager_sock, EPOLLIN))
+		exit(EXIT_FAILURE);
+
+	if (epoll_reg_fd(self_pipe_fd, EPOLLIN))
+		exit(EXIT_FAILURE);
 
 	/* The launchers, sole purpose is to listen for commands from the manager.
 	 * When it receives a command from the manager it creates a new socket pair
 	 * and forks off a child process.  this child process will become a TA.
 	 * Once the child process is forked off, the launcher sends one end
-	 * of the newly created socket pair to the back to the manager so it can
+	 * of the newly created socket pair back to the manager so it can
 	 * communicate directly with the TA. The launcher then returns to wait until
 	 * it is required to start the next TA.
 	 *
-	 * In the child process the launcher loads the TA library and waits for an
-	 * open_session request to arrive from the manager so it cna complete its
+	 * In the child process the launcher loads the TA as a library and waits for
+	 * an open_session request to arrive from the manager so it cna complete its
 	 * initialization
 	 */
+
 	for (;;) {
+		printf("Ramble on!\n");
 
-		num_r = recv(manager_sock, &lib_path, to_read, 0);
-		if (num_r == -1) {
+		if (pthread_sigmask(SIG_SETMASK, &sig_empty_set, NULL)) {
+			syslog(LOG_ERR, "lib_main_loop: Problem with signal mask setting\n");
+			continue;
+		}
+
+		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);
+		if (event_count == -1) {
 			if (errno == EINTR) {
-				/* We have been interrupted so check which of our signals it was
-				 * and act on it, though it may have been a SIGCHLD
-				 */
-				check_signal_status();
-			} else {
-				syslog(LOG_ERR, "recv fail : %s", strerror(errno));
+				check_and_reset_signal_status();
+				continue;
 			}
 
+			/* Log error and hope the error clears itself */
+			syslog(LOG_ERR, "lib_main_loop: Failed return from epoll_wait\n");
 			continue;
+		}
 
-		} else if (num_r < to_read) {
-			/* TODO: we might want to loop here to read all of the struct data
-			 * if it does not arrive in 1 go.
+		if (pthread_sigmask(SIG_SETMASK, &sig_block_set, NULL)) {
+			syslog(LOG_ERR, "lib_main_loop: Problem with signal mask setting\n");
+			continue;
+		}
+
+		/* Note: All signals are blocked */
+
+		for (i = 0; i < event_count; i++) {
+
+			if (cur_events[i].data.fd == self_pipe_fd) {
+
+				if (cur_events[i].events & EPOLLERR) {
+					syslog(LOG_ERR, "lib_main_loop: Something wrong with self pipe\n");
+					exit(EXIT_FAILURE);
+				}
+
+				check_and_reset_signal_status();
+				continue;
+			}
+
+			if (cur_events[i].events & EPOLLERR || cur_events[i].events & EPOLLHUP) {
+				syslog(LOG_ERR, "lib_main_loop: Manager socket error\n");
+				exit(EXIT_FAILURE);
+			}
+
+			ret = com_wait_and_recv_msg(manager_sock, &recv_open_msg, &recv_bytes, NULL);
+
+			if (ret == -1) {
+				free(recv_open_msg);
+				continue; /* TODO: Figur out why -1 */
+
+			} else if (ret > 0) {
+				free(recv_open_msg);
+				continue;
+			}
+
+			/* Extrac info from message */
+			if (recv_open_msg->msg_hdr.msg_name != COM_MSG_NAME_OPEN_SESSION ||
+			    recv_open_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
+				syslog(LOG_ERR, "lib_main_loop: Invalid message\n");
+				free(recv_open_msg);
+				continue; /* ignore */
+			}
+
+			/* create a socket pair so the manager and TA can communicate */
+			if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1) {
+				syslog(LOG_ERR, "failed to create a socket pair : %s", strerror(errno));
+				/* TODO: send err msg */
+				free(recv_open_msg);
+				continue;
+			}
+
+			/*
+			 * Clone now to create the TA subprocess
 			 */
-			syslog(LOG_ERR, "failed to read the correct data : %s", strerror(errno));
-			continue;
-		}
 
-		/* create a socket pair so the manager and launcher can communicate */
-		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1) {
-			syslog(LOG_ERR, "failed to create a socket pair : %s", strerror(errno));
-			continue;
-		}
+			created_ta.pid = syscall(SYS_clone, SIGCHLD | CLONE_PARENT, 0 , 0);
+			if (created_ta.pid == -1) {
+				if (com_send_msg(manager_sock, &created_ta,
+						 sizeof(struct com_msg_ta_created)) !=
+				    sizeof(struct com_msg_ta_created)) {
+					syslog(LOG_ERR, "lib_main_loop: Failed report fail");
 
-		/* fork now to create the TA subprocess */
-		switch (fork()) {
-		case -1:
-			/* failed to fork */
-			return -1;
-		case 0:
-			/* child process will become the TA*/
-			close(sockfd[0]);
-			/* We should never return from the TA in this function call */
-			if (ta_process_loop(lib_path.path, sockfd[1])) {
-				syslog(LOG_ERR, "ta_process has failed");
-				exit(1);
+				}
+
+				continue;
+
+			} else if (created_ta.pid == 0) {
+				/* child process will become the TA*/
+				epoll_unreg(manager_sock);
+				close(manager_sock);
+				close(sockfd[0]);
+				prctl(PR_SET_PDEATHSIG, SIGTERM);
+				if (ta_process_loop(sockfd[1], recv_open_msg)) {
+					syslog(LOG_ERR, "ta_process has failed");
+					exit(1);
+				}
+
+			} else {
+				/* TODO: Proper error handling */
+				created_ta.msg_hdr.msg_name = COM_MSG_NAME_CREATED_TA;
+				created_ta.msg_hdr.msg_type = COM_TYPE_RESPONSE;
+				created_ta.msg_hdr.sender_type = Launcher;
+				created_ta.msg_hdr.sess_id = 0;
+				created_ta.pid = new_proc_pid;
+
+				/* We have to send kill signal to TA, because
+				 * SIGTERM might not be executed if TA is "stuck" in
+				 * create entry or open session function */
+
+				if (com_send_msg(manager_sock, &created_ta,
+						 sizeof(struct com_msg_ta_created)) ==
+				    sizeof(struct com_msg_ta_created)) {
+
+					if (send_fd(manager_sock, sockfd[0]) == -1) {
+						syslog(LOG_ERR, "Failed to send TA sock");
+						kill(new_proc_pid, SIGKILL);
+						/* TODO: Check what is causing error */
+					}
+
+				} else {
+					syslog(LOG_ERR, "Failed to send response msg");
+					kill(new_proc_pid, SIGKILL);
+					/* TODO: Check what is causing error */
+				}
+
+				/* parent process will stay as the launcher */
+				/* The launcher process has no need for these socket descriptors now */
+				close(sockfd[0]);
+				close(sockfd[1]);
+				free(recv_open_msg);
 			}
-			break;
-		default:
-			/* parent process will stay as the launcher */
-			if (send_fd(manager_sock, sockfd[0]))
-				syslog(LOG_ERR, "failed to send the fd to manager");
-
-			/* The launcher process has no need for these socket descriptors now */
-			close(sockfd[0]);
-			close(sockfd[1]);
-			break;
 		}
 	}
 }

@@ -27,11 +27,16 @@
 #include <dlfcn.h>
 #include <sys/prctl.h>
 #include <string.h>
+#include <pthread.h>
+#include <sys/eventfd.h>
+#include <errno.h>
+
 
 #include "subprocess.h"
 #include "conf_parser.h"
+#include "main_shared_var.h"
 
-#define MAX_PR_NAME 16
+/* #define MAX_PR_NAME 16 */
 
 /*!
  * \brief restart
@@ -46,26 +51,89 @@ static volatile sig_atomic_t restart;
 static volatile sig_atomic_t terminate;
 
 /*!
+ * \brief child_dead_count
+ * Counter is increased in every waitpid loop.
+ */
+static volatile sig_atomic_t sick_child;
+
+/*!
  * \brief sig_handler
  * Callback handler for the registered signals
  * \param sig The id of the signal that ha been revceived
  */
+
+volatile sig_atomic_t sig_vector;
+char *argv0;
+int argv0_len;
+pid_t manager_pid;
+int self_pipe_fd;
+pid_t launcher_pid;
+
 static void sig_handler(int sig)
 {
+	uint64_t event = 1;
+
 	switch (sig) {
 	case SIGCHLD:
-		/* wait for children, to reap the zombies */
-		while (waitpid(-1, NULL, WNOHANG) > 0)
-			continue;
+		sig_vector |= TEE_SIG_CHILD;
 		break;
+
 	case SIGHUP:
 		/* restart the daemon */
-		restart = 1;
+		sig_vector |= TEE_SIG_HUP;
 		break;
+
 	case SIGTERM:
 		/* terminate the app, so clean up */
-		terminate = 1;
+		sig_vector |= TEE_SIG_TERM;
 		break;
+
+	case SIGPIPE:
+		/* Catch. Handled locally */
+		break;
+
+	case SIGINT:
+		/* Testing purpose */
+		sig_vector |= TEE_SIG_INT;
+		break;
+	}
+
+	if (write(self_pipe_fd, &event, sizeof(uint64_t)) == -1) {
+		syslog(LOG_DEBUG, "sig_handler: write error");
+		/* Lets hope that the error clear it self :S */
+	}
+}
+
+/*!
+ * \brief check_signal_status
+ * After the signals have change the state of the global bits we should check what we have been
+ * requested to do. This is basic handler and for now it is used by launcher and all TAs
+ */
+void check_and_reset_signal_status()
+{
+	uint64_t event;
+
+	if (sig_vector & TEE_SIG_TERM) {
+		closelog();
+		exit(EXIT_SUCCESS);
+	}
+
+	if (sig_vector & TEE_SIG_HUP) {
+		sig_vector ^= TEE_SIG_HUP;
+		/* At the moment, do nothing */
+	}
+
+	if (sig_vector & TEE_SIG_INT) {
+		closelog();
+		exit(EXIT_SUCCESS);
+	}
+
+	if (read(self_pipe_fd, &event, sizeof(uint64_t)) == -1) {
+		/* EAGAIN == FD is zero and because it is set as non blocking, it returns EAGAIN */
+		if (errno != EAGAIN) {
+			syslog(LOG_ERR, "check_and_reset_signal_status: Failed to reset self_pipe_fd\n");
+			/* TODO: See what is causing it! */
+		}
 	}
 }
 
@@ -123,24 +191,6 @@ static int daemonize(void)
 	return 0;
 }
 
-/*!
- * \brief check_signal_status
- * After the signals have change the state of the global bits we should check what we have been
- * requested to do
- */
-static void check_signal_status()
-{
-	if (restart) {
-		syslog(LOG_DEBUG, "restart requested");
-		restart = 0;
-	}
-	if (terminate) {
-		syslog(LOG_DEBUG, "Terminate requested");
-		closelog();
-		exit(3);
-	}
-}
-
 int load_lib(char *path, main_loop_cb *callback)
 {
 	void *lib;
@@ -149,7 +199,7 @@ int load_lib(char *path, main_loop_cb *callback)
 
 	dlerror();
 
-	lib = dlopen(path, RTLD_LAZY);
+	lib = dlopen(path, RTLD_LAZY | RTLD_GLOBAL);
 	if (lib == NULL) {
 		syslog(LOG_DEBUG, "Failed to load library : %s : %s", path, dlerror());
 		return -1;
@@ -178,8 +228,15 @@ int main(int argc, char **argv)
 	main_loop_cb main_loop;
 	char proc_name[MAX_PR_NAME];
 	int cmd_name_len = strnlen(argv[0], MAX_PR_NAME);
-
 	argc = argc;
+	sigset_t sig_block_set;
+
+	/* Block all signals */
+	if (sigfillset(&sig_block_set))
+		exit(1);
+
+	if (pthread_sigmask(SIG_SETMASK, &sig_block_set, NULL))
+		exit(1);
 
 	sigemptyset(&sig_act.sa_mask);
 	sig_act.sa_flags = 0;
@@ -191,13 +248,17 @@ int main(int argc, char **argv)
 		exit(1);
 	if (sigaction(SIGTERM, &sig_act, NULL) == -1)
 		exit(1);
+	if (sigaction(SIGPIPE, &sig_act, NULL) == -1)
+		exit(1);
+	if (sigaction(SIGINT, &sig_act, NULL) == -1)
+		exit(1);
 
 	/*
 	 * TODO: we should probably implement some file locks to ensure only one instance of the
 	 * daemon is running at any one time.
-	 */
+	 *
 	if (daemonize())
-		exit(1);
+		exit(1); */
 
 	/* create a socket pair so the manager and launcher can communicate */
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1)
@@ -206,25 +267,30 @@ int main(int argc, char **argv)
 	if (config_parser_get_config(&conf) == -1)
 		exit(1);
 
+	argv0 = argv[0];
+	argv0_len = strnlen(argv[0], MAX_PR_NAME);
+	manager_pid = getpid();
+	self_pipe_fd = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
+
 	/* fork now to create the manager and launcher subprocesses */
-	switch (fork()) {
-	case -1:
+	launcher_pid = fork();
+	if (launcher_pid == -1) {
 		/* failed to fork */
 		return -1;
-	case 0:
+	} else if (launcher_pid == 0) {
 		/* child process will become the launcher*/
+		/* prctl(PR_SET_PDEATHSIG, SIGHUP); */
 		close(sockfd[0]);
 		comm_sock_fd = sockfd[1];
 		lib_to_load = conf->subprocess_launcher;
 		strncpy(proc_name, "tee_launcher", MAX_PR_NAME);
-		break;
-	default:
+		prctl(PR_SET_PDEATHSIG, SIGTERM);
+	} else {
 		/* parent process will become the manager */
 		close(sockfd[1]);
 		comm_sock_fd = sockfd[0];
 		lib_to_load = conf->subprocess_manager;
 		strncpy(proc_name, "tee_manager", MAX_PR_NAME);
-		break;
 	}
 
 	/* set the name of our process it appears that we have to set
@@ -241,7 +307,7 @@ int main(int argc, char **argv)
 
 	/* Enter into the main part of the resepctive programs, manager or launcher
 	 * in a proper situation this function should never return */
-	if (main_loop(&check_signal_status, comm_sock_fd))
+	if (main_loop(comm_sock_fd))
 		exit(2);
 
 	exit(0);
