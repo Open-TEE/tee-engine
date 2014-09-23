@@ -65,6 +65,8 @@ int recv_fd(int sockfd, int *recvd_fd)
 	anc_load.header.cmsg_len = CMSG_LEN(sizeof(int));
 	anc_load.header.cmsg_level = SOL_SOCKET;
 
+	msg_head.msg_name = NULL;
+	msg_head.msg_namelen = 0;
 	msg_head.msg_control = &anc_load;
 	msg_head.msg_controllen = CMSG_SPACE(sizeof(int));
 

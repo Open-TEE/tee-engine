@@ -46,6 +46,14 @@ static volatile sig_atomic_t restart;
 static volatile sig_atomic_t terminate;
 
 /*!
+ * \brief child_dead_count
+ * Counter is increased in every waitpid loop.
+ */
+static volatile sig_atomic_t sick_child;
+
+static volatile sig_atomic_t sig_status;
+
+/*!
  * \brief sig_handler
  * Callback handler for the registered signals
  * \param sig The id of the signal that ha been revceived
@@ -56,17 +64,55 @@ static void sig_handler(int sig)
 	case SIGCHLD:
 		/* wait for children, to reap the zombies */
 		while (waitpid(-1, NULL, WNOHANG) > 0)
-			continue;
+			sig_status |= TEE_SIG_CHILD;
 		break;
+
 	case SIGHUP:
 		/* restart the daemon */
-		restart = 1;
+		sig_status |= TEE_SIG_HUP;
 		break;
+
 	case SIGTERM:
 		/* terminate the app, so clean up */
-		terminate = 1;
+		sig_status |= TEE_SIG_TERM;
+		break;
+
+	case SIGPIPE:
+		/* Catch */
+		break;
+
+	case SIGINT:
+		sig_status |= TEE_SIG_INT;
 		break;
 	}
+}
+
+/*!
+ * \brief check_signal_status
+ * After the signals have change the state of the global bits we should check what we have been
+ * requested to do
+ */
+static void check_signal_status()
+{
+	/* syslog(LOG_DEBUG, "check_signal_status\n"); */
+
+	if (sig_status & TEE_SIG_TERM) {
+		syslog(LOG_DEBUG, "check_signal_status: restart requested");
+	}
+
+	if (sig_status & TEE_SIG_HUP) {
+		syslog(LOG_DEBUG, "Terminate requested");
+		closelog();
+		exit(3);
+	}
+
+	if (sig_status & TEE_SIG_INT) {
+		syslog(LOG_DEBUG, "Terminate requested");
+		closelog();
+		exit(3);
+	}
+
+	sig_status = 0;
 }
 
 /*!
@@ -123,24 +169,6 @@ static int daemonize(void)
 	return 0;
 }
 
-/*!
- * \brief check_signal_status
- * After the signals have change the state of the global bits we should check what we have been
- * requested to do
- */
-static void check_signal_status()
-{
-	if (restart) {
-		syslog(LOG_DEBUG, "restart requested");
-		restart = 0;
-	}
-	if (terminate) {
-		syslog(LOG_DEBUG, "Terminate requested");
-		closelog();
-		exit(3);
-	}
-}
-
 int load_lib(char *path, main_loop_cb *callback)
 {
 	void *lib;
@@ -178,8 +206,16 @@ int main(int argc, char **argv)
 	main_loop_cb main_loop;
 	char proc_name[MAX_PR_NAME];
 	int cmd_name_len = strnlen(argv[0], MAX_PR_NAME);
-
 	argc = argc;
+	sigset_t sig_block_set;
+
+	/* Block all signals
+	if (sigfillset(&sig_block_set))
+
+	exit(1); */
+
+	if (sigprocmask(SIG_BLOCK, &sig_block_set, NULL))
+		exit(1);
 
 	sigemptyset(&sig_act.sa_mask);
 	sig_act.sa_flags = 0;
@@ -191,13 +227,17 @@ int main(int argc, char **argv)
 		exit(1);
 	if (sigaction(SIGTERM, &sig_act, NULL) == -1)
 		exit(1);
+	if (sigaction(SIGPIPE, &sig_act, NULL) == -1)
+		exit(1);
+	if (sigaction(SIGINT, &sig_act, NULL) == -1)
+		exit(1);
 
 	/*
 	 * TODO: we should probably implement some file locks to ensure only one instance of the
 	 * daemon is running at any one time.
-	 */
+	 *
 	if (daemonize())
-		exit(1);
+		exit(1); */
 
 	/* create a socket pair so the manager and launcher can communicate */
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1)
@@ -213,6 +253,7 @@ int main(int argc, char **argv)
 		return -1;
 	case 0:
 		/* child process will become the launcher*/
+		prctl(PR_SET_PDEATHSIG, SIGHUP);
 		close(sockfd[0]);
 		comm_sock_fd = sockfd[1];
 		lib_to_load = conf->subprocess_launcher;

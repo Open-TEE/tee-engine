@@ -17,6 +17,11 @@
 #ifndef __TEE_TA_PROCESS_H__
 #define __TEE_TA_PROCESS_H__
 
+#include <stdint.h>
+
+#include "com_protocol.h"
+#include "subprocess.h"
+
 /*!
  * \brief ta_process_loop
  * The main loop of the TA process
@@ -24,6 +29,6 @@
  * \param sockfd The socket on which to communicate with the manager
  * \return should never return
  */
-int ta_process_loop(const char *lib_path, int sockfd);
+int ta_process_loop(int man_sockfd, sig_status_cb check_signal_status, struct com_msg_open_session *open_msg);
 
 #endif

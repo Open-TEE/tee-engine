@@ -1,5 +1,6 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Secure Systems Group.                                 **
+** Copyright (C) 2014 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,27 +15,21 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_INTERNAL_MEMORY_H__
-#define __TEE_INTERNAL_MEMORY_H__
+/* Placeholder */
 
-#include "tee_internal_data_types.h"
+#include <string.h>
+#include "trusted_app_properties.h"
 
-TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buffer, size_t size);
+static char *ta_path_and_name = "/home/tdettenb/code/opentee/gcc-debug/libtest_applet.so";
 
-void TEE_SetInstanceData(void *instanceData);
+int get_ta_properties(TEE_UUID *get_ta_uuid, struct trusted_app_properties *ta_properties)
+{
+	get_ta_uuid = get_ta_uuid;
 
-void *TEE_GetInstanceData();
+	ta_properties->instance_keep_alive = false;
+	ta_properties->singleton_instance = false;
+	ta_properties->multi_session = false;
+	memcpy(&ta_properties->ta_so_name_with_path, ta_path_and_name, MAX_TA_PATH_NAME);
 
-void *TEE_Malloc(size_t size, uint32_t hint);
-
-void *TEE_Realloc(void *buffer, uint32_t newSize);
-
-void TEE_Free(void *buffer);
-
-void TEE_MemMove(void *dest, void *src, uint32_t size);
-
-int32_t TEE_MemCompare(void *buffer1, void *buffer2, uint32_t size);
-
-void TEE_MemFill(void *buffer, uint32_t x, uint32_t size);
-
-#endif
+	return 0;
+}

@@ -4,10 +4,10 @@ CppApplication {
     name: "storage_test"
     type: "application"
 
+    destinationDirectory: '.'
+
     Depends { name: "InternalApi" }
     Depends { name: "OpenSSL" }
-
-    destinationDirectory: '.'
 
     files: ["storage_test.c"]
 }

@@ -19,7 +19,7 @@
 
 #include <stdint.h>
 
-#include "data_types.h"
+#include "tee_internal_data_types.h"
 
 /*!
   * \brief Specify a wait time that will only be interupted by seting a cancelation flag.

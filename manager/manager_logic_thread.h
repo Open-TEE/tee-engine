@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -13,28 +13,9 @@
 ** See the License for the specific language governing permissions and      **
 ** limitations under the License.                                           **
 *****************************************************************************/
+#ifndef __MANAGER_LOGIC_THREAD__
+#define __MANAGER_LOGIC_THREAD__
 
-#ifndef __TEE_INTERNAL_MEMORY_H__
-#define __TEE_INTERNAL_MEMORY_H__
+void *manager_logic_main_thread(void *arg);
 
-#include "tee_internal_data_types.h"
-
-TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buffer, size_t size);
-
-void TEE_SetInstanceData(void *instanceData);
-
-void *TEE_GetInstanceData();
-
-void *TEE_Malloc(size_t size, uint32_t hint);
-
-void *TEE_Realloc(void *buffer, uint32_t newSize);
-
-void TEE_Free(void *buffer);
-
-void TEE_MemMove(void *dest, void *src, uint32_t size);
-
-int32_t TEE_MemCompare(void *buffer1, void *buffer2, uint32_t size);
-
-void TEE_MemFill(void *buffer, uint32_t x, uint32_t size);
-
-#endif
+#endif /* __MANAGER_LOGIC_THREAD__ */
