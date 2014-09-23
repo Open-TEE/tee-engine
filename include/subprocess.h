@@ -17,7 +17,14 @@
 #ifndef __TEE_SUBPROCESS_H__
 #define __TEE_SUBPROCESS_H__
 
-typedef void (*sig_status_cb)(void);
+#include <stdint.h>
+
+static const uint32_t TEE_SIG_CHILD	= 0x00000001;
+static const uint32_t TEE_SIG_TERM	= 0x00000002;
+static const uint32_t TEE_SIG_HUP	= 0x00000004;
+static const uint32_t TEE_SIG_INT	= 0x00000008;
+
+typedef void (*sig_status_cb)();
 
 typedef int (*main_loop_cb)(sig_status_cb handler, int sockpair_fd);
 

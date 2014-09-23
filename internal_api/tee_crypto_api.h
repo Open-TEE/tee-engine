@@ -20,7 +20,7 @@
 
 #include <stdbool.h>
 
-#include "data_types.h"
+#include "tee_internal_data_types.h"
 #include "tee_storage_api.h"
 
 
