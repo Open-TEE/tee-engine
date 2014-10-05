@@ -26,6 +26,7 @@
 #include "subprocess.h"
 #include "epoll_wrapper.h"
 #include "process_manager.h"
+#include "trusted_app_properties.h"
 
 #define MAX_CURR_EVENTS 5
 #define MAX_ERR_STRING 100
@@ -71,7 +72,7 @@ static int init_sock(int *pub_sockfd)
 
 int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 {
-	int clientfd, public_sockfd, i;
+	int clientfd, public_sockfd, i, inotify_fd;
 	int event_count;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
 	char errbuf[MAX_ERR_STRING];
@@ -81,6 +82,13 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 		return -1;
 
 	if (init_sock(&public_sockfd))
+		return -1;
+
+	inotify_fd = init_ta_properti_notify();
+	if (inotify_fd)
+		return -1;
+
+	if (epoll_reg_fd(inotify_fd, EPOLLIN))
 		return -1;
 
 	/* listen to inbound connections from userspace clients */
@@ -134,6 +142,10 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 
 				if (epoll_reg_data(clientfd, EPOLLIN, (void *)new_client))
 					return -1;
+
+			} else if (cur_events[i].data.fd == inotify_fd) {
+				handle_inotify_fd(&cur_events[i]);
+
 			} else {
 				pm_handle_connection(cur_events[i].events, cur_events[i].data.ptr);
 			}
