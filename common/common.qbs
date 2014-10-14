@@ -14,7 +14,7 @@ DynamicLibrary {
     cpp.includePaths: ["../include"]
 
     files: ["../include/tee_list.h", "../include/conf_parser.h", "conf_parser.c", "tee_list.c",
-            "socket_help.c", "../include/socket_help.h"
+            "socket_help.c", "../include/socket_help.h", "../include/tee_logging.h"
     ]
 }
 
