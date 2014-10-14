@@ -26,7 +26,7 @@ static void free_attr(TEE_Attribute *params, size_t count);
 #define KEY_IN_BYTES(key_in_bits) ((key_in_bits + 7) / 8)
 
 /* pri_obj_attr */
-static void pri_obj_attr(TEE_ObjectHandle object)
+static void __attribute__((unused)) pri_obj_attr(TEE_ObjectHandle object)
 {
 	size_t i,j;
 	if (object == NULL)
@@ -41,7 +41,7 @@ static void pri_obj_attr(TEE_ObjectHandle object)
 }
 
 /* pri_and_cmp_attr */
-static void pri_and_cmp_attr(TEE_ObjectHandle obj1, TEE_ObjectHandle obj2)
+static void __attribute__((unused)) pri_and_cmp_attr(TEE_ObjectHandle obj1, TEE_ObjectHandle obj2)
 {
 	size_t i,j, attr_count, cmp_len;
 
@@ -104,7 +104,7 @@ static void pri_void_buf(void *buf, size_t len)
 	printf("\n");
 }
 
-static void pri_obj_data(TEE_ObjectHandle object)
+static void __attribute__((unused)) pri_obj_data(TEE_ObjectHandle object)
 {
 	void *data = NULL;
 	TEE_ObjectInfo info;
@@ -148,7 +148,7 @@ err:
 	free(data);
 }
 
-static void pri_obj_info(TEE_ObjectInfo info)
+static void __attribute__((unused)) pri_obj_info(TEE_ObjectInfo info)
 {
 	printf("Info structure:\n");
 	printf("dataPosition:  %u\n", info.dataPosition);

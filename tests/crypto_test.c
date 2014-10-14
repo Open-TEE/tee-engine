@@ -47,7 +47,7 @@ static void free_attr(TEE_Attribute *params, size_t count);
 #define KEY_IN_BYTES(key_in_bits) ((key_in_bits + 7) / 8)
 
 /* pri_obj_attr */
-static void pri_obj_attr(TEE_ObjectHandle object)
+static void __attribute__((unused)) pri_obj_attr(TEE_ObjectHandle object) /* No warning */
 {
 	size_t i,j;
 	if (object == NULL)
@@ -62,7 +62,7 @@ static void pri_obj_attr(TEE_ObjectHandle object)
 }
 
 /* pri_and_cmp_attr */
-static void pri_and_cmp_attr(TEE_ObjectHandle obj1, TEE_ObjectHandle obj2)
+static void __attribute__((unused)) pri_and_cmp_attr(TEE_ObjectHandle obj1, TEE_ObjectHandle obj2)
 {
 	size_t i,j, attr_count, cmp_len;
 
@@ -122,7 +122,7 @@ static void pri_void_buf(void *buf, size_t len)
 	printf("\n");
 }
 
-static void pri_obj_data(TEE_ObjectHandle object)
+static void __attribute__((unused)) pri_obj_data(TEE_ObjectHandle object)
 {
 	void *data = NULL;
 	TEE_ObjectInfo info;
@@ -166,7 +166,7 @@ err:
 	free(data);
 }
 
-static void pri_obj_info(TEE_ObjectInfo info)
+static void __attribute__((unused)) pri_obj_info(TEE_ObjectInfo info)
 {
 	printf("Info structure:\n");
 	printf("dataPosition:  %u\n", info.dataPosition);
@@ -189,7 +189,7 @@ static void free_attr(TEE_Attribute *params, size_t count)
 		free(params[i].content.ref.buffer);
 }
 
-static void gen_rand_per_data_obj(TEE_ObjectHandle *gen_obj, size_t data_len)
+static void __attribute__((unused)) gen_rand_per_data_obj(TEE_ObjectHandle *gen_obj, size_t data_len)
 {
 	void *ID = NULL;
 	size_t ID_len = 30;
@@ -222,7 +222,7 @@ err:
 	free(init_data);
 }
 
-static void gen_RSA_per_obj_with_data(TEE_ObjectHandle *gen_obj, size_t data_len)
+static void __attribute__((unused)) gen_RSA_per_obj_with_data(TEE_ObjectHandle *gen_obj, size_t data_len)
 {
 	TEE_Result ret;
 	TEE_ObjectHandle handler;
@@ -590,7 +590,7 @@ static void des3_cbc_enc_dec()
 		goto err;
 	}
 	RAND_bytes(IV, IVlen);
-	memcpy(plain, plain_msg, sizeof(plain_msg));
+	memcpy(plain, plain_msg, strlen(plain_msg) + 1);
 
 	/* Alloc and gen keys */
 	ret = TEE_AllocateTransientObject(obj_type, key_size, &key);
@@ -837,7 +837,7 @@ static void aes_256_cbc_enc_dec()
 		goto err;
 	}
 	RAND_bytes(IV, IVlen);
-	memcpy(plain, plain_msg, sizeof(plain_msg));
+	memcpy(plain, plain_msg, strlen(plain_msg) + 1);
 
 	/* Alloc and gen keys */
 	ret = TEE_AllocateTransientObject(obj_type, key_size, &key);
@@ -975,7 +975,7 @@ static void RSA_keypair_enc_dec()
 		goto err;
 	}
 
-	memcpy(plain, plain_msg, sizeof(plain_msg));
+	memcpy(plain, plain_msg, strlen(plain_msg) + 1);
 	//RAND_bytes(plain, plain_len);
 
 	ret = TEE_AllocateTransientObject(TEE_TYPE_RSA_KEYPAIR, key_size, &rsa_keypair);
@@ -1108,7 +1108,7 @@ static void RSA_sig_and_ver()
 		goto err;
 	}
 
-	memcpy(dig, dig_msg, sizeof(dig_msg));
+	memcpy(dig, dig_msg, strlen(dig_msg) + 1);
 
 	ret = TEE_AllocateTransientObject(TEE_TYPE_RSA_KEYPAIR, key_size, &rsa_keypair);
 	if (ret != TEE_SUCCESS) {
@@ -1169,8 +1169,8 @@ static void HMAC_computation()
 		goto err;
 	}
 
-	memcpy(msg, seed_msg, sizeof(seed_msg));
-	memcpy(msg2, seed_msg2, sizeof(seed_msg2));
+	memcpy(msg, seed_msg, strlen(seed_msg) + 1);
+	memcpy(msg2, seed_msg2, strlen(seed_msg2) + 1);
 
 	ret = TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256, key_size, &hmac_key);
 	if (ret != TEE_SUCCESS) {
@@ -1272,8 +1272,8 @@ static void CMAC_computation()
 		goto err;
 	}
 
-	memcpy(msg, seed_msg, sizeof(seed_msg));
-	memcpy(msg2, seed_msg2, sizeof(seed_msg2));
+	memcpy(msg, seed_msg, strlen(seed_msg) + 1);
+	memcpy(msg2, seed_msg2, strlen(seed_msg2) + 1);
 
 	ret = TEE_AllocateTransientObject(TEE_TYPE_AES, key_size, &hmac_key);
 	if (ret != TEE_SUCCESS) {
@@ -1590,7 +1590,7 @@ static void dup_rsa_key()
 		goto err;
 	}
 
-	memcpy(plain, plain_msg, sizeof(plain_msg));
+	memcpy(plain, plain_msg, strlen(plain_msg) + 1);
 
 	ret = TEE_AllocateTransientObject(TEE_TYPE_RSA_KEYPAIR, key_size, &key);
 	if (ret != TEE_SUCCESS) {
