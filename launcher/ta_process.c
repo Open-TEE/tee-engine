@@ -24,6 +24,7 @@ int ta_process_loop(const char *lib_path, int sockfd)
 {
 	TEEC_Result ret;
 	struct ta_interface *interface;
+	sockfd = sockfd;
 
 	ret = load_ta(lib_path, &interface);
 	if (ret != TEE_SUCCESS) {
