@@ -17,7 +17,7 @@
 #ifndef __TEE_STORAGE_API_H__
 #define __TEE_STORAGE_API_H__
 
-#include "data_types.h"
+#include "tee_data_types.h"
 
 /*
  * ## Data Types ##

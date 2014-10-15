@@ -17,7 +17,7 @@
 #ifndef __TEE_INTERNAL_MEMORY_H__
 #define __TEE_INTERNAL_MEMORY_H__
 
-#include "data_types.h"
+#include "tee_data_types.h"
 
 TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buffer, size_t size);
 

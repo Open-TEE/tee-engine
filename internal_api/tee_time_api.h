@@ -14,12 +14,12 @@
 ** limitations under the License.					   **
 *****************************************************************************/
 
-#ifndef __TIME_API_H__
-#define __TIME_API_H__
+#ifndef __TEE_TIME_API_H__
+#define __TEE_TIME_API_H__
 
 #include <stdint.h>
 
-#include "data_types.h"
+#include "tee_data_types.h"
 
 /*!
   * \brief Specify a wait time that will only be interupted by seting a cancelation flag.
@@ -66,4 +66,4 @@ TEE_Result TEE_SetTAPersistentTime(TEE_Time *time);
  */
 void TEE_GetREETime(TEE_Time *time);
 
-#endif /* __TIME_API_H__ */
+#endif /* __TEE_TIME_API_H__ */

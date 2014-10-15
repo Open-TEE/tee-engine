@@ -49,7 +49,7 @@
 #include "tee_storage_api.h"
 #include "tee_object_handle.h"
 #include "tee_panic.h"
-#include "data_types.h"
+#include "tee_data_types.h"
 #include "openssl_1_0_2_beta_rsa_oaep.h"
 
 #define BITS_TO_BYTES(bits) (bits / 8)

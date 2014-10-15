@@ -17,7 +17,7 @@
 #ifndef __TEE_OBJECT_ENUM_HANDLE_H__
 #define __TEE_OBJECT_ENUM_HANDLE_H__
 
-#include "data_types.h"
+#include "tee_data_types.h"
 #include "tee_storage_api.h"
 
 struct storage_obj_meta_data {

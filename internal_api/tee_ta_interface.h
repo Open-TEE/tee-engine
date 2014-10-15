@@ -17,7 +17,7 @@
 #ifndef __TEE_TA_INTERFACE_H__
 #define __TEE_TA_INTERFACE_H__
 
-#include "data_types.h"
+#include "tee_data_types.h"
 
 #ifdef TA_PLUGIN
 #define TA_EXPORT __attribute__((__visibility__("default")))

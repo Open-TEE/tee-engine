@@ -19,7 +19,7 @@
 #include <errno.h>
 #include <stdbool.h>
 
-#include "time_api.h"
+#include "tee_time_api.h"
 
 static struct timeval persistent_time;
 static struct timeval mark_time;

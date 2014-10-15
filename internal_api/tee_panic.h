@@ -17,7 +17,7 @@
 #ifndef __TEE_PANIC_H__
 #define __TEE_PANIC_H__
 
-#include "data_types.h"
+#include "tee_data_types.h"
 
 void TEE_Panic(TEE_Result panicCode);
 

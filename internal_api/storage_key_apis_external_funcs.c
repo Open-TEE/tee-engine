@@ -26,7 +26,7 @@
 #include <dirent.h>
 #include <unistd.h>
 
-#include "data_types.h"
+#include "tee_data_types.h"
 #include "tee_storage_api.h"
 #include "tee_panic.h"
 #include "tee_memory.h"

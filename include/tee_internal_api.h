@@ -17,10 +17,10 @@
 #ifndef __TEE_INTERNAL_API_EMU_H__
 #define __TEE_INTERNAL_API_EMU_H__
 
-#include "../internal_api/data_types.h"
+#include "../internal_api/tee_data_types.h"
 #include "../internal_api/tee_memory.h"
 #include "../internal_api/tee_ta_interface.h"
-#include "../internal_api/time_api.h"
+#include "../internal_api/tee_time_api.h"
 #include "../internal_api/tee_storage_api.h"
 #include "../internal_api/tee_panic.h"
 #include "../internal_api/tee_crypto_api.h"
