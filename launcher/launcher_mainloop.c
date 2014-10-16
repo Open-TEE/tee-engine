@@ -23,8 +23,27 @@
 #include "subprocess.h"
 #include "socket_help.h"
 #include "ta_process.h"
+#include "../core/main_shared_var.h"
 
-int lib_main_loop(sig_status_cb check_signal_status, int manager_sock)
+static void check_signal_status()
+{
+	sig_atomic_t cpy_sig_vec = sig_vector;
+	reset_signal_self_pipe();
+
+	/* Note: SIGPIPE and SIGGHLD is not handeled. SIGPIPE is handeled locally and
+	 * launcher is not parenting any process */
+
+	if (cpy_sig_vec & TEE_SIG_TERM) {
+		closelog();
+		exit(EXIT_SUCCESS);
+	}
+
+	if (cpy_sig_vec & TEE_SIG_HUP) {
+		/* At the moment, do nothing */
+	}
+}
+
+int lib_main_loop(int manager_sock)
 {
 	void *lib_path; /* Temporary. Launcher patch is comming */
 	ssize_t to_read = 1; /* Temporary. Launcher patch is comming */
