@@ -12,9 +12,11 @@ DynamicLibrary {
     destinationDirectory: '.'
 
     cpp.includePaths: ["../include"]
+    cpp.dynamicLibraries: ["z"]
 
     files: ["../include/tee_list.h", "../include/conf_parser.h", "conf_parser.c", "tee_list.c",
-            "socket_help.c", "../include/socket_help.h", "../include/tee_logging.h"
+        "socket_help.c", "../include/socket_help.h", "../include/tee_logging.h",
+        "com_protocol.c", "../include/com_protocol.h"
     ]
 }
 
