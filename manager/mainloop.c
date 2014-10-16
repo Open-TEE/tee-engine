@@ -26,6 +26,7 @@
 #include "subprocess.h"
 #include "epoll_wrapper.h"
 #include "process_manager.h"
+#include "core_extern_resources.h"
 
 #define MAX_CURR_EVENTS 5
 #define MAX_ERR_STRING 100
@@ -69,7 +70,16 @@ static int init_sock(int *pub_sockfd)
 	return 0;
 }
 
-int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
+static void manager_check_signal()
+{
+	/* Placeholder */
+	sig_atomic_t cpy_sig_vec = sig_vector;
+	reset_signal_self_pipe();
+
+	cpy_sig_vec = cpy_sig_vec; /* Suppress compiler warning */
+}
+
+int lib_main_loop(int sockpair_fd)
 {
 	int clientfd, public_sockfd, i;
 	int event_count;
@@ -100,7 +110,7 @@ int lib_main_loop(sig_status_cb check_signal_status, int sockpair_fd)
 				/* We have been interrupted so check which of our signals it was
 				 * and act on it, though it may have been a SIGCHLD
 				 */
-				check_signal_status();
+				manager_check_signal();
 			} else {
 				strerror_r(errno, errbuf, MAX_ERR_STRING);
 				syslog(LOG_ERR, "Failed return from epoll_wait : %s", errbuf);

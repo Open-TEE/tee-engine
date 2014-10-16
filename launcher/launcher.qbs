@@ -12,9 +12,10 @@ DynamicLibrary {
     }
 
     destinationDirectory: '.'
-
-    cpp.dynamicLibraries: ["dl"]
+    cpp.includePaths: ["../core"]
+    cpp.dynamicLibraries: ["dl", "pthread"]
 
     files: ["launcher_mainloop.c", "dynamic_loader.c", "dynamic_loader.h",
-            "ta_process.h", "ta_process.c"]
+        "ta_process.h", "ta_process.c", "../core/core_extern_resources.h", "../core/main.c"
+    ]
 }
