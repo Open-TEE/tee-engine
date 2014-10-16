@@ -14,6 +14,7 @@ DynamicLibrary {
     destinationDirectory: '.'
 
     cpp.dynamicLibraries: ["dl", "pthread"]
+    cpp.includePaths: ["../include", "../core"]
 
     files: ["launcher_mainloop.c", "dynamic_loader.c", "dynamic_loader.h",
             "ta_process.h", "ta_process.c", "../core/main_shared_var.h", "../core/main.c"]
