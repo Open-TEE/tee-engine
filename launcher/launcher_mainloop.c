@@ -26,8 +26,8 @@
 
 int lib_main_loop(sig_status_cb check_signal_status, int manager_sock)
 {
-	struct ta_path lib_path;
-	ssize_t to_read = sizeof(struct ta_path);
+	void *lib_path; /* Temporary. Launcher patch is comming */
+	ssize_t to_read = 1; /* Temporary. Launcher patch is comming */
 	ssize_t num_r;
 	int sockfd[2];
 
@@ -81,7 +81,7 @@ int lib_main_loop(sig_status_cb check_signal_status, int manager_sock)
 			/* child process will become the TA*/
 			close(sockfd[0]);
 			/* We should never return from the TA in this function call */
-			if (ta_process_loop(lib_path.path, sockfd[1])) {
+			if (ta_process_loop(NULL, sockfd[1])) {
 				syslog(LOG_ERR, "ta_process has failed");
 				exit(1);
 			}
