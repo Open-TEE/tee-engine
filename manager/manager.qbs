@@ -10,9 +10,7 @@ DynamicLibrary {
     cpp.dynamicLibraries: ["dl", "pthread"]
     cpp.includePaths: ["../include", "../core"]
 
-    files: ["mainloop.c",
-        "process_definition.h", "epoll_wrapper.c", "epoll_wrapper.h",
-        "process_manager.c", "process_manager.h", "../core/core_extern_resources.h",
-        "../core/main.c"
+    files: ["mainloop.c", "process_definition.h", "process_manager.c", "process_manager.h",
+        "../core/core_extern_resources.h", "../core/main.c"
     ]
 }
