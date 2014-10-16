@@ -23,8 +23,29 @@
 #include "subprocess.h"
 #include "socket_help.h"
 #include "ta_process.h"
+#include "core_extern_resources.h"
 
-int lib_main_loop(sig_status_cb check_signal_status, int manager_sock)
+static void check_signal_status()
+{
+	sig_atomic_t cpy_sig_vec = sig_vector;
+	reset_signal_self_pipe();
+
+	/* Note: SIGPIPE and SIGGHLD is not handeled. SIGPIPE is handeled locally and
+	 * launcher is not parenting any process. Launcher spwan new process, but it will
+	 * transfer ownership to manager process and all child-status-change signals are
+	 * delivered to manger process */
+
+	if (cpy_sig_vec & TEE_SIG_TERM) {
+		closelog();
+		exit(EXIT_SUCCESS);
+	}
+
+	if (cpy_sig_vec & TEE_SIG_HUP) {
+		/* At the moment, do nothing */
+	}
+}
+
+int lib_main_loop(int manager_sock)
 {
 	struct ta_path lib_path;
 	ssize_t to_read = sizeof(struct ta_path);

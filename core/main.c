@@ -14,58 +14,79 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <sys/wait.h>
-#include <syslog.h>
 #include <dlfcn.h>
 #include <sys/prctl.h>
 #include <string.h>
+#include <pthread.h>
+#include <sys/eventfd.h>
+#include <errno.h>
 
 #include "subprocess.h"
 #include "conf_parser.h"
+#include "core_extern_resources.h"
+#include "tee_logging.h"
 
-#define MAX_PR_NAME 16
+/* Used for process signal handle */
+int self_pipe_fd;
+volatile sig_atomic_t sig_vector;
 
-/*!
- * \brief restart
- * set this to true when we receive a SIGHUP and we can re init the daemon
- */
-static volatile sig_atomic_t restart;
+/* Changing process name (TA) */
+char *argv0;
+int argv0_len;
 
-/*!
- * \brief terminate
- * Terminate the application
- */
-static volatile sig_atomic_t terminate;
+/* Monitoring TEE status */
+pid_t launcher_pid;
 
-/*!
- * \brief sig_handler
- * Callback handler for the registered signals
- * \param sig The id of the signal that ha been revceived
- */
+/* Opentee configuration */
+struct emulator_config *opentee_conf;
+
 static void sig_handler(int sig)
 {
+	uint64_t event = 1;
+
 	switch (sig) {
 	case SIGCHLD:
-		/* wait for children, to reap the zombies */
-		while (waitpid(-1, NULL, WNOHANG) > 0)
-			continue;
+		sig_vector |= TEE_SIG_CHILD;
 		break;
+
 	case SIGHUP:
 		/* restart the daemon */
-		restart = 1;
+		sig_vector |= TEE_SIG_HUP;
 		break;
+
 	case SIGTERM:
 		/* terminate the app, so clean up */
-		terminate = 1;
+		sig_vector |= TEE_SIG_TERM;
 		break;
+
+	case SIGPIPE:
+		/* Catch. Handled locally */
+		break;
+	}
+
+	if (write(self_pipe_fd, &event, sizeof(uint64_t)) == -1) {
+		OT_LOG(LOG_ERR, "write error");
+		/* Lets hope that the error clear it self :S */
+	}
+
+}
+
+void reset_signal_self_pipe()
+{
+	uint64_t event;
+
+	if (read(self_pipe_fd, &event, sizeof(uint64_t)) == -1) {
+		/* EAGAIN == fd is zero and because it is set as non blocking, it returns EAGAIN */
+		if (errno != EAGAIN) {
+			OT_LOG(LOG_ERR, "Failed to reset self_pipe_fd\n");
+			/* TODO: See what is causing it! */
+		}
 	}
 }
 
@@ -123,24 +144,6 @@ static int daemonize(void)
 	return 0;
 }
 
-/*!
- * \brief check_signal_status
- * After the signals have change the state of the global bits we should check what we have been
- * requested to do
- */
-static void check_signal_status()
-{
-	if (restart) {
-		syslog(LOG_DEBUG, "restart requested");
-		restart = 0;
-	}
-	if (terminate) {
-		syslog(LOG_DEBUG, "Terminate requested");
-		closelog();
-		exit(3);
-	}
-}
-
 int load_lib(char *path, main_loop_cb *callback)
 {
 	void *lib;
@@ -149,16 +152,16 @@ int load_lib(char *path, main_loop_cb *callback)
 
 	dlerror();
 
-	lib = dlopen(path, RTLD_LAZY);
+	lib = dlopen(path, RTLD_LAZY | RTLD_GLOBAL);
 	if (lib == NULL) {
-		syslog(LOG_DEBUG, "Failed to load library : %s : %s", path, dlerror());
+		OT_LOG(LOG_DEBUG, "Failed to load library");
 		return -1;
 	}
 
 	*(void **)(callback) = dlsym(lib, "lib_main_loop");
 	err = dlerror();
 	if (err != NULL || !callback) {
-		syslog(LOG_DEBUG, "Failed to find lib_main_loop : %s : %s", path, err);
+		OT_LOG(LOG_DEBUG, "Failed to find lib_main_loop");
 		ret = -1;
 	}
 
@@ -172,14 +175,20 @@ int main(int argc, char **argv)
 {
 	struct sigaction sig_act;
 	int sockfd[2];
-	struct emulator_config *conf;
 	char *lib_to_load = NULL;
 	int comm_sock_fd;
 	main_loop_cb main_loop;
 	char proc_name[MAX_PR_NAME];
 	int cmd_name_len = strnlen(argv[0], MAX_PR_NAME);
-
 	argc = argc;
+	sigset_t sig_block_set;
+
+	/* Block all signals */
+	if (sigfillset(&sig_block_set))
+		exit(1);
+
+	if (pthread_sigmask(SIG_SETMASK, &sig_block_set, NULL))
+		exit(1);
 
 	sigemptyset(&sig_act.sa_mask);
 	sig_act.sa_flags = 0;
@@ -190,6 +199,8 @@ int main(int argc, char **argv)
 	if (sigaction(SIGHUP, &sig_act, NULL) == -1)
 		exit(1);
 	if (sigaction(SIGTERM, &sig_act, NULL) == -1)
+		exit(1);
+	if (sigaction(SIGPIPE, &sig_act, NULL) == -1)
 		exit(1);
 
 	/*
@@ -203,28 +214,34 @@ int main(int argc, char **argv)
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1)
 		exit(1);
 
-	if (config_parser_get_config(&conf) == -1)
+	if (config_parser_get_config(&opentee_conf) == -1)
 		exit(1);
 
+	self_pipe_fd = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
+	if (self_pipe_fd == -1)
+		exit(1);
+
+	argv0 = argv[0];
+	argv0_len = cmd_name_len;
+
 	/* fork now to create the manager and launcher subprocesses */
-	switch (fork()) {
-	case -1:
+	launcher_pid = fork();
+	if (launcher_pid == -1) {
 		/* failed to fork */
 		return -1;
-	case 0:
+	} else if (launcher_pid == 0) {
 		/* child process will become the launcher*/
 		close(sockfd[0]);
 		comm_sock_fd = sockfd[1];
-		lib_to_load = conf->subprocess_launcher;
+		lib_to_load = opentee_conf->subprocess_launcher;
 		strncpy(proc_name, "tee_launcher", MAX_PR_NAME);
-		break;
-	default:
+		prctl(PR_SET_PDEATHSIG, SIGTERM);
+	} else {
 		/* parent process will become the manager */
 		close(sockfd[1]);
 		comm_sock_fd = sockfd[0];
-		lib_to_load = conf->subprocess_manager;
+		lib_to_load = opentee_conf->subprocess_manager;
 		strncpy(proc_name, "tee_manager", MAX_PR_NAME);
-		break;
 	}
 
 	/* set the name of our process it appears that we have to set
@@ -241,7 +258,7 @@ int main(int argc, char **argv)
 
 	/* Enter into the main part of the resepctive programs, manager or launcher
 	 * in a proper situation this function should never return */
-	if (main_loop(&check_signal_status, comm_sock_fd))
+	if (main_loop(comm_sock_fd))
 		exit(2);
 
 	exit(0);

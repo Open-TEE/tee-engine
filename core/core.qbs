@@ -7,8 +7,14 @@ CppApplication {
 
     destinationDirectory: '.'
 
-    cpp.dynamicLibraries: ["dl"]
-    cpp.includePaths: ["../include"]
+    Export {
+        Depends { name: "cpp" }
+        cpp.includePaths: ["../include", "."]
+    }
 
-    files: ["main.c"]
+    cpp.dynamicLibraries: ["dl", "pthread"]
+    cpp.includePaths: ["../include"]
+    cpp.linkerFlags: "-rdynamic"
+
+    files: ["main.c", "core_extern_resources.h"]
 }
