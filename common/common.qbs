@@ -10,11 +10,12 @@ DynamicLibrary {
     }
 
     destinationDirectory: '.'
-
+    cpp.dynamicLibraries: ["elf"]
     cpp.includePaths: ["../include"]
 
     files: ["../include/tee_list.h", "../include/conf_parser.h", "conf_parser.c", "tee_list.c",
         "socket_help.c", "../include/socket_help.h", "../include/tee_logging.h",
-        "../include/h_table.h", "h_table.c" ]
+        "../include/h_table.h", "h_table.c", "elf_read.c", "../include/elf_read.h"
+    ]
 }
 
