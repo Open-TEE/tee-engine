@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,19 +14,26 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_SUBPROCESS_H__
-#define __TEE_SUBPROCESS_H__
+#ifndef __CORE_EXTERN_RESOURCES_H__
+#define __CORE_EXTERN_RESOURCES_H__
 
-typedef void (*sig_status_cb)(void);
+#include <signal.h>
+#include <unistd.h>
 
-typedef int (*main_loop_cb)(int sockpair_fd);
+#include "conf_parser.h"
 
-/*!
- * \brief lib_main_loop
- * This is the main processing loop of the library that is being loaded.
- * \param sockpair_fd The socket handle that is used to communicate between manager and launcher
- * \return This function should never return unless a major error occurs, and then -1.
- */
-int lib_main_loop(int sockpair_fd);
+#define MAX_PR_NAME		16
 
-#endif
+#define TEE_SIG_CHILD		0x00000001
+#define TEE_SIG_TERM		0x00000002
+#define TEE_SIG_HUP		0x00000004
+
+extern volatile sig_atomic_t sig_vector;
+extern char *argv0;
+extern int argv0_len;
+extern pid_t launcher_pid;
+extern int self_pipe_fd;
+struct emulator_config *opentee_conf;
+extern void reset_signal_self_pipe();
+
+#endif /* __CORE_EXTERN_RESOURCES_H__ */
