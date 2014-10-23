@@ -24,5 +24,8 @@ DynamicLibrary {
         "process_definition.h",
         "process_manager.h",
         "process_manager.c",
+        "ta_dir_watch.h",
+        "ta_dir_watch.c",
+        "tee_ta_propertie.h",
     ]
 }
