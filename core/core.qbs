@@ -12,9 +12,19 @@ CppApplication {
         cpp.includePaths: ["../include", "."]
     }
 
-    cpp.dynamicLibraries: ["dl", "pthread"]
-    cpp.includePaths: ["../include"]
+    cpp.dynamicLibraries: [
+        "dl",
+        "pthread"
+    ]
+
+    cpp.includePaths: [
+        "../include"
+    ]
+
     cpp.linkerFlags: "-rdynamic"
 
-    files: ["main.c", "core_extern_resources.h"]
+    files: [
+        "core_extern_resources.h",
+        "main.c",
+    ]
 }

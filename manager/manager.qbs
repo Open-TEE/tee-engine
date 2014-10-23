@@ -7,10 +7,22 @@ DynamicLibrary {
 
     destinationDirectory: '.'
 
-    cpp.dynamicLibraries: ["dl", "pthread"]
-    cpp.includePaths: ["../include", "../core"]
+    cpp.dynamicLibraries: [
+        "dl",
+        "pthread"
+    ]
 
-    files: ["mainloop.c", "process_definition.h", "process_manager.c", "process_manager.h",
-        "../core/core_extern_resources.h", "../core/main.c"
+    cpp.includePaths: [
+        "../core",
+        "../include",
+    ]
+
+    files: [
+        "../core/core_extern_resources.h",
+        "../core/main.c",
+        "mainloop.c",
+        "process_definition.h",
+        "process_manager.h",
+        "process_manager.c",
     ]
 }
