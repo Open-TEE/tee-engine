@@ -26,5 +26,8 @@ DynamicLibrary {
         "logic_thread.h",
         "logic_thread.c",
         "mainloop.c",
+        "ta_dir_watch.h",
+        "ta_dir_watch.c",
+        "tee_ta_propertie.h",
     ]
 }
