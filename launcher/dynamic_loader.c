@@ -14,26 +14,38 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
+#define _GNU_SOURCE
+
 #include "dynamic_loader.h"
 #include "conf_parser.h"
+#include "core_extern_resources.h"
+#include "tee_logging.h"
 
-#include <syslog.h>
 #include <dlfcn.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
+TEE_Result load_ta(const char *ta_so_name, struct ta_interface **callbacks)
 {
 	struct ta_interface tmp_cb;
 	char *err = NULL;
+	char *path = NULL;
 
 	memset((void *)&tmp_cb, 0, sizeof(struct ta_interface));
 	*callbacks = NULL;
+
+	if (asprintf(&path, "%s%s", opentee_conf->ta_dir_path, ta_so_name) == -1) {
+		OT_LOG(LOG_ERR, "out of memory");
+		return TEE_ERROR_GENERIC;
+	}
 
 	dlerror();
 
 	tmp_cb.library = dlopen(path, RTLD_LAZY);
 	if (!tmp_cb.library) {
-		syslog(LOG_DEBUG, "Failed to load library : %s : %s", path, dlerror());
+		OT_LOG(LOG_DEBUG, "Failed to load library : %s : %s", path, dlerror());
+		free(path);
 		return TEE_ERROR_GENERIC;
 	}
 
@@ -44,47 +56,49 @@ TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 	*(void **)(&tmp_cb.create) = dlsym(tmp_cb.library, "TA_CreateEntryPoint");
 	err = dlerror();
 	if (err != NULL || !tmp_cb.create) {
-		syslog(LOG_DEBUG, "Failed to find CreateEntryPoint : %s : %s", path, err);
+		OT_LOG(LOG_DEBUG, "Failed to find CreateEntryPoint : %s : %s", path, err);
 		goto err_cleanup;
 	}
 
 	*(void **)(&tmp_cb.destroy) = dlsym(tmp_cb.library, "TA_DestroyEntryPoint");
 	err = dlerror();
 	if (err != NULL || !tmp_cb.destroy) {
-		syslog(LOG_DEBUG, "Failed to find DestroyEntryPoint : %s : %s", path, err);
+		OT_LOG(LOG_DEBUG, "Failed to find DestroyEntryPoint : %s : %s", path, err);
 		goto err_cleanup;
 	}
 
 	*(void **)(&tmp_cb.open_session) = dlsym(tmp_cb.library, "TA_OpenSessionEntryPoint");
 	err = dlerror();
 	if (err != NULL || !tmp_cb.open_session) {
-		syslog(LOG_DEBUG, "Failed to find OpenSessionEntryPoint : %s : %s", path, err);
+		OT_LOG(LOG_DEBUG, "Failed to find OpenSessionEntryPoint : %s : %s", path, err);
 		goto err_cleanup;
 	}
 
 	*(void **)(&tmp_cb.invoke_cmd) = dlsym(tmp_cb.library, "TA_InvokeCommandEntryPoint");
 	err = dlerror();
 	if (err != NULL || !tmp_cb.invoke_cmd) {
-		syslog(LOG_DEBUG, "Failed to find InvokeCommandEntryPoint : %s : %s", path, err);
+		OT_LOG(LOG_DEBUG, "Failed to find InvokeCommandEntryPoint : %s : %s", path, err);
 		goto err_cleanup;
 	}
 
 	*(void **)(&tmp_cb.close_session) = dlsym(tmp_cb.library, "TA_CloseSessionEntryPoint");
 	err = dlerror();
 	if (err != NULL || !tmp_cb.close_session) {
-		syslog(LOG_DEBUG, "Failed to find CloseSession Entry point : %s : %s", path, err);
+		OT_LOG(LOG_DEBUG, "Failed to find CloseSession Entry point : %s : %s", path, err);
 		goto err_cleanup;
 	}
 
 	*callbacks = TEE_Malloc(sizeof(struct ta_interface), 0);
 	if (!*callbacks) {
-		syslog(LOG_DEBUG, "Out of memory");
+		OT_LOG(LOG_DEBUG, "Out of memory");
 		goto err_cleanup;
 	}
 
 	memcpy(*callbacks, (void *)&tmp_cb, sizeof(struct ta_interface));
 
 err_cleanup:
+	free(path);
+
 	if (err || !*callbacks) {
 		if (tmp_cb.destroy)
 			tmp_cb.destroy();
@@ -106,7 +120,7 @@ void unload_ta(struct ta_interface *callbacks)
 	callbacks->destroy();
 
 	if (dlclose(callbacks->library))
-		syslog(LOG_DEBUG, "Error while closing library : %s", dlerror());
+		OT_LOG(LOG_DEBUG, "Error while closing library : %s", dlerror());
 
 	TEE_Free(callbacks);
 
