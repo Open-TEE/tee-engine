@@ -56,7 +56,7 @@ struct list_head {
  *      element = LIST_ENTRY(pos, struct my_data, list);
  */
 #define LIST_ENTRY(ptr, type, element)                                  \
-	((type *)(void *)((char *)(ptr) - (unsigned long)(&((type *)0)->(element))))
+	((type *)(void *)((char *)(ptr) - (unsigned long)(&((type *)0)->element)))
 
 /*!
  *  \brief Iterate over a list
