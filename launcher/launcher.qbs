@@ -32,6 +32,8 @@ DynamicLibrary {
         "ta_extern_resources.h",
         "ta_internal_thread.h",
         "ta_internal_thread.c",
+        "ta_io_thread.h",
+        "ta_io_thread.c",
         "ta_process.h",
         "ta_process.c",
     ]
