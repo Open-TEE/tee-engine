@@ -17,6 +17,7 @@
 #ifndef __TA_IO_THREAD_H__
 #define __TA_IO_THREAD_H__
 
+#include "epoll_wrapper.h"
 #include "ta_extern_resources.h"
 
 /*!
@@ -25,5 +26,21 @@
  * \param released_task
  */
 void free_task(struct ta_task *released_task);
+
+/*!
+ * \brief receive_from_manager
+ * Receive a message from manager socket and place message todo queue
+ * \param event Manager socket fd
+ * \param man_sockfd
+ */
+void receive_from_manager(struct epoll_event *event, int man_sockfd);
+
+/*!
+ * \brief reply_to_manager
+ * Take a done queue message and send it to manager
+ * \param event event_fd
+ * \param man_sockfd
+ */
+void reply_to_manager(struct epoll_event *event, int man_sockfd);
 
 #endif /* __TA_IO_THREAD_H__ */

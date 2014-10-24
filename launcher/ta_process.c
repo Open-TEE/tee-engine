@@ -27,6 +27,7 @@
 #include "epoll_wrapper.h"
 #include "ta_extern_resources.h"
 #include "ta_internal_thread.h"
+#include "ta_io_thread.h"
 #include "ta_process.h"
 #include "tee_logging.h"
 
@@ -164,10 +165,10 @@ int ta_process_loop(int man_sockfd, struct com_msg_open_session *open_msg)
 		for (i = 0; i < event_count; i++) {
 
 			if (cur_events[i].data.fd == man_sockfd) {
-
+				receive_from_manager(&cur_events[i], man_sockfd);
 
 			} else if (cur_events[i].data.fd == event_fd) {
-
+				reply_to_manager(&cur_events[i], man_sockfd);
 
 			} else if (cur_events[i].data.fd == self_pipe_fd) {
 
