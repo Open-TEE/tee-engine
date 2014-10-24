@@ -30,6 +30,8 @@ DynamicLibrary {
         "dynamic_loader.c",
         "launcher_mainloop.c",
         "ta_extern_resources.h",
+        "ta_internal_thread.h",
+        "ta_internal_thread.c",
         "ta_process.h",
         "ta_process.c",
     ]
