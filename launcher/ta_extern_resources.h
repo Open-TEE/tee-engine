@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2014 Brian McGillion.                                      **
+** Copyright (C) 2014 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,18 +14,35 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_TA_PROCESS_H__
-#define __TEE_TA_PROCESS_H__
+#ifndef __TA_EXTERN_RESOURCES_H__
+#define __TA_EXTERN_RESOURCES_H__
 
-#include "com_protocol.h"
+#include <pthread.h>
 
-/*!
- * \brief ta_process_loop
- * The main loop of the TA process. Ta_process_loop function is TA execution entry function
- * \param man_sockfd The socket on which to communicate with the manager
- * \param open_msg Open session message from CA or TA
- * \return should never return
- */
-int ta_process_loop(int man_sockfd, struct com_msg_open_session *open_msg);
+#include "tee_list.h"
 
-#endif
+/* Struct ta_task will be used for communication between thread */
+struct ta_task {
+	struct list_head list;
+	void *msg;
+	int msg_len;
+};
+
+/* These are for tasks received from the caller going to the TA */
+extern struct ta_task tasks_todo;
+
+/* These are for tasks that are complete and are being returned to the caller */
+extern struct ta_task tasks_done;
+
+/* Interface TA funcitons */
+extern struct ta_interface *interface;
+
+/* we have 2 threads to synchronize so we can achieve this with static condition and statix mutex */
+extern pthread_mutex_t todo_list_mutex;
+extern pthread_mutex_t done_list_mutex;
+extern pthread_cond_t condition;
+
+/* Use eventfd to notify the io_thread that the TA thread has finished processing a task */
+extern int event_fd;
+
+#endif /* __TA_EXTERN_RESOURCES_H__ */

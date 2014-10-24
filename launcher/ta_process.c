@@ -14,27 +14,62 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <syslog.h>
+#include <pthread.h>
 #include <stdlib.h>
+#include <sys/eventfd.h>
 
-#include "ta_process.h"
+#include "com_protocol.h"
+#include "core_extern_resources.h"
 #include "dynamic_loader.h"
+#include "ta_extern_resources.h"
+#include "ta_process.h"
+#include "tee_logging.h"
 
-int ta_process_loop(const char *lib_path, int sockfd)
+/* we have 2 threads to synchronize so we can achieve this with static condition and statix mutex */
+pthread_mutex_t todo_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t done_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
+
+/* Interface TA funcitons */
+struct ta_interface *interface;
+
+/* Use eventfd to notify the io_thread that the TA thread has finished processing a task */
+int event_fd;
+
+/* These are for tasks received from the caller going to the TA */
+struct ta_task tasks_todo;
+
+/* These are for tasks that are complete and are being returned to the caller */
+struct ta_task tasks_done;
+
+int ta_process_loop(int man_sockfd, struct com_msg_open_session *open_msg)
 {
 	TEEC_Result ret;
 	struct ta_interface *interface;
-	sockfd = sockfd;
+	man_sockfd = man_sockfd;
+	open_msg = open_msg;
 
-	ret = load_ta(lib_path, &interface);
-	if (ret != TEE_SUCCESS) {
-		/* TODO write the error to the sockfd so the manager is notified and can notify
-		 * the client application.
-		 */
-		syslog(LOG_ERR, "Failed to load the TA");
-		exit(1);
+	/* Load TA to this process */
+	ret = load_ta(open_msg->ta_so_name, &interface);
+	if (ret != TEE_SUCCESS || interface == NULL) {
+		OT_LOG(LOG_ERR, "Failed to load the TA");
+		exit(EXIT_FAILURE);
 	}
 
+	/* create an eventfd, that will allow the writer to increment the count by 1
+	 * for each new event, and the reader to decrement by 1 each time, this will allow the
+	 * reader to be notified for each new event, as opposed to being notified just once that
+	 * there are "event(s)" pending*/
+	event_fd = eventfd(0, EFD_SEMAPHORE);
+	if (event_fd == -1) {
+		OT_LOG(LOG_ERR, "Failed to initialize eventfd");
+		exit(EXIT_FAILURE);
+	}
+
+	/* Initializations of TODO and DONE queues*/
+	INIT_LIST(&tasks_todo.list);
+	INIT_LIST(&tasks_done.list);
+
 	/* Should never reach here */
-	return -1;
+	exit(EXIT_FAILURE);
 }
