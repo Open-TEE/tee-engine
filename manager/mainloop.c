@@ -26,6 +26,7 @@
 #include "core_extern_resources.h"
 #include "epoll_wrapper.h"
 #include "extern_resources.h"
+#include "io_thread.h"
 #include "logic_thread.h"
 #include "tee_logging.h"
 
@@ -249,7 +250,7 @@ int lib_main_loop(int sockpair_fd)
 
 
 			} else if (cur_events[i].data.fd == event_done_queue_fd) {
-
+				handle_done_queue(&cur_events[i]);
 
 			} else if (cur_events[i].data.fd == self_pipe_fd) {
 				manager_check_signal(&cur_events[i]);
