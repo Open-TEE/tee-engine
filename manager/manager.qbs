@@ -21,8 +21,6 @@ DynamicLibrary {
         "../core/core_extern_resources.h",
         "../core/main.c",
         "mainloop.c",
-        "process_definition.h",
-        "process_manager.h",
-        "process_manager.c",
+        "manager_extern_resources.h",
     ]
 }
