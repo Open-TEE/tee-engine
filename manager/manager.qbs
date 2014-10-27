@@ -20,6 +20,8 @@ DynamicLibrary {
     files: [
         "../core/core_extern_resources.h",
         "../core/main.c",
+        "logic_thread.c",
+        "logic_thread.h",
         "mainloop.c",
         "manager_extern_resources.h",
     ]
