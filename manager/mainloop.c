@@ -1,4 +1,4 @@
-/*****************************************************************************
+﻿/*****************************************************************************
 ** Copyright (C) 2013 Brian McGillion                                       **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
@@ -26,6 +26,7 @@
 #include "core_extern_resources.h"
 #include "epoll_wrapper.h"
 #include "extern_resources.h"
+#include "logic_thread.h"
 #include "tee_logging.h"
 
 /* Maximum epoll events */
@@ -71,7 +72,6 @@ int event_close_sock;
 /* Next session ID */
 uint64_t next_sess_id;
 
-#define MAX_ERR_STRING 100
 /*!
  * \brief init_sock
  * Initialize the daemons main public socket and listen for inbound connections
@@ -170,75 +170,99 @@ err_1:
 
 int lib_main_loop(int sockpair_fd)
 {
-	int clientfd, public_sockfd, i;
-	int event_count;
+	int public_sockfd, i, event_count;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
-	char errbuf[MAX_ERR_STRING];
+	pthread_t logic_thread;
+	pthread_attr_t attr;
+	sigset_t sig_empty_set;
 
 	if (init_extern_res(sockpair_fd))
 		return -1; /* err msg logged */
 
-	if (init_epoll())
+	if (sigemptyset(&sig_empty_set)) {
+		OT_LOG(LOG_ERR, "Sigempty set failed");
 		return -1;
+	}
+
+	if (init_epoll())
+		return -1; /* err msg logged */
 
 	if (init_sock(&public_sockfd))
-		return -1;
+		return -1; /* err msg logged */
 
 	/* listen to inbound connections from userspace clients */
 	if (epoll_reg_fd(public_sockfd, EPOLLIN))
-		return -1;
+		return -1; /* err msg logged */
 
-	/* listen for communications from the launcher process */
-	if (epoll_reg_fd(sockpair_fd, EPOLLIN))
-		return -1;
+	/* Done queue event fd */
+	if (epoll_reg_fd(event_done_queue_fd, EPOLLIN))
+		return -1; /* err msg logged */
 
-	/* NB everything after this point must be thread safe */
+	/* Singnal handling */
+	if (epoll_reg_fd(self_pipe_fd, EPOLLIN))
+		return -1; /* err msg logged */
+
+	/* Init logic thread */
+	if (pthread_attr_init(&attr)) {
+		OT_LOG(LOG_ERR, "Failed to create attr for thread in : %s\n", strerror(errno));
+		return -1;
+	}
+
+	/* Logic thread is detached thread */
+	if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED)) {
+		OT_LOG(LOG_ERR, "Failed set DETACHED for : %s\n", strerror(errno));
+		return -1;
+	}
+
+	/* Note: Logic thread is not accepting any signals. All signals has been blocked */
+	if (pthread_create(&logic_thread, &attr, logic_thread_mainloop, NULL)) {
+		OT_LOG(LOG_ERR, "Failed launch thread for : %s\n", strerror(errno));
+		return -1;
+	}
+
+	/* NB everything after this point must be thread safe
+	 * NB Mainloop is executed as IO thread */
+
+	/* Allow signal delivery */
+	if (pthread_sigmask(SIG_SETMASK, &sig_empty_set, NULL)) {
+		OT_LOG(LOG_ERR, "Failed to allow signal delivery");
+		return -1;
+	}
+
 	for (;;) {
 		/* Block and wait for a one of the monitored I/Os to become available */
 		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);
 		if (event_count == -1) {
 			if (errno == EINTR) {
-				/* We have been interrupted so check which of our signals it was
-				 * and act on it, though it may have been a SIGCHLD
-				 */
 				manager_check_signal();
-			} else {
-				strerror_r(errno, errbuf, MAX_ERR_STRING);
-				OT_LOG(LOG_ERR, "Failed return from epoll_wait : %s", errbuf);
+				continue;
 			}
 
-			/* In both cases continue, and hope the error clears itself */
+			/* Log error and hope the error clears itself */
+			OT_LOG(LOG_ERR, "Failed return from epoll_wait\n");
 			continue;
 		}
 
 		for (i = 0; i < event_count; i++) {
-			OT_LOG(LOG_ERR, "Spinning in the inner foor loop");
 
 			if (cur_events[i].data.fd == public_sockfd) {
-				/* the listen socket has received a connection attempt */
-				clientfd = accept(public_sockfd, NULL, NULL);
-				if (clientfd == -1) {
-					strerror_r(errno, errbuf, MAX_ERR_STRING);
-					OT_LOG(LOG_ERR, "Failed to accept child : %s", errbuf);
-					/* hope the problem will clear for next connection */
-					continue;
-				}
 
-				/* Create a dummy process entry to monitor the new client and
-				 * just listen for future communications from this socket
-				 * If there is already data on the socket, we will be notified
-				 * immediatly once we return to epoll_wait() and we can handle
-				 * it correctly
-				 *
-				if (create_uninitialized_client_proc(&new_client, clientfd))
-					return -1;
 
-				if (epoll_reg_data(clientfd, EPOLLIN, (void *)new_client))
-					return -1;
-					*/
+			} else if (cur_events[i].data.fd == event_done_queue_fd) {
+
+
+			} else if (cur_events[i].data.fd == self_pipe_fd) {
+				manager_check_signal(&cur_events[i]);
+
+			} else if(cur_events[i].data.fd == event_close_sock) {
+
+
 			} else {
-				//pm_handle_connection(cur_events[i].events, cur_events[i].data.ptr);
+
 			}
 		}
 	}
+
+	OT_LOG(LOG_ERR, "Something is very wrong");
+	return -1;
 }
