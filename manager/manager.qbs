@@ -22,5 +22,7 @@ DynamicLibrary {
         "../core/main.c",
         "mainloop.c",
         "manager_extern_resources.h",
+        "manager_logic_thread.c",
+        "manager_logic_thread.h",
     ]
 }
