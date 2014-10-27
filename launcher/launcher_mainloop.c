@@ -159,8 +159,7 @@ int lib_main_loop(int manager_sock)
 				exit(EXIT_FAILURE);
 			}
 
-			ret = com_wait_and_recv_msg(manager_sock,
-						    (void **)&recv_open_msg, &recv_bytes);
+			ret = com_recv_msg(manager_sock, (void **)&recv_open_msg, &recv_bytes);
 			if (ret == -1) {
 				free(recv_open_msg);
 				/* TODO: Figur out why -1, but for now lets
