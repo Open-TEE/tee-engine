@@ -14,23 +14,64 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
+#include <errno.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/socket.h>
-#include <syslog.h>
-#include <unistd.h>
-#include <sys/un.h>
 #include <string.h>
-#include <errno.h>
+#include <sys/eventfd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
-#include "subprocess.h"
-#include "epoll_wrapper.h"
-#include "process_manager.h"
 #include "core_extern_resources.h"
+#include "epoll_wrapper.h"
+#include "extern_resources.h"
+#include "tee_logging.h"
 
+/* Maximum epoll events */
 #define MAX_CURR_EVENTS 5
-#define MAX_ERR_STRING 100
 
+/* TODO: Opentee should switch to use more sophisticated hashtable implementation */
+#define ESTIMATE_COUNT_OF_CAS 50
+#define ESTIMATE_COUNT_OF_TAS 50
+
+/* These are for tasks received from the caller going to the logic thread */
+struct manager_msg todo_queue;
+
+/* These are for tasks that are complete and need to send out */
+struct manager_msg done_queue;
+
+/* Socket need to be closed by IO thread */
+struct sock_to_close socks_to_close;
+
+/* Client connections */
+HASHTABLE clientApps;
+
+/* Loaded TAs (ready accept open sessions) */
+HASHTABLE trustedApps;
+
+pthread_mutex_t CA_table_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TA_table_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t todo_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t done_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t socks_to_close_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* IO thead "signaling": wake up logic thread */
+pthread_cond_t todo_queue_cond = PTHREAD_COND_INITIALIZER;
+
+/* Launcher process fd */
+int launcher_fd;
+
+/* Done queue have something in */
+int event_done_queue_fd;
+
+/* Close queue have something to process */
+int event_close_sock;
+
+/* Next session ID */
+uint64_t next_sess_id;
+
+#define MAX_ERR_STRING 100
 /*!
  * \brief init_sock
  * Initialize the daemons main public socket and listen for inbound connections
@@ -43,13 +84,13 @@ static int init_sock(int *pub_sockfd)
 	struct sockaddr_un sock_addr;
 
 	if (remove(sock_path) == -1 && errno != ENOENT) {
-		syslog(LOG_ERR, "Failed to remove %s : %s", sock_path, strerror(errno));
+		OT_LOG(LOG_ERR, "Failed to remove %s : %s", sock_path, strerror(errno));
 		return -1;
 	}
 
 	*pub_sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (*pub_sockfd == -1) {
-		syslog(LOG_ERR, "Create socket %s", strerror(errno));
+		OT_LOG(LOG_ERR, "Create socket %s", strerror(errno));
 		return -1;
 	}
 
@@ -58,12 +99,12 @@ static int init_sock(int *pub_sockfd)
 	sock_addr.sun_family = AF_UNIX;
 
 	if (bind(*pub_sockfd, (struct sockaddr *) &sock_addr, sizeof(struct sockaddr_un)) == -1) {
-		syslog(LOG_ERR, "Error %s", strerror(errno));
+		OT_LOG(LOG_ERR, "Error %s", strerror(errno));
 		return -1;
 	}
 
 	if (listen(*pub_sockfd, SOMAXCONN) == -1) {
-		syslog(LOG_ERR, "Listen socket %s", strerror(errno));
+		OT_LOG(LOG_ERR, "Listen socket %s", strerror(errno));
 		return -1;
 	}
 
@@ -79,13 +120,63 @@ static void manager_check_signal()
 	cpy_sig_vec = cpy_sig_vec; /* Suppress compiler warning */
 }
 
+static int init_extern_res(int launcher_proc_fd)
+{
+	trustedApps = NULL;
+	clientApps = NULL;
+
+	/* Linked lists */
+	INIT_LIST(&todo_queue.list);
+	INIT_LIST(&done_queue.list);
+	INIT_LIST(&socks_to_close.list);
+
+	/* CA and TA hashtables */
+	h_table_create(&clientApps, ESTIMATE_COUNT_OF_CAS);
+	h_table_create(&trustedApps, ESTIMATE_COUNT_OF_TAS);
+	if (!clientApps || !trustedApps) {
+		OT_LOG(LOG_ERR, "Failed to init clientApps or trustedApps table")
+		goto err_1;
+	}
+
+	/* Launcher fd */
+	launcher_fd = launcher_proc_fd;
+
+	/* First session id is zero */
+	next_sess_id = 0;
+
+	/* Done queue event is used in semaphore style */
+	event_done_queue_fd = eventfd(0, EFD_SEMAPHORE);
+	if (event_done_queue_fd) {
+		OT_LOG(LOG_ERR, "Failed to init event_done_queue_fd: %s", strerror(errno));
+		goto err_1;
+	}
+
+	/* Close socket is only zeroed */
+	event_close_sock = eventfd(0, 0);
+	if (event_close_sock) {
+		OT_LOG(LOG_ERR, "Failed to init event_close_sock: %s", strerror(errno));
+		goto err_2;
+	}
+
+	return 0;
+
+err_2:
+	close(event_done_queue_fd);
+err_1:
+	h_table_free(clientApps);
+	h_table_free(trustedApps);
+	return 1;
+}
+
 int lib_main_loop(int sockpair_fd)
 {
 	int clientfd, public_sockfd, i;
 	int event_count;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
 	char errbuf[MAX_ERR_STRING];
-	proc_t new_client;
+
+	if (init_extern_res(sockpair_fd))
+		return -1; /* err msg logged */
 
 	if (init_epoll())
 		return -1;
@@ -113,7 +204,7 @@ int lib_main_loop(int sockpair_fd)
 				manager_check_signal();
 			} else {
 				strerror_r(errno, errbuf, MAX_ERR_STRING);
-				syslog(LOG_ERR, "Failed return from epoll_wait : %s", errbuf);
+				OT_LOG(LOG_ERR, "Failed return from epoll_wait : %s", errbuf);
 			}
 
 			/* In both cases continue, and hope the error clears itself */
@@ -121,14 +212,14 @@ int lib_main_loop(int sockpair_fd)
 		}
 
 		for (i = 0; i < event_count; i++) {
-			syslog(LOG_ERR, "Spinning in the inner foor loop");
+			OT_LOG(LOG_ERR, "Spinning in the inner foor loop");
 
 			if (cur_events[i].data.fd == public_sockfd) {
 				/* the listen socket has received a connection attempt */
 				clientfd = accept(public_sockfd, NULL, NULL);
 				if (clientfd == -1) {
 					strerror_r(errno, errbuf, MAX_ERR_STRING);
-					syslog(LOG_ERR, "Failed to accept child : %s", errbuf);
+					OT_LOG(LOG_ERR, "Failed to accept child : %s", errbuf);
 					/* hope the problem will clear for next connection */
 					continue;
 				}
@@ -138,14 +229,15 @@ int lib_main_loop(int sockpair_fd)
 				 * If there is already data on the socket, we will be notified
 				 * immediatly once we return to epoll_wait() and we can handle
 				 * it correctly
-				 */
+				 *
 				if (create_uninitialized_client_proc(&new_client, clientfd))
 					return -1;
 
 				if (epoll_reg_data(clientfd, EPOLLIN, (void *)new_client))
 					return -1;
+					*/
 			} else {
-				pm_handle_connection(cur_events[i].events, cur_events[i].data.ptr);
+				//pm_handle_connection(cur_events[i].events, cur_events[i].data.ptr);
 			}
 		}
 	}
