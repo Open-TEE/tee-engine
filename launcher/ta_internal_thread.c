@@ -169,7 +169,8 @@ void *ta_internal_thread(void *arg)
 		}
 
 		/* Exctract messagese part */
-		com_msg_name = com_get_msg_name(task->msg);
+		if (!task || com_get_msg_name(task->msg, &com_msg_name))
+			continue;
 
 		switch (com_msg_name) {
 
