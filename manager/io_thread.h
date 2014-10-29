@@ -36,4 +36,11 @@ void free_manager_msg(struct manager_msg *released_msg);
  */
 void handle_done_queue(struct epoll_event *event);
 
+/*!
+ * \brief handle_public_fd
+ * Handles new connection which is incomming to public fd.
+ * \param event
+ */
+void handle_public_fd(struct epoll_event *event);
+
 #endif /* __IO_THREAD__ */
