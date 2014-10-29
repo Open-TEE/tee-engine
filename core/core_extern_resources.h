@@ -33,7 +33,7 @@ extern char *argv0;
 extern int argv0_len;
 extern pid_t launcher_pid;
 extern int self_pipe_fd;
-struct emulator_config *opentee_conf;
+extern struct emulator_config *opentee_conf;
 extern void reset_signal_self_pipe();
 
 #endif /* __CORE_EXTERN_RESOURCES_H__ */
