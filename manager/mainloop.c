@@ -247,7 +247,7 @@ int lib_main_loop(int sockpair_fd)
 		for (i = 0; i < event_count; i++) {
 
 			if (cur_events[i].data.fd == public_sockfd) {
-
+				handle_public_fd(&cur_events[i]);
 
 			} else if (cur_events[i].data.fd == event_done_queue_fd) {
 				handle_done_queue(&cur_events[i]);

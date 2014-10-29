@@ -24,6 +24,9 @@
 #include "tee_list.h"
 #include "tee_logging.h"
 
+/* Used for hashtable init */
+#define CA_SES_APPROX_COUNT 20
+
 /*!
  * \brief proc_fd_err
  * Process fd is erring
@@ -100,6 +103,73 @@ static void send_msg(proc_t send_to, void *msg, int msg_len)
 	}
 }
 
+static void send_new_conn_err(int fd)
+{
+	struct com_msg_ca_init_tee_conn err_msg;
+
+	err_msg.msg_hdr.msg_name = COM_MSG_NAME_CA_INIT_CONTEXT;
+	err_msg.msg_hdr.msg_type = COM_TYPE_RESPONSE;
+	err_msg.ret = TEE_ERROR_GENERIC;
+
+	com_send_msg(fd, &err_msg, sizeof(struct com_msg_ca_init_tee_conn));
+}
+
+static int create_uninitialized_client_proc(proc_t *proc, int sockfd)
+{
+	*proc = calloc(1, sizeof(struct __proc));
+	if (!*proc) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		return 1;
+	}
+
+	h_table_create(&(*proc)->content.process.links, CA_SES_APPROX_COUNT);
+	if (!(*proc)->content.process.links) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		free(*proc);
+		return 1;
+	}
+
+	(*proc)->content.process.status = proc_uninitialized;
+	(*proc)->sockfd = sockfd;
+	(*proc)->p_type = proc_t_CA;
+
+	return 0;
+}
+
+static int add_client_to_ca_table(proc_t add_client)
+{
+	int ret = 0;
+
+	if (pthread_mutex_lock(&CA_table_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return 1;
+	}
+
+	if (h_table_insert(clientApps, (unsigned char *)(&add_client->sockfd),
+				sizeof(add_client->sockfd), add_client)) {
+		OT_LOG(LOG_ERR, "Failed to add client table(out-of-mem)");
+		ret = 1;
+	}
+
+	if (pthread_mutex_unlock(&CA_table_mutex))
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+
+	return ret;
+}
+
+static void remove_client_from_ca_table(proc_t rm_client)
+{
+	if (pthread_mutex_lock(&CA_table_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return;
+	}
+
+	h_table_remove(clientApps, (unsigned char *)(&rm_client->sockfd), sizeof(rm_client->sockfd));
+
+	if (pthread_mutex_unlock(&CA_table_mutex))
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+}
+
 void free_manager_msg(struct manager_msg *released_msg)
 {
 	free(released_msg->msg);
@@ -142,4 +212,41 @@ void handle_done_queue(struct epoll_event *event)
 	send_msg(handled_msg->proc, handled_msg->msg, handled_msg->msg_len);
 
 	free_manager_msg(handled_msg);
+}
+
+void handle_public_fd(struct epoll_event *event)
+{
+	int accept_fd;
+	proc_t new_client = NULL;
+
+	if (check_event_fd_epoll_status(event))
+		return; /* err msg logged */
+
+	/* Socket has received a connection attempt */
+	accept_fd = accept(event->data.fd, NULL, NULL);
+	if (accept_fd == -1) {
+		OT_LOG(LOG_ERR, "Accept error\n");
+		/* hope the problem will clear for next connection */
+		return;
+	}
+
+	if (create_uninitialized_client_proc(&new_client, accept_fd))
+		goto err_1; /* No resources reserved */
+
+	if (add_client_to_ca_table(new_client))
+		goto err_2; /* Free proc */
+
+	if (epoll_reg_data(accept_fd, EPOLLIN, (void *)new_client))
+		goto err_3; /* Free proc and client table */
+
+	return;
+
+err_3:
+	remove_client_from_ca_table(new_client);
+err_2:
+	h_table_free(new_client->content.process.links);
+	free(new_client);
+err_1:
+	send_new_conn_err(accept_fd);
+	close(accept_fd);
 }

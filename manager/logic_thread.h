@@ -19,4 +19,11 @@
 
 void *logic_thread_mainloop(void *arg);
 
+/*!
+ * \brief handle_public_fd
+ * Handles new connection which is incomming to public fd.
+ * \param event
+ */
+void handle_public_fd(struct epoll_event *event);
+
 #endif /* __LOGIC_THREAD__ */
