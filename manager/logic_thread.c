@@ -15,6 +15,7 @@
 *****************************************************************************/
 
 #include <pthread.h>
+#include <unistd.h>
 
 #include "com_protocol.h"
 #include "extern_resources.h"
@@ -22,6 +23,68 @@
 #include "tee_list.h"
 #include "tee_logging.h"
 #include "logic_thread.h"
+
+static void add_msg_done_queue_and_notify(struct manager_msg *man_msg)
+{
+	const uint64_t event = 1;
+
+	/* Lock task queue from logic thread */
+	if (pthread_mutex_lock(&done_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return;
+	}
+
+	/* enqueue the task manager queue */
+	list_add_before(&man_msg->list, &done_queue.list);
+
+	if (pthread_mutex_unlock(&done_queue_mutex)) {
+		/* For now, just log error */
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+	}
+
+	/* notify the I/O thread that there is something at output queue */
+	if (write(event_done_queue_fd, &event, sizeof(uint64_t)) == -1) {
+		OT_LOG(LOG_ERR, "Failed to notify the io thread");
+		/* TODO/PLACEHOLDER: notify IO thread */
+	}
+}
+
+static void ca_init_context(struct manager_msg *man_msg)
+{
+	struct com_msg_ca_init_tee_conn *init_msg;
+
+	if (!man_msg)
+		return;
+
+	init_msg = man_msg->msg;
+
+	/* Valid init message */
+	if (init_msg->msg_hdr.msg_name != COM_MSG_NAME_CA_INIT_CONTEXT ||
+		init_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
+		OT_LOG(LOG_ERR, "Parsing wrong message, ignore msg");
+		goto discard_msg;
+	}
+
+	/* Message can be received only from client */
+	if (man_msg->proc->p_type != proc_t_CA) {
+		OT_LOG(LOG_ERR, "Message can be received only from clientApp");
+		goto discard_msg;
+	}
+
+	/* Valid message. Updated CA proc status to initialized */
+	man_msg->proc->content.process.status = proc_initialized;
+
+	/* Response to CA */
+	init_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
+	init_msg->ret = TEE_SUCCESS;
+
+	add_msg_done_queue_and_notify(man_msg);
+
+	return;
+
+discard_msg:
+	free(man_msg);
+}
 
 void *logic_thread_mainloop(void *arg)
 {
@@ -72,7 +135,7 @@ void *logic_thread_mainloop(void *arg)
 			break;
 
 		case COM_MSG_NAME_CA_INIT_CONTEXT:
-
+			ca_init_context(handled_msg);
 			break;
 
 		case COM_MSG_NAME_OPEN_SESSION:
