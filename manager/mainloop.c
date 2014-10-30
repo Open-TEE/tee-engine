@@ -259,7 +259,7 @@ int lib_main_loop(int sockpair_fd)
 
 
 			} else {
-
+				read_fd_and_add_todo_queue(&cur_events[i]);
 			}
 		}
 	}

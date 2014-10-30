@@ -43,4 +43,11 @@ void handle_done_queue(struct epoll_event *event);
  */
 void handle_public_fd(struct epoll_event *event);
 
+/*!
+ * \brief read_fd_and_add_todo_queue
+ * Reads message from fd and adding message to do queue.
+ * \param event
+ */
+void read_fd_and_add_todo_queue(struct epoll_event *event);
+
 #endif /* __IO_THREAD__ */
