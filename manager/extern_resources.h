@@ -78,11 +78,15 @@ extern int event_close_sock;
 /* Next session ID */
 extern uint64_t next_sess_id;
 
+/* Note: Do not assign enumerator values. Let compiler do that.
+ * If manual assigment needed, do it after XXXX_last-element */
+
 /* Different proc type will be handeled in different way */
 enum proc_type {
 	proc_t_CA,
 	proc_t_TA,
 	proc_t_link,
+	proc_t_last, /* Used for "looping" through enumerator */
 };
 
 /* Note: Might not be complite */
@@ -92,6 +96,7 @@ enum proc_status {
 	proc_disconnected,
 	proc_panicked,
 	proc_undefined,
+	proc_status_last, /* Used for "looping" through enumerator */
 };
 
 /* Note: Might not be complite */
@@ -101,6 +106,7 @@ enum session_status {
 	sess_closed,
 	sess_panicked,
 	sess_undefined,
+	sess_status_last, /* Used for "looping" through enumerator */
 };
 
 /* Process name is a bit missleading.

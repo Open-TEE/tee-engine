@@ -15,6 +15,7 @@
 *****************************************************************************/
 
 #include <errno.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "com_protocol.h"
@@ -41,6 +42,29 @@ static void proc_fd_err(int err_nro, proc_t proc)
 	if (proc)
 		epoll_unreg(proc->sockfd);
 	err_nro = err_nro;
+}
+
+/*!
+ * \brief check_proc_fd_epoll_status
+ * Checks process fd status and acts according to status. Function checks epoll events (== status)
+ * \param event
+ * \return
+ */
+static int check_proc_fd_epoll_status(struct epoll_event *event)
+{
+	/* Placeholder */
+
+	if (event->events & (EPOLLERR | EPOLLHUP)) {
+		epoll_unreg(((proc_t)event->data.ptr)->sockfd);
+		return 1;
+
+	} else if (event->events & EPOLLIN) {
+		return 0;
+
+	} else {
+		OT_LOG(LOG_ERR, "unknown epoll event")
+		return 1;
+	}
 }
 
 /*!
@@ -73,7 +97,6 @@ static int check_event_fd_epoll_status(struct epoll_event *event)
 
 static void send_msg(proc_t send_to, void *msg, int msg_len)
 {
-	int send_bytes;
 	uint8_t msg_name, msg_type;
 
 	if (msg_len == 0)
@@ -84,8 +107,7 @@ static void send_msg(proc_t send_to, void *msg, int msg_len)
 		return;
 	}
 
-	send_bytes = com_send_msg(send_to->sockfd, msg, msg_len);
-	if (send_bytes != msg_len) {
+	if (com_send_msg(send_to->sockfd, msg, msg_len) != msg_len) {
 		proc_fd_err(errno, send_to);
 		return;
 	}
@@ -96,11 +118,27 @@ static void send_msg(proc_t send_to, void *msg, int msg_len)
 		return; /* Err msg logged */
 
 	if (msg_name == COM_MSG_NAME_OPEN_SESSION && msg_type == COM_TYPE_RESPONSE) {
-		if (send_fd(send_to->sockfd, ((struct com_msg_open_session *)msg)->sess_fd_to_caller) == -1) {
+		if (send_fd(send_to->sockfd,
+			    ((struct com_msg_open_session *)msg)->sess_fd_to_caller) == -1) {
 			OT_LOG(LOG_ERR, "Failed to send FD");
 			proc_fd_err(errno, send_to);
 		}
 	}
+}
+
+static void send_err_msg(proc_t proc, uint32_t err, uint32_t err_origin)
+{
+	struct com_msg_error err_msg;
+
+	memset(&err_msg, 0, sizeof(struct com_msg_error));
+	err_msg.msg_hdr.msg_name = COM_MSG_NAME_ERROR;
+
+	err_msg.ret = err;
+	err_msg.ret_origin = err_origin;
+
+	if (com_send_msg(proc->sockfd, &err_msg, sizeof(struct com_msg_error)) !=
+	    sizeof(struct com_msg_error))
+		proc_fd_err(errno, proc);
 }
 
 static void send_new_conn_err(int fd)
@@ -168,6 +206,35 @@ static void remove_client_from_ca_table(proc_t rm_client)
 
 	if (pthread_mutex_unlock(&CA_table_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+}
+
+static int add_man_msg_todo_queue_and_notify(struct manager_msg *msg)
+{
+	int ret = 0;
+
+	/* Lock task queue from logic thread */
+	if (pthread_mutex_lock(&todo_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return 1;
+	}
+
+	/* enqueue the task manager queue */
+	list_add_before(&msg->list, &todo_queue.list);
+
+	if (pthread_mutex_unlock(&todo_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+		ret = 1;
+	}
+
+	/* Signal to logic thread */
+	if (pthread_cond_signal(&todo_queue_cond)) {
+		OT_LOG(LOG_ERR, "Manager msg queue signal fail");
+		/* Function only should fail if todo_queue_cond is not initialized
+		 * Therefore, this function call *should* not fails */
+		ret = 1; /* error return, because no granti if message get handeled! */
+	}
+
+	return ret;
 }
 
 void free_manager_msg(struct manager_msg *released_msg)
@@ -249,4 +316,56 @@ err_2:
 err_1:
 	send_new_conn_err(accept_fd);
 	close(accept_fd);
+}
+
+void read_fd_and_add_todo_queue(struct epoll_event *event)
+{
+	struct manager_msg *new_man_msg = NULL;
+	int ret;
+
+	/* Process might have cleaned up */
+	if (!event || !event->data.ptr)
+		return;
+
+	/* Function is only valid for proc FDs */
+	if (((proc_t)event->data.ptr)->p_type >= proc_t_last) {
+		OT_LOG(LOG_ERR, "Invalid connection type")
+		return;
+	}
+
+	if (check_proc_fd_epoll_status(event))
+		return; /* err msg logged */
+
+	new_man_msg = calloc(1, sizeof(struct manager_msg));
+	if (!new_man_msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		goto err;
+	}
+
+	/* Add message "sender" details */
+	new_man_msg->proc = event->data.ptr;
+
+	/* Add message */
+	ret = com_recv_msg(((proc_t)event->data.ptr)->sockfd,
+			   &new_man_msg->msg, &new_man_msg->msg_len);
+	if (ret == -1) {
+		OT_LOG(LOG_ERR, "Socket error");
+		proc_fd_err(errno, event->data.ptr);
+		free(new_man_msg);
+		return; /* No error message to CA, because socket status is unknown! */
+
+	} else if (ret > 0) {
+		OT_LOG(LOG_ERR, "Received corrupted/partial message, discarding");
+		goto err;
+	}
+
+	/* Add task to manager message queue */
+	if (add_man_msg_todo_queue_and_notify(new_man_msg))
+		goto err;
+
+	return; /* Msg recv OK */
+
+err:
+	send_err_msg(event->data.ptr, TEE_ERROR_GENERIC, TEE_ORIGIN_TEE);
+	free_manager_msg(new_man_msg);
 }
