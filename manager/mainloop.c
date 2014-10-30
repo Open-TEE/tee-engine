@@ -147,14 +147,14 @@ static int init_extern_res(int launcher_proc_fd)
 
 	/* Done queue event is used in semaphore style */
 	event_done_queue_fd = eventfd(0, EFD_SEMAPHORE);
-	if (event_done_queue_fd) {
+	if (event_done_queue_fd == -1) {
 		OT_LOG(LOG_ERR, "Failed to init event_done_queue_fd: %s", strerror(errno));
 		goto err_1;
 	}
 
 	/* Close socket is only zeroed */
 	event_close_sock = eventfd(0, 0);
-	if (event_close_sock) {
+	if (event_close_sock == -1) {
 		OT_LOG(LOG_ERR, "Failed to init event_close_sock: %s", strerror(errno));
 		goto err_2;
 	}
