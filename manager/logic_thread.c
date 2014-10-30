@@ -86,6 +86,50 @@ discard_msg:
 	free(man_msg);
 }
 
+static void open_session_response(struct manager_msg *man_msg)
+{
+	man_msg = man_msg;
+}
+
+static void open_session_query(struct manager_msg *man_msg)
+{
+	man_msg = man_msg;
+}
+
+static void open_session_msg(struct manager_msg *man_msg)
+{
+	struct com_msg_open_session *open_msg = man_msg->msg;
+
+	if (open_msg->msg_hdr.msg_name != COM_MSG_NAME_OPEN_SESSION) {
+		OT_LOG(LOG_ERR, "Handling wrong message");
+		goto discard_msg;
+	}
+
+	/* Function is only valid for proc FDs */
+	if (man_msg->proc->p_type >= proc_t_last ||
+	    man_msg->proc->content.process.status != proc_initialized) {
+		OT_LOG(LOG_ERR, "Invalid connection type or status")
+		goto discard_msg;
+	}
+
+	/* Query and response will handle in their own functions */
+	if (open_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
+		open_session_query(man_msg);
+
+	} else if (open_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE) {
+		open_session_response(man_msg);
+
+	} else {
+		OT_LOG(LOG_ERR, "Unkwon message type");
+		goto discard_msg;
+	}
+
+	return;
+
+discard_msg:
+	free_manager_msg(man_msg);
+}
+
 void *logic_thread_mainloop(void *arg)
 {
 	arg = arg; /* ignored */
@@ -125,6 +169,12 @@ void *logic_thread_mainloop(void *arg)
 			continue;
 		}
 
+		if (!handled_msg->proc) {
+			OT_LOG(LOG_ERR, "Error with sender details");
+			free_manager_msg(handled_msg);
+			continue;
+		}
+
 		switch (com_msg_name) {
 		case COM_MSG_NAME_PROC_STATUS_CHANGE:
 
@@ -139,7 +189,7 @@ void *logic_thread_mainloop(void *arg)
 			break;
 
 		case COM_MSG_NAME_OPEN_SESSION:
-
+			open_session_msg(handled_msg);
 			break;
 
 		case COM_MSG_NAME_INVOKE_CMD:
