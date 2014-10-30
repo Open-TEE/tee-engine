@@ -38,8 +38,9 @@ static void proc_fd_err(int err_nro, proc_t proc)
 {
 	/* Placeholder */
 
+	if (proc)
+		epoll_unreg(proc->sockfd);
 	err_nro = err_nro;
-	proc = proc;
 }
 
 /*!
@@ -52,8 +53,8 @@ static void io_fd_err(int err_nro, int fd)
 {
 	/* Placeholder */
 
+	epoll_unreg(fd);
 	err_nro = err_nro;
-	fd = fd;
 }
 
 /*!
@@ -67,7 +68,6 @@ static int check_event_fd_epoll_status(struct epoll_event *event)
 	/* Placeholder */
 
 	event = event;
-
 	return 0;
 }
 
