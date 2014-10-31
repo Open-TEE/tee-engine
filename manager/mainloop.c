@@ -28,6 +28,7 @@
 #include "extern_resources.h"
 #include "io_thread.h"
 #include "logic_thread.h"
+#include "ta_dir_watch.h"
 #include "tee_logging.h"
 
 /* Maximum epoll events */
@@ -171,7 +172,7 @@ err_1:
 
 int lib_main_loop(int sockpair_fd)
 {
-	int public_sockfd, i, event_count;
+	int public_sockfd, i, event_count, event_ta_dir_watch_fd;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
 	pthread_t logic_thread;
 	pthread_attr_t attr;
@@ -184,6 +185,9 @@ int lib_main_loop(int sockpair_fd)
 		OT_LOG(LOG_ERR, "Sigempty set failed");
 		return -1;
 	}
+
+	if (ta_dir_watch_init(&event_ta_dir_watch_fd))
+		return -1; /* err msg logged */
 
 	if (init_epoll())
 		return -1; /* err msg logged */
@@ -257,6 +261,9 @@ int lib_main_loop(int sockpair_fd)
 
 			} else if(cur_events[i].data.fd == event_close_sock) {
 
+
+			} else if(cur_events[i].data.fd == event_ta_dir_watch_fd) {
+				ta_dir_watch_event(&cur_events[i], &event_ta_dir_watch_fd);
 
 			} else {
 				read_fd_and_add_todo_queue(&cur_events[i]);
