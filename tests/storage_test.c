@@ -1,3 +1,19 @@
+/*****************************************************************************
+** Copyright (C) 2014 Secure Systems Group.                                 **
+**                                                                          **
+** Licensed under the Apache License, Version 2.0 (the "License");          **
+** you may not use this file except in compliance with the License.         **
+** You may obtain a copy of the License at                                  **
+**                                                                          **
+**      http://www.apache.org/licenses/LICENSE-2.0                          **
+**                                                                          **
+** Unless required by applicable law or agreed to in writing, software      **
+** distributed under the License is distributed on an "AS IS" BASIS,        **
+** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. **
+** See the License for the specific language governing permissions and      **
+** limitations under the License.                                           **
+*****************************************************************************/
+
 #include <openssl/rand.h>
 
 #include <stdio.h>
@@ -12,16 +28,6 @@
 /* NOTICE */
 #include "../include/tee_internal_api.h"
 #include "../internal_api/tee_object_handle.h"
-
- /* Useful functions */
-static void pri_obj_attr(TEE_ObjectHandle object);
-static void pri_and_cmp_attr(TEE_ObjectHandle obj1, TEE_ObjectHandle obj2);
-static void pri_void_buf(void *buf, size_t len);
-static void pri_obj_data(TEE_ObjectHandle object);
-static void pri_obj_info(TEE_ObjectInfo info);
-static void gen_RSA_per_obj_with_data(TEE_ObjectHandle *gen_obj, size_t data_len);
-static void gen_rand_per_data_obj(TEE_ObjectHandle *gen_obj, size_t data_len);
-static void free_attr(TEE_Attribute *params, size_t count);
 
 #define KEY_IN_BYTES(key_in_bits) ((key_in_bits + 7) / 8)
 

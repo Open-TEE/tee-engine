@@ -202,6 +202,7 @@ static int concat_values(const char *base, char **src_n_dest)
 int config_parser_get_config(struct emulator_config **conf)
 {
 	struct emulator_config *conf_ptr;
+	char *core_lib_path = NULL;
 	int ret;
 
 	/* TODO: Fix this function to only open the conf file once and read all values */
@@ -211,6 +212,11 @@ int config_parser_get_config(struct emulator_config **conf)
 		return -1;
 
 	if (alloc_fill_value("ta_dir_path", &conf_ptr->ta_dir_path) == -1) {
+		ret = -1;
+		goto out;
+	}
+
+	if (alloc_fill_value("core_lib_path", &core_lib_path) == -1) {
 		ret = -1;
 		goto out;
 	}
@@ -226,13 +232,12 @@ int config_parser_get_config(struct emulator_config **conf)
 	}
 
 	/* tidy up and make the library paths full paths, hence usable */
-
-	if (concat_values(conf_ptr->ta_dir_path, &conf_ptr->subprocess_manager) == -1) {
+	if (concat_values(core_lib_path, &conf_ptr->subprocess_manager) == -1) {
 		ret = -1;
 		goto out;
 	}
 
-	if (concat_values(conf_ptr->ta_dir_path, &conf_ptr->subprocess_launcher) == -1) {
+	if (concat_values(core_lib_path, &conf_ptr->subprocess_launcher) == -1) {
 		ret = -1;
 		goto out;
 	}
@@ -243,6 +248,9 @@ out:
 		config_parser_free_config(conf_ptr);
 		conf_ptr = NULL;
 	}
+
+	/* clean up the tmp lib path variable */
+	free(core_lib_path);
 
 	/* Assign the config back to the caller */
 	*conf = conf_ptr;

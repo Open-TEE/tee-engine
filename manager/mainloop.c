@@ -186,10 +186,10 @@ int lib_main_loop(int sockpair_fd)
 		return -1;
 	}
 
-	if (ta_dir_watch_init(&event_ta_dir_watch_fd))
+	if (init_epoll())
 		return -1; /* err msg logged */
 
-	if (init_epoll())
+	if (ta_dir_watch_init(&event_ta_dir_watch_fd))
 		return -1; /* err msg logged */
 
 	if (init_sock(&public_sockfd))
