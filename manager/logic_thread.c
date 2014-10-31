@@ -24,6 +24,11 @@
 #include "tee_logging.h"
 #include "logic_thread.h"
 
+static void free_proc(proc_t del_proc)
+{
+	del_proc = del_proc;
+}
+
 static void add_msg_done_queue_and_notify(struct manager_msg *man_msg)
 {
 	const uint64_t event = 1;
@@ -47,6 +52,27 @@ static void add_msg_done_queue_and_notify(struct manager_msg *man_msg)
 		OT_LOG(LOG_ERR, "Failed to notify the io thread");
 		/* TODO/PLACEHOLDER: notify IO thread */
 	}
+}
+
+static void gen_err_msg_and_add_to_done(struct manager_msg *man_msg,
+										uint32_t err_origin, uint32_t err_name)
+{
+	free(man_msg->msg); /* replace old message with error */
+
+	man_msg->msg = calloc(1, sizeof(struct com_msg_error));
+	if (!man_msg->msg) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		return;
+	}
+
+	man_msg->msg_len = sizeof(struct com_msg_error);
+
+	/* Fill error message */
+	((struct com_msg_error *) man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
+	((struct com_msg_error *) man_msg->msg)->ret_origin = err_origin;
+	((struct com_msg_error *) man_msg->msg)->ret = err_name;
+
+	add_msg_done_queue_and_notify(man_msg);
 }
 
 static void ca_init_context(struct manager_msg *man_msg)
@@ -91,9 +117,87 @@ static void open_session_response(struct manager_msg *man_msg)
 	man_msg = man_msg;
 }
 
-static void open_session_query(struct manager_msg *man_msg)
+static void get_next_sess_id(uint64_t *new_id)
+{
+	/* TODO: Rare, but after ~92 quadrillion session this will overflow */
+	static uint64_t next_sess_id;
+
+	*new_id = next_sess_id++;
+}
+
+static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid,
+				  proc_t *new_ta_proc, proc_t conn_ta)
 {
 	man_msg = man_msg;
+	ta_uuid = ta_uuid;
+	new_ta_proc = new_ta_proc;
+	conn_ta = conn_ta;
+
+	return 0;
+}
+
+static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
+{
+	owner = owner;
+	to = to;
+	sess_id = sess_id;
+
+	return 0;
+}
+
+static void open_session_query(struct manager_msg *man_msg)
+{
+	proc_t new_ta = NULL;
+	proc_t conn_ta = NULL;
+	uint64_t new_session_id;
+	struct com_msg_open_session *open_msg = man_msg->msg;
+
+	/* Generate new session ID */
+	get_next_sess_id(&new_session_id);
+
+	/* SessID is needed when message is sent back from TA */
+	open_msg->msg_hdr.sess_id = new_session_id;
+
+	/* Launch new TA, if needed */
+	if (launch_and_init_ta(man_msg, &open_msg->uuid, &new_ta, conn_ta))
+		return; /* Err msg logged and send to sender */
+
+	/* If new_ta is NULL, should connect existing TA (conn_ta is not NULL)
+	 * If conn_ta is NULL, new ta created and connect to that  (new_ta is not null)
+	 * If conn_ta is NULL and new_ta NULL, should never happen */
+
+	/* Send invoke task to TA */
+	if (conn_ta) {
+
+		if (create_sesLink(man_msg->proc, conn_ta, new_session_id))
+			goto err; /* Err msg logged */
+
+		/* Pass on open session cmd
+		 * Know error: If this message send fails, CA will be waiting forever, because
+		 * no error message is not send */
+		man_msg->proc = conn_ta;
+		add_msg_done_queue_and_notify(man_msg);
+
+	} else if (new_ta) {
+
+		if (create_sesLink(man_msg->proc, new_ta, new_session_id))
+			goto err; /* Err msg logged */
+
+		/* Open session command is already send */
+
+		free_manager_msg(man_msg); /* TA will send response message */
+
+	} else {
+		/* Should never end up here ! */
+		OT_LOG(LOG_ERR, "Error");
+		goto err;
+	}
+
+	return;
+
+err:
+	free_proc(new_ta);
+	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 }
 
 static void open_session_msg(struct manager_msg *man_msg)
