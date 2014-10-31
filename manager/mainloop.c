@@ -143,9 +143,6 @@ static int init_extern_res(int launcher_proc_fd)
 	/* Launcher fd */
 	launcher_fd = launcher_proc_fd;
 
-	/* First session id is zero */
-	next_sess_id = 0;
-
 	/* Done queue event is used in semaphore style */
 	event_done_queue_fd = eventfd(0, EFD_SEMAPHORE);
 	if (event_done_queue_fd == -1) {
