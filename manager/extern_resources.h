@@ -75,9 +75,6 @@ extern int event_done_queue_fd;
 /* Close queue have something to process */
 extern int event_close_sock;
 
-/* Next session ID */
-extern uint64_t next_sess_id;
-
 /* Note: Do not assign enumerator values. Let compiler do that.
  * If manual assigment needed, do it after XXXX_last-element */
 
