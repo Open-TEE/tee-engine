@@ -1,5 +1,6 @@
 /*****************************************************************************
-** Copyright (C) 2013 ICRI.                                    **
+** Copyright (C) 2013 Tanel Dettenborn                                      **
+** Copyright (C) 2014 Brian McGillion                                       **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,327 +15,112 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <stdio.h>
-#include <syslog.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
+#define _GNU_SOURCE
 
 #include "conf_parser.h"
+#include "ini.h"
+#include "tee_logging.h"
 
-#ifndef CONF_FILE_WITH_PATH /* Allow this to be sepecified on the compile line -D */
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+
+/* Allow this to be sepecified on the compile line -D */
+#ifndef CONF_FILE_WITH_PATH
 #define CONF_FILE_WITH_PATH "/etc/opentee.conf"
 #endif
 
-static const size_t BLOCK_SIZE = 256;
-
 /*!
- * \brief first_non_whitspace
- * Allocate first non whitespace character location from the beginning
- * \param line is handled line
- * \return a pointer to first non whitespace character in line
+ * \brief ini_handler
+ * The callback handler that is registered with the ini parser
+ * \param user The user defined type that is used to store the parsed values
+ * \param section The ini section that is being parsed
+ * \param name The name of the configuration in that section
+ * \param value The value of a named configuration
+ * \return 0 on failure; > 0 on success
  */
-static char *first_non_whitespace(char *line)
+static int ini_handler(void *user, const char *section, const char *name, const char *value)
 {
-	size_t k = 0;
-	for (k = 0; k < strlen(line); ++k) {
-		if (!isspace(line[k]))
-			break;
+	struct emulator_config *conf = (struct emulator_config *)user;
+
+	if (strcmp(section, "PATHS") == 0) {
+		if (strcmp(name, "core_lib_path") == 0)
+			conf->core_lib_path = strdup(value);
+		else if (strcmp(name, "ta_dir_path") == 0)
+			conf->ta_dir_path = strdup(value);
+		else if (strcmp(name, "subprocess_manager") == 0)
+			conf->subprocess_manager = strdup(value);
+		else if (strcmp(name, "subprocess_launcher") == 0)
+			conf->subprocess_launcher = strdup(value);
 	}
 
-	return &line[k];
+	return 1;
 }
 
 /*!
- * \brief last_non_whitespace
- * Opposite to first_non_whitespace. \sa first_non_whitespace
+ * \brief fixup_lib_path
+ * To be useful the lib name should be the whole path so we concatinate the strings here
+ * \param path The base directory containing the libraries
+ * \param lib_name [IN] The name of the library [OUT] the full path of the library
+ * \return 0 on success -1 otherwise
  */
-static char *last_non_whitespace(char *line)
+static int fixup_lib_path(const char *path, char **lib_name)
 {
-	size_t k = 0;
-	for (k = (strlen(line)-1); k > 0; --k) {
-		if (!isspace(line[k]))
-			break;
+	char *tmp = NULL;
+	int ret = 0;
+
+	if (asprintf(&tmp, "%s/%s", path, *lib_name) == -1) {
+		OT_LOG(LOG_ERR, "Failed to make %s path", *lib_name);
+		ret = -1;
+		goto out;
 	}
 
-	return &line[k];
-}
+	/* copy the entire path + name back into the libname */
+	free(*lib_name);
+	*lib_name = strdup(tmp);
 
-/*!
- * \brief strip_whitespace
- * Removes whitespaces from the beginning and at the end. Does not actually
- * remove.
- * \param line is handled line
- */
-static void strip_whitespace(char *line)
-{
-	char *end = last_non_whitespace(line) + 1;
-	*end = '\0';
-
-	char *begin = first_non_whitespace(line);
-
-	size_t len = (end + 1) - begin;
-
-	memmove(line, begin, len);
-}
-
-/*!
- * \brief parse_value
- * Function is retrieving a value from a line. At the beginning and at the
- * ind whitespace is removed.
- * \param line that is containing a key-value pair
- * \return In case of success returning a pointer to value. Memory for value
- * is allocated by malloc and it is the responsibility of a user to free
- * memory. Value is newline terminated. In case of failure function will
- * return NULL and no memory is malloced.
- */
-static char *parse_value(const char *line)
-{
-	char *buf = (char *) calloc(0, sizeof(char) * BLOCK_SIZE);
-	if (buf == NULL) {
-		syslog(LOG_DEBUG, "Calloc failed");
-		return NULL;
-	}
-
-	char *as_op = memchr(line, '=', strlen(line));
-	if (as_op == NULL) {
-		free(buf);
-		syslog(LOG_DEBUG, "No assigning operator");
-		return NULL;
-	}
-
-	size_t begin = as_op - line + 1;
-	size_t end = strlen(line);
-
-	char read_ch;
-	size_t buf_index = 0;
-	size_t count = 0;
-	size_t buf_size = BLOCK_SIZE;
-
-	size_t k = 0;
-	for (k = begin; k < end; ++k) {
-
-		if (count - 1 >= buf_size) {
-			char *tmp;
-			tmp = realloc(buf, buf_size + BLOCK_SIZE);
-			if (tmp == NULL) {
-				syslog(LOG_DEBUG, "Realloc failed");
-				free(buf);
-				return NULL;
-			}
-
-			buf = tmp;
-			buf_size += BLOCK_SIZE;
-			memset(&buf[k], 0, BLOCK_SIZE);
-			count = 0;
-		}
-
-		read_ch = line[k];
-		if (read_ch == '#')
-			break;
-
-		buf[buf_index] = read_ch;
-		buf_index++;
-		count++;
-	}
-
-	buf[buf_index] = '\0';
-
-	strip_whitespace(buf);
-
-	return buf;
-}
-
-/*!
- * \brief alloc_fill_value
- * Read a value from the config and allocate enough space for it in the dest
- * \param key The config setting we wish to find in the config file
- * \param dest Where to store the value
- * \return -1 on error, 0 otherwise
- */
-static int alloc_fill_value(const char *key, char **dest)
-{
-	char *value = config_parser_get_value(key);
-	if (value == NULL)
-		return -1;
-
-	*dest = (char *)calloc(strlen(value) + 1, sizeof(char));
-	if (*dest == NULL) {
-		free(value);
-		return -1;
-	}
-
-	strncpy(*dest, value, strlen(value));
-	free(value);
-	return 0;
-}
-
-/*!
- * \brief concat_values
- * Many values in the config file may need to be concatinated together, e.g.
- * library path and library name, so that the library can be accessed properly
- * \param base The base value that is used for concatination
- * \param src_n_dest The value that is to be concatinated to the base and where the result will
- * be stored
- * \return 0 on success, -1 otherwise
- */
-static int concat_values(const char *base, char **src_n_dest)
-{
-	char *tmp;
-
-	if (base == NULL || *src_n_dest == NULL)
-		return 0; /* nothing will change */
-
-	tmp = (char *)calloc(strlen(base) + strlen(*src_n_dest) + 1, sizeof(char));
-	if (tmp == NULL)
-		return -1;
-
-	/* concatinat the 2 strings */
-	snprintf(tmp, strlen(base) + strlen(*src_n_dest) + 1, "%s%s", base, *src_n_dest);
-
-	/* now store the result back into src_n_dest */
-	free(*src_n_dest);
-	*src_n_dest = tmp;
-
-	return 0;
+out:
+	free(tmp);
+	return ret;
 }
 
 int config_parser_get_config(struct emulator_config **conf)
 {
-	struct emulator_config *conf_ptr;
-	char *core_lib_path = NULL;
-	int ret;
+	struct emulator_config *tmp_conf;
 
-	/* TODO: Fix this function to only open the conf file once and read all values */
-
-	conf_ptr = (struct emulator_config *)calloc(sizeof(struct emulator_config), sizeof(char));
-	if (conf_ptr == NULL)
+	tmp_conf = (struct emulator_config *)calloc(1, sizeof(struct emulator_config));
+	if (tmp_conf == NULL) {
+		OT_LOG(LOG_ERR, "Out of memory");
 		return -1;
-
-	if (alloc_fill_value("ta_dir_path", &conf_ptr->ta_dir_path) == -1) {
-		ret = -1;
-		goto out;
 	}
 
-	if (alloc_fill_value("core_lib_path", &core_lib_path) == -1) {
-		ret = -1;
-		goto out;
-	}
+	if (ini_parse(CONF_FILE_WITH_PATH, ini_handler, tmp_conf) < 0)
+		goto err_out;
 
-	if (alloc_fill_value("subprocess_manager", &conf_ptr->subprocess_manager) == -1) {
-		ret = -1;
-		goto out;
-	}
+	if (fixup_lib_path(tmp_conf->core_lib_path, &tmp_conf->subprocess_manager))
+		goto err_out;
 
-	if (alloc_fill_value("subprocess_launcher", &conf_ptr->subprocess_launcher) == -1) {
-		ret = -1;
-		goto out;
-	}
+	if (fixup_lib_path(tmp_conf->core_lib_path, &tmp_conf->subprocess_launcher))
+		goto err_out;
 
-	/* tidy up and make the library paths full paths, hence usable */
-	if (concat_values(core_lib_path, &conf_ptr->subprocess_manager) == -1) {
-		ret = -1;
-		goto out;
-	}
+	*conf = tmp_conf;
 
-	if (concat_values(core_lib_path, &conf_ptr->subprocess_launcher) == -1) {
-		ret = -1;
-		goto out;
-	}
+	return 0;
 
-out:
-	/* There has been some error so clean up */
-	if (ret == -1) {
-		config_parser_free_config(conf_ptr);
-		conf_ptr = NULL;
-	}
-
-	/* clean up the tmp lib path variable */
-	free(core_lib_path);
-
-	/* Assign the config back to the caller */
-	*conf = conf_ptr;
-
-	return ret;
+err_out:
+	free(tmp_conf);
+	conf = NULL;
+	return -1;
 }
 
 void config_parser_free_config(struct emulator_config *conf)
 {
-	if (conf == NULL)
-		return; /* nothing to free */
+	if (!conf)
+		return;
 
-	if (conf->ta_dir_path)
-		free(conf->ta_dir_path);
-
-	if (conf->subprocess_launcher)
-		free(conf->subprocess_launcher);
-
-	if (conf->subprocess_manager)
-		free(conf->subprocess_manager);
-
+	free(conf->subprocess_launcher);
+	free(conf->subprocess_manager);
+	free(conf->ta_dir_path);
 	free(conf);
-}
-
-char *config_parser_get_value(const char *key)
-{
-	FILE *init_file = fopen(CONF_FILE_WITH_PATH, "r");
-	char *value = NULL;
-
-	if (init_file == NULL) {
-		syslog(LOG_DEBUG, "Failed open config file");
-		goto err1;
-	}
-
-	if (feof(init_file)) {
-		syslog(LOG_DEBUG, "File is empty");
-		goto err2;
-	}
-
-	size_t n = 0;
-	ssize_t read = 0;
-	char *line = NULL;
-	while ((read = getline(&line, &n, init_file)) != -1) {
-
-		if ((*first_non_whitespace(line) == '#') ||
-		    (*first_non_whitespace(line) == '[')) {
-			free(line);
-			n = 0;
-			line = NULL;
-			continue;
-		}
-
-		char *assigment_op = memchr(line, '=', strlen(line));
-		if (assigment_op == NULL) {
-			free(line);
-			n = 0;
-			line = NULL;
-			continue;
-		}
-
-		char *key_line = (char *) calloc(0, sizeof(char) * (assigment_op-line));
-		if (key_line == NULL) {
-			syslog(LOG_DEBUG, "Calloc failed");
-			goto err3;
-		}
-
-		strncpy(key_line, line, assigment_op-line);
-
-		if (strstr(key_line, key)) {
-			value = parse_value(line);
-			free(key_line);
-			goto err3;
-		}
-
-		free(key_line);
-		free(line);
-		n = 0;
-		line = NULL;
-	}
-
-err3:
-	free(line);
-err2:
-	fclose(init_file);
-err1:
-	return value;
 }
