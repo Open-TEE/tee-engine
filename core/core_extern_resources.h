@@ -20,8 +20,6 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include "conf_parser.h"
-
 #define MAX_PR_NAME		16
 
 #define TEE_SIG_CHILD		0x00000001
