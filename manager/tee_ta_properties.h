@@ -1,0 +1,1 @@
+../../TAs/include/tee_ta_properties.h

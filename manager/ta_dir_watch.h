@@ -28,7 +28,7 @@
 */
 
 #include "epoll_wrapper.h"
-#include "tee_ta_propertie.h"
+#include "tee_ta_properties.h"
 
 #define TA_MAX_FILE_NAME 255
 

@@ -48,7 +48,7 @@ int get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, siz
 
 	e = elf_begin(fd, ELF_C_READ, NULL);
 	if (!e) {
-		OT_LOG(LOG_ERR, "Elf begin");
+		OT_LOG(LOG_ERR, "Elf begin failed : %s", elf_errmsg(elf_errno()));
 		goto end;
 	}
 
@@ -58,38 +58,38 @@ int get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, siz
 	}
 
 	if (elf_getshdrstrndx(e, &shstrndx) != 0) {
-		OT_LOG(LOG_ERR, "elf kind");
+		OT_LOG(LOG_ERR, "elf getshdrstrndx : %s", elf_errmsg(elf_errno()));
 		goto end;
 	}
 
-	while (1) {
+	while (is_sec_found) {
 
 		scn = elf_nextscn(e, scn);
 		if (!scn)
 			break;
 
 		if (gelf_getshdr(scn, &shdr) != &shdr) {
-			OT_LOG(LOG_ERR, "gelf getshdr");
+			OT_LOG(LOG_ERR, "gelf getshdr : %s", elf_errmsg(elf_errno()));
 			goto end;
 		}
 
 		name = elf_strptr(e, shstrndx, shdr.sh_name);
 		if (!name) {
-			OT_LOG(LOG_ERR, "elf_strptr");
+			OT_LOG(LOG_ERR, "elf_strptr : %s", elf_errmsg(elf_errno()));
 			goto end;
 		}
 
 		if (!strncasecmp(sec_name, name, MAX_SEC_NAME_LEN)) {
 			data = elf_getdata(scn, data);
 			if (!data) {
-				OT_LOG(LOG_ERR, "elf_getdata");
+				OT_LOG(LOG_ERR, "elf_getdata : %s", elf_errmsg(elf_errno()));
 				goto end;
 			}
 
 			if (*buf_len >= data->d_size) {
 				memcpy(buf, data->d_buf, data->d_size);
-				is_sec_found = 0;
 				*buf_len = data->d_size;
+				is_sec_found = 0;
 
 			} else {
 				OT_LOG(LOG_ERR, "Buffer too small");

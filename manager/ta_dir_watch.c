@@ -33,10 +33,10 @@
 #include "epoll_wrapper.h"
 #include "h_table.h"
 #include "ta_dir_watch.h"
-#include "tee_ta_propertie.h"
+#include "tee_ta_properties.h"
 #include "tee_logging.h"
 
-static const char *seek_section_name = PROPERTIE_SEC_NAME;
+static const char *seek_section_name = PROPERTY_SEC_NAME;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static HASHTABLE ta_dir_table;
 static int inotify_fd;
@@ -82,7 +82,7 @@ static void add_new_ta(char *name)
 		return;
 	}
 
-	if (asprintf(&ta_with_path, "%s%s", opentee_conf->ta_dir_path, name) == -1) {
+	if (asprintf(&ta_with_path, "%s/%s", opentee_conf->ta_dir_path, name) == -1) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		goto err;
 	}

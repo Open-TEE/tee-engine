@@ -28,6 +28,6 @@ DynamicLibrary {
         "mainloop.c",
         "ta_dir_watch.h",
         "ta_dir_watch.c",
-        "tee_ta_propertie.h",
+        "tee_ta_properties.h",
     ]
 }

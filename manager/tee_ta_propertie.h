@@ -1,1 +1,0 @@
-../../libtee/include/tee_ta_propertie.h
