@@ -302,7 +302,7 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid,
 		goto err_1;
 	}
 
-	if (h_table_insert(trustedApps, (unsigned char *)((*new_ta_proc)->content.process.pid),
+	if (h_table_insert(trustedApps, (unsigned char *)&((*new_ta_proc)->content.process.pid),
 					   sizeof(pid_t), *new_ta_proc)) {
 		OT_LOG(LOG_ERR, "out of memory");
 		goto err_2;
