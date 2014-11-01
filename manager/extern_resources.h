@@ -119,8 +119,8 @@ struct __proc {
 			enum session_status status;
 			int session_id;
 			int sockfd;
-			proc_t *to;
-			proc_t *owner;
+			proc_t to;
+			proc_t owner;
 		} sesLink;
 
 		struct {

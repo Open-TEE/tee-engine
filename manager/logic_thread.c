@@ -324,11 +324,53 @@ err_1:
 	return 1;
 }
 
+static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner,
+								   proc_t to, uint64_t sess_id)
+{
+	*sesLink = (proc_t)malloc(sizeof(struct __proc));
+	if (!*sesLink) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		return 1;
+	}
+
+	(*sesLink)->p_type = proc_t_link;
+	(*sesLink)->content.sesLink.status = sess_initialized;
+	(*sesLink)->content.sesLink.owner = owner;
+	(*sesLink)->content.sesLink.to = to;
+	(*sesLink)->content.sesLink.session_id = sess_id;
+
+	return 0;
+}
+
+static int add_new_session_to_proc(proc_t owner, proc_t to,
+								   uint64_t session_id, proc_t *new_sesLink)
+{
+	if (alloc_and_init_sessLink(new_sesLink, owner, to, session_id))
+		return 1;
+
+	if (h_table_insert(owner->content.process.links,
+					   (unsigned char *)&session_id, sizeof(uint64_t), *new_sesLink)) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		return 1;
+	}
+
+	return 0;
+}
+
 static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
 {
-	owner = owner;
-	to = to;
-	sess_id = sess_id;
+	proc_t new_owner_ses = NULL;
+	proc_t new_to_ses = NULL;
+
+	/* Following code will be generating two session link and cross linking sessions to gether */
+
+	if (add_new_session_to_proc(owner, NULL, sess_id, &new_owner_ses))
+		return 1;
+
+	if (add_new_session_to_proc(to, new_owner_ses, sess_id, &new_to_ses))
+		return 1;
+
+	new_owner_ses->content.sesLink.to = new_to_ses;
 
 	return 0;
 }
