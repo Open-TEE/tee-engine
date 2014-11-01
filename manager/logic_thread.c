@@ -24,6 +24,7 @@
 #include "extern_resources.h"
 #include "h_table.h"
 #include "io_thread.h"
+#include "socket_help.h"
 #include "ta_dir_watch.h"
 #include "tee_list.h"
 #include "tee_logging.h"
@@ -176,11 +177,57 @@ static proc_t get_ta_by_uuid(TEE_UUID *uuid)
 static int comm_launcher_to_launch_ta(struct manager_msg *man_msg,
 									  int *new_ta_fd, pid_t *new_ta_pid)
 {
-	man_msg = man_msg;
-	new_ta_fd = new_ta_fd;
-	new_ta_pid = new_ta_pid;
+	struct com_msg_ta_created *recv_created_msg = NULL;
 
+	/* Initialize new ta pid -1 in purpose of error handling in this function */
+	*new_ta_pid = -1;
+
+	/* Communicating directly to launcher */
+	if (com_send_msg(launcher_fd, man_msg->msg, man_msg->msg_len) != man_msg->msg_len) {
+		/* TODO: Why socket failing */
+		OT_LOG(LOG_ERR, "Communication proble to launcher");
+		goto err;
+	}
+
+	/* Note: After this point we might receive signal SIGCHLD */
+
+	/* Receive launcer msg. In case of error, abort TA initialization */
+	if (com_recv_msg(launcher_fd, (void **)(&recv_created_msg), NULL)) {
+		/* TODO: Why socket failing */
+		OT_LOG(LOG_ERR, "failed to receive ta create message");
+		goto err;
+	}
+
+	if (recv_created_msg->msg_hdr.msg_name != COM_MSG_NAME_CREATED_TA ||
+			recv_created_msg->msg_hdr.msg_type != COM_TYPE_RESPONSE) {
+		OT_LOG(LOG_ERR, "Invalid message\n");
+		goto err;
+	}
+
+	if (recv_created_msg->pid == -1) {
+		/* If PID is -1, fork/clone failed! */
+		OT_LOG(LOG_ERR, "Problem in TA launching");
+		goto err;
+	}
+
+	*new_ta_pid = recv_created_msg->pid;
+
+	/* launcher is forking to new proc and creates sockpair. Other end will be send here. */
+	if (recv_fd(launcher_fd, new_ta_fd) == -1) {
+		OT_LOG(LOG_ERR, "Error at recv TA fd");
+		goto err;
+	}
+
+	free(recv_created_msg);
 	return 0;
+
+err:
+	if (*new_ta_pid != -1)
+		kill(*new_ta_pid , SIGKILL);
+
+	free(recv_created_msg);
+	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+	return 1;
 }
 
 static int connect_to_ta(struct manager_msg *man_msg, proc_t conn_ta, TEE_UUID *ta_uuid,
