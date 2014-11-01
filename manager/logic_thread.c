@@ -15,14 +15,22 @@
 *****************************************************************************/
 
 #include <pthread.h>
+#include <signal.h>
+#include <string.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "com_protocol.h"
 #include "extern_resources.h"
+#include "h_table.h"
 #include "io_thread.h"
+#include "ta_dir_watch.h"
 #include "tee_list.h"
 #include "tee_logging.h"
 #include "logic_thread.h"
+
+/* Used for hashtable init */
+#define TA_SESS_COUNT_EST 50
 
 static void free_proc(proc_t del_proc)
 {
@@ -125,15 +133,148 @@ static void get_next_sess_id(uint64_t *new_id)
 	*new_id = next_sess_id++;
 }
 
+static int create_uninitialized_ta_proc(proc_t *new_ta, TEE_UUID *ta_uuid)
+{
+	*new_ta = (proc_t)calloc(1, sizeof(struct __proc));
+	if (!*new_ta) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		return 1;
+	}
+
+	h_table_create(&(*new_ta)->content.process.links, TA_SESS_COUNT_EST);
+	if (!(*new_ta)->content.process.links) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		free(*new_ta);
+		return 1;
+	}
+
+	(*new_ta)->p_type = proc_t_TA;
+	(*new_ta)->content.process.status = proc_uninitialized;
+	memcpy(&(*new_ta)->content.process.ta_uuid, ta_uuid, sizeof(TEE_UUID));
+
+	return 0;
+}
+
+static proc_t get_ta_by_uuid(TEE_UUID *uuid)
+{
+	proc_t ta = NULL;
+
+	h_table_init_stepper(trustedApps);
+
+	while (1) {
+		ta = (proc_t)h_table_step(trustedApps);
+		if (!ta)
+			break; /* TA is not running, return NULL */
+
+		if (!bcmp(&ta->content.process.ta_uuid, uuid, sizeof(TEE_UUID)))
+			break; /* TA running, return proc ptr */
+	}
+
+	return ta;
+}
+
+static int comm_launcher_to_launch_ta(struct manager_msg *man_msg,
+									  int *new_ta_fd, pid_t *new_ta_pid)
+{
+	man_msg = man_msg;
+	new_ta_fd = new_ta_fd;
+	new_ta_pid = new_ta_pid;
+
+	return 0;
+}
+
+static int connect_to_ta(struct manager_msg *man_msg, proc_t conn_ta, TEE_UUID *ta_uuid,
+						 struct trusted_app_propertie *ta_propertie)
+{
+	int ret = 0;
+
+	conn_ta = get_ta_by_uuid(ta_uuid);
+	if (!conn_ta)
+		return 0; /* Connect to existing, because ta is not running/loaded */
+
+	if (ta_dir_watch_lock_mutex())
+		return 1; /* Err msg logged */
+
+	/* If trusted application exists at TA folder and get it properties. */
+	ta_propertie = ta_dir_watch_props(ta_uuid);
+	if (!ta_propertie) {
+		OT_LOG(LOG_ERR, "TA with requested UUID is not found");
+		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_BAD_PARAMETERS);
+		ret = 1;
+		goto ret;
+	}
+
+	memcpy(((struct com_msg_open_session *) man_msg->msg)->ta_so_name,
+		   ta_propertie->ta_so_name, TA_MAX_FILE_NAME);
+
+	if (ta_propertie->user_config.singletonInstance) {
+		ret = 0;
+		goto ret; /* Singleton and TA running */
+	}
+
+	if (ta_propertie->user_config.singletonInstance && !ta_propertie->user_config.multiSession) {
+		/* Singleton and running and not supporting multi session! */
+		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_ACCESS_CONFLICT);
+		ret = 1;
+	}
+
+ret:
+	ta_dir_watch_unlock_mutex();
+	return ret;
+}
+
 static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid,
 				  proc_t *new_ta_proc, proc_t conn_ta)
 {
-	man_msg = man_msg;
-	ta_uuid = ta_uuid;
-	new_ta_proc = new_ta_proc;
-	conn_ta = conn_ta;
+	struct trusted_app_propertie *ta_propertie = NULL;
+	pid_t new_ta_pid = 0; /* Zero for compiler warning */
+
+	/* Init return values */
+	*new_ta_proc = NULL;
+	conn_ta = NULL; /* NULL for compiler warning */
+
+	if (connect_to_ta(man_msg, conn_ta, ta_uuid, ta_propertie))
+		return 1; /* Err logged and send */
+
+	if (conn_ta)
+		return 0; /* Connect to existing TA */
+
+	/* Launch new TA */
+	if (comm_launcher_to_launch_ta(man_msg, &((*new_ta_proc)->sockfd),
+								   &((*new_ta_proc)->content.process.pid)))
+		return 1; /* Err logged and send */
+
+	/* Note: TA is launched and its init process is on going now on its own proc */
+
+	/* Init TA data to manager */
+	if (create_uninitialized_ta_proc(new_ta_proc, ta_uuid))
+		goto err_1; /* Err logged */
+
+	if (epoll_reg_data((*new_ta_proc)->sockfd, EPOLLIN, *new_ta_proc)) {
+		OT_LOG(LOG_ERR, "Epoll reg error");
+		goto err_1;
+	}
+
+	if (h_table_insert(trustedApps, (unsigned char *)((*new_ta_proc)->content.process.pid),
+					   sizeof(pid_t), *new_ta_proc)) {
+		OT_LOG(LOG_ERR, "out of memory");
+		goto err_2;
+	}
+
+	/* TA ready for communication */
+	(*new_ta_proc)->content.process.status = proc_initialized;
 
 	return 0;
+
+err_2:
+	epoll_unreg((*new_ta_proc)->sockfd);
+	free_proc(*new_ta_proc);
+	*new_ta_proc = NULL;
+err_1:
+	kill(new_ta_pid, SIGKILL);
+	conn_ta = NULL;
+	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+	return 1;
 }
 
 static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
