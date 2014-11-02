@@ -1,0 +1,73 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a6b29fe_69dd8d70",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 616,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-02T19:41:21Z",
+      "side": 1,
+      "message": "is this supposed to be a bool function based on the output values it is hard to know is 0 good or bad.",
+      "range": {
+        "startLine": 616,
+        "startChar": 7,
+        "endLine": 616,
+        "endChar": 10
+      },
+      "revId": "5f16b66c611ac9bff221d3583c265a2e7a25e6b7",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_a9e7a53f",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 634,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-02T19:41:21Z",
+      "side": 1,
+      "message": "doxygen, what are the return values -1 -\u003e 1 ?",
+      "range": {
+        "startLine": 634,
+        "startChar": 11,
+        "endLine": 634,
+        "endChar": 28
+      },
+      "revId": "5f16b66c611ac9bff221d3583c265a2e7a25e6b7",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_e9d07d55",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 687,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-02T19:41:21Z",
+      "side": 1,
+      "message": "this should be an \"else if\" and specify \u003d\u003d 1 because",
+      "range": {
+        "startLine": 687,
+        "startChar": 1,
+        "endLine": 687,
+        "endChar": 3
+      },
+      "revId": "5f16b66c611ac9bff221d3583c265a2e7a25e6b7",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
