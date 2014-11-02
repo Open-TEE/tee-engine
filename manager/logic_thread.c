@@ -613,6 +613,29 @@ ignore_msg:
 	free_manager_msg(man_msg);
 }
 
+static void ca_finalize_context(struct manager_msg *man_msg)
+{
+	struct com_msg_ca_finalize_constex *fin_con_msg = man_msg->msg;
+
+	/* Valid init message */
+	if (fin_con_msg->msg_hdr.msg_name != COM_MSG_NAME_CA_FINALIZ_CONTEXT ||
+		fin_con_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
+		OT_LOG(LOG_ERR, "Parsing wrong message, ignore msg");
+		goto ignore_msg;
+	}
+
+	/* Message can be received only from client */
+	if (man_msg->proc->p_type != proc_t_CA) {
+		OT_LOG(LOG_ERR, "Message can be received only from clientApp");
+		goto ignore_msg;
+	}
+
+	free_proc(man_msg->proc); /* Del client proc */
+
+ignore_msg:
+	free_manager_msg(man_msg);
+}
+
 void *logic_thread_mainloop(void *arg)
 {
 	arg = arg; /* ignored */
@@ -684,7 +707,7 @@ void *logic_thread_mainloop(void *arg)
 			break;
 
 		case COM_MSG_NAME_CA_FINALIZ_CONTEXT:
-
+			ca_finalize_context(handled_msg);
 			break;
 
 		default:
