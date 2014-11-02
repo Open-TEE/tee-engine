@@ -121,9 +121,93 @@ discard_msg:
 	free(man_msg);
 }
 
+static void free_sess(proc_t del_sess)
+{
+	del_sess = del_sess;
+}
+
+static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
+{
+	free_sess(h_table_get(owner->content.process.links,
+						  (unsigned char *)(&sess_id), sizeof(uint64_t)));
+
+	free_sess(h_table_get(to->content.process.links,
+						  (unsigned char *)(&sess_id), sizeof(uint64_t)));
+}
+
 static void open_session_response(struct manager_msg *man_msg)
 {
-	man_msg = man_msg;
+	struct com_msg_open_session *open_resp_msg = man_msg->msg;
+	int sockfd[2];
+	proc_t ta_session;
+
+	/* Message can be received only from trusted App! */
+	if (man_msg->proc->p_type != proc_t_TA ||
+		man_msg->proc->content.process.status != proc_initialized) {
+		OT_LOG(LOG_ERR, "Invalid sender");
+		goto ignore_msg;
+	}
+
+	/* Sender is TA. Lets get TA session from TA proc session links */
+	ta_session = h_table_get(man_msg->proc->content.process.links,
+							 (unsigned char *)(&open_resp_msg->msg_hdr.sess_id), sizeof(uint64_t));
+	if (!ta_session) {
+		OT_LOG(LOG_ERR, "Invalid session ID");
+		goto ignore_msg;
+	}
+
+	if (ta_session->content.sesLink.status != sess_initialized ||
+			ta_session->content.sesLink.to->content.sesLink.status != sess_initialized) {
+		OT_LOG(LOG_ERR, "Invalid TA or TA session TO status");
+		goto ignore_msg;
+	}
+
+	/* Check received message answer and proceed according to that */
+
+	if (open_resp_msg->return_code_open_session != TEE_SUCCESS) {
+
+		remove_session_between(ta_session->content.sesLink.owner,
+							   ta_session->content.sesLink.to,
+							   open_resp_msg->msg_hdr.sess_id);
+
+	} else {
+
+		/* create a socket pair for CA session and manager communication */
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1) {
+			OT_LOG(LOG_ERR, "Failed to create socket pair");
+			goto err_1;
+		}
+
+		/* Reg CA session socket */
+		if (epoll_reg_data(sockfd[0], EPOLLIN, ta_session->content.sesLink.to))
+			goto err_2; /* Err msg logged */
+
+		ta_session->content.sesLink.to->content.sesLink.sockfd = sockfd[0];
+		ta_session->content.sesLink.status = sess_active;
+		ta_session->content.sesLink.to->content.sesLink.status = sess_active;
+		open_resp_msg->sess_fd_to_caller = sockfd[1];
+	}
+
+	/* Send message to its initial sender
+	 * man_msg->proc will be used as message "address" */
+	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
+	add_msg_done_queue_and_notify(man_msg);
+	return;
+
+err_2:
+	close(sockfd[0]);
+	close(sockfd[1]);
+err_1:
+	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
+	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+	remove_session_between(ta_session->content.sesLink.owner,
+						   ta_session->content.sesLink.to,
+						   open_resp_msg->msg_hdr.sess_id);
+	/* TODO: should TA killed == KEEP ALIVE */
+	return;
+
+ignore_msg:
+	free_manager_msg(man_msg);
 }
 
 static void get_next_sess_id(uint64_t *new_id)
