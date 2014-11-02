@@ -440,9 +440,9 @@ static void open_session_msg(struct manager_msg *man_msg)
 	}
 
 	/* Function is only valid for proc FDs */
-	if (man_msg->proc->p_type >= proc_t_last ||
+	if (man_msg->proc->p_type == proc_t_link ||
 	    man_msg->proc->content.process.status != proc_initialized) {
-		OT_LOG(LOG_ERR, "Invalid connection type or status")
+		OT_LOG(LOG_ERR, "Invalid sender or senders status")
 		goto discard_msg;
 	}
 
