@@ -65,7 +65,7 @@ static void add_msg_done_queue_and_notify(struct manager_msg *man_msg)
 }
 
 static void gen_err_msg_and_add_to_done(struct manager_msg *man_msg,
-										uint32_t err_origin, uint32_t err_name)
+					uint32_t err_origin, uint32_t err_name)
 {
 	free(man_msg->msg); /* replace old message with error */
 
@@ -96,7 +96,7 @@ static void ca_init_context(struct manager_msg *man_msg)
 
 	/* Valid init message */
 	if (init_msg->msg_hdr.msg_name != COM_MSG_NAME_CA_INIT_CONTEXT ||
-		init_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
+	    init_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
 		OT_LOG(LOG_ERR, "Parsing wrong message, ignore msg");
 		goto discard_msg;
 	}
@@ -130,10 +130,10 @@ static void free_sess(proc_t del_sess)
 static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
 {
 	free_sess(h_table_get(owner->content.process.links,
-						  (unsigned char *)(&sess_id), sizeof(uint64_t)));
+			      (unsigned char *)(&sess_id), sizeof(uint64_t)));
 
 	free_sess(h_table_get(to->content.process.links,
-						  (unsigned char *)(&sess_id), sizeof(uint64_t)));
+			      (unsigned char *)(&sess_id), sizeof(uint64_t)));
 }
 
 static void open_session_response(struct manager_msg *man_msg)
@@ -144,21 +144,22 @@ static void open_session_response(struct manager_msg *man_msg)
 
 	/* Message can be received only from trusted App! */
 	if (man_msg->proc->p_type != proc_t_TA ||
-		man_msg->proc->content.process.status != proc_initialized) {
+	    man_msg->proc->content.process.status != proc_initialized) {
 		OT_LOG(LOG_ERR, "Invalid sender");
 		goto ignore_msg;
 	}
 
 	/* Sender is TA. Lets get TA session from TA proc session links */
 	ta_session = h_table_get(man_msg->proc->content.process.links,
-							 (unsigned char *)(&open_resp_msg->msg_hdr.sess_id), sizeof(uint64_t));
+				 (unsigned char *)(&open_resp_msg->msg_hdr.sess_id),
+				 sizeof(uint64_t));
 	if (!ta_session) {
 		OT_LOG(LOG_ERR, "Invalid session ID");
 		goto ignore_msg;
 	}
 
 	if (ta_session->content.sesLink.status != sess_initialized ||
-			ta_session->content.sesLink.to->content.sesLink.status != sess_initialized) {
+	    ta_session->content.sesLink.to->content.sesLink.status != sess_initialized) {
 		OT_LOG(LOG_ERR, "Invalid TA or TA session TO status");
 		goto ignore_msg;
 	}
@@ -168,8 +169,8 @@ static void open_session_response(struct manager_msg *man_msg)
 	if (open_resp_msg->return_code_open_session != TEE_SUCCESS) {
 
 		remove_session_between(ta_session->content.sesLink.owner,
-							   ta_session->content.sesLink.to,
-							   open_resp_msg->msg_hdr.sess_id);
+				       ta_session->content.sesLink.to,
+				       open_resp_msg->msg_hdr.sess_id);
 
 	} else {
 
@@ -202,8 +203,8 @@ err_1:
 	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
 	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 	remove_session_between(ta_session->content.sesLink.owner,
-						   ta_session->content.sesLink.to,
-						   open_resp_msg->msg_hdr.sess_id);
+			       ta_session->content.sesLink.to,
+			       open_resp_msg->msg_hdr.sess_id);
 	/* TODO: should TA killed == KEEP ALIVE */
 	return;
 
@@ -260,7 +261,7 @@ static proc_t get_ta_by_uuid(TEE_UUID *uuid)
 }
 
 static int comm_launcher_to_launch_ta(struct manager_msg *man_msg,
-									  int *new_ta_fd, pid_t *new_ta_pid)
+				      int *new_ta_fd, pid_t *new_ta_pid)
 {
 	struct com_msg_ta_created *recv_created_msg = NULL;
 
@@ -284,7 +285,7 @@ static int comm_launcher_to_launch_ta(struct manager_msg *man_msg,
 	}
 
 	if (recv_created_msg->msg_hdr.msg_name != COM_MSG_NAME_CREATED_TA ||
-			recv_created_msg->msg_hdr.msg_type != COM_TYPE_RESPONSE) {
+	    recv_created_msg->msg_hdr.msg_type != COM_TYPE_RESPONSE) {
 		OT_LOG(LOG_ERR, "Invalid message\n");
 		goto err;
 	}
@@ -315,13 +316,13 @@ err:
 	return 1;
 }
 
-static int connect_to_ta(struct manager_msg *man_msg, proc_t conn_ta, TEE_UUID *ta_uuid,
-						 struct trusted_app_propertie *ta_propertie)
+static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID *ta_uuid,
+			 struct trusted_app_propertie *ta_propertie)
 {
 	int ret = 0;
 
-	conn_ta = get_ta_by_uuid(ta_uuid);
-	if (!conn_ta)
+	*conn_ta = get_ta_by_uuid(ta_uuid);
+	if (!*conn_ta)
 		return 0; /* Connect to existing, because ta is not running/loaded */
 
 	if (ta_dir_watch_lock_mutex())
@@ -337,7 +338,7 @@ static int connect_to_ta(struct manager_msg *man_msg, proc_t conn_ta, TEE_UUID *
 	}
 
 	memcpy(((struct com_msg_open_session *) man_msg->msg)->ta_so_name,
-		   ta_propertie->ta_so_name, TA_MAX_FILE_NAME);
+	       ta_propertie->ta_so_name, TA_MAX_FILE_NAME);
 
 	if (ta_propertie->user_config.singletonInstance) {
 		ret = 0;
@@ -356,24 +357,24 @@ ret:
 }
 
 static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid,
-				  proc_t *new_ta_proc, proc_t conn_ta)
+			      proc_t *new_ta_proc, proc_t *conn_ta)
 {
 	struct trusted_app_propertie *ta_propertie = NULL;
 	pid_t new_ta_pid = 0; /* Zero for compiler warning */
 
 	/* Init return values */
-	*new_ta_proc = NULL;
-	conn_ta = NULL; /* NULL for compiler warning */
+	*new_ta_proc = (proc_t)malloc(sizeof(struct __proc));
+	*conn_ta = NULL; /* NULL for compiler warning */
 
 	if (connect_to_ta(man_msg, conn_ta, ta_uuid, ta_propertie))
 		return 1; /* Err logged and send */
 
-	if (conn_ta)
+	if (*conn_ta)
 		return 0; /* Connect to existing TA */
 
 	/* Launch new TA */
 	if (comm_launcher_to_launch_ta(man_msg, &((*new_ta_proc)->sockfd),
-								   &((*new_ta_proc)->content.process.pid)))
+				       &((*new_ta_proc)->content.process.pid)))
 		return 1; /* Err logged and send */
 
 	/* Note: TA is launched and its init process is on going now on its own proc */
@@ -388,7 +389,7 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid,
 	}
 
 	if (h_table_insert(trustedApps, (unsigned char *)&((*new_ta_proc)->content.process.pid),
-					   sizeof(pid_t), *new_ta_proc)) {
+			   sizeof(pid_t), *new_ta_proc)) {
 		OT_LOG(LOG_ERR, "out of memory");
 		goto err_2;
 	}
@@ -404,13 +405,13 @@ err_2:
 	*new_ta_proc = NULL;
 err_1:
 	kill(new_ta_pid, SIGKILL);
-	conn_ta = NULL;
+	*conn_ta = NULL;
 	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 	return 1;
 }
 
 static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner,
-								   proc_t to, uint64_t sess_id)
+				   proc_t to, uint64_t sess_id)
 {
 	*sesLink = (proc_t)malloc(sizeof(struct __proc));
 	if (!*sesLink) {
@@ -428,13 +429,13 @@ static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner,
 }
 
 static int add_new_session_to_proc(proc_t owner, proc_t to,
-								   uint64_t session_id, proc_t *new_sesLink)
+				   uint64_t session_id, proc_t *new_sesLink)
 {
 	if (alloc_and_init_sessLink(new_sesLink, owner, to, session_id))
 		return 1;
 
 	if (h_table_insert(owner->content.process.links,
-					   (unsigned char *)&session_id, sizeof(uint64_t), *new_sesLink)) {
+			   (unsigned char *)&session_id, sizeof(uint64_t), *new_sesLink)) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		return 1;
 	}
@@ -474,7 +475,7 @@ static void open_session_query(struct manager_msg *man_msg)
 	open_msg->msg_hdr.sess_id = new_session_id;
 
 	/* Launch new TA, if needed */
-	if (launch_and_init_ta(man_msg, &open_msg->uuid, &new_ta, conn_ta))
+	if (launch_and_init_ta(man_msg, &open_msg->uuid, &new_ta, &conn_ta))
 		return; /* Err msg logged and send to sender */
 
 	/* If new_ta is NULL, should connect existing TA (conn_ta is not NULL)
@@ -527,7 +528,7 @@ static void open_session_msg(struct manager_msg *man_msg)
 	/* Function is only valid for proc FDs */
 	if (man_msg->proc->p_type == proc_t_link ||
 	    man_msg->proc->content.process.status != proc_initialized) {
-		OT_LOG(LOG_ERR, "Invalid sender or senders status")
+		OT_LOG(LOG_ERR, "Invalid sender or senders status");
 		goto discard_msg;
 	}
 
@@ -564,7 +565,7 @@ static void invoke_cmd_response(struct manager_msg *man_msg)
 	proc_t session = NULL;
 
 	session = h_table_get(man_msg->proc->content.process.links,
-						  (unsigned char *)(&invoke_resp_msg->session_id), sizeof(uint64_t));
+			      (unsigned char *)(&invoke_resp_msg->session_id), sizeof(uint64_t));
 	if (!session) {
 		OT_LOG(LOG_ERR, "Session is not found");
 		goto ignore_msg;
@@ -620,7 +621,7 @@ static void ca_finalize_context(struct manager_msg *man_msg)
 
 	/* Valid init message */
 	if (fin_con_msg->msg_hdr.msg_name != COM_MSG_NAME_CA_FINALIZ_CONTEXT ||
-		fin_con_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
+	    fin_con_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
 		OT_LOG(LOG_ERR, "Parsing wrong message, ignore msg");
 		goto ignore_msg;
 	}
@@ -650,7 +651,7 @@ static bool active_sess_in_ta(proc_t ta_proc)
 
 		/* Initialized means that there might be an open session message out */
 		if (sess->content.sesLink.status == sess_active ||
-				sess->content.sesLink.status == sess_initialized)
+		    sess->content.sesLink.status == sess_initialized)
 			return true;
 	}
 }
@@ -699,7 +700,7 @@ static void close_session(struct manager_msg *man_msg)
 
 	/* Valid open session message */
 	if (close_msg->msg_hdr.msg_name != COM_MSG_NAME_CLOSE_SESSION ||
-		close_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
+	    close_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
 		OT_LOG(LOG_ERR, "Invalid message");
 		goto ignore_msg;
 	}
@@ -725,8 +726,8 @@ static void close_session(struct manager_msg *man_msg)
 	} else {
 		/* Remove sessions, because TA will be not terminated */
 		remove_session_between(man_msg->proc->content.sesLink.owner,
-							   man_msg->proc->content.sesLink.to->content.sesLink.owner,
-							   man_msg->proc->content.sesLink.session_id);
+				       man_msg->proc->content.sesLink.to->content.sesLink.owner,
+				       man_msg->proc->content.sesLink.session_id);
 	}
 
 	man_msg->proc = man_msg->proc->content.sesLink.to->content.sesLink.owner;
@@ -820,7 +821,7 @@ void *logic_thread_mainloop(void *arg)
 	}
 
 	/* should never reach here */
-	OT_LOG(LOG_ERR, "Logic thread is about to exit")
+	OT_LOG(LOG_ERR, "Logic thread is about to exit");
 	exit(EXIT_FAILURE); /* TODO: Replace this function with kill tee gracefully */
 	return NULL;
 }
