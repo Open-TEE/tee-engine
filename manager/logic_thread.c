@@ -16,6 +16,7 @@
 
 #include <pthread.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -636,6 +637,107 @@ ignore_msg:
 	free_manager_msg(man_msg);
 }
 
+static bool active_sess_in_ta(proc_t ta_proc)
+{
+	proc_t sess;
+
+	h_table_init_stepper(ta_proc->content.process.links);
+
+	while(1) {
+		sess = h_table_step(ta_proc->content.process.links);
+		if (!sess)
+			return false;
+
+		/* Initialized means that there might be an open session message out */
+		if (sess->content.sesLink.status == sess_active ||
+				sess->content.sesLink.status == sess_initialized)
+			return true;
+	}
+}
+
+/*!
+ * \brief should_ta_destroy
+ * \param ta_proc
+ * \return If TA should destroy, return 1.
+ * If TA should not destroy, return 0.
+ * In case of error (e.g. TA not found in TA directory), return -1
+ */
+static int should_ta_destroy(proc_t ta_proc)
+{
+	struct trusted_app_propertie *ta_properties;
+	int ret = 0; /* Default action is not to destroy */
+
+	if (ta_dir_watch_lock_mutex())
+		return -1; /* Err logged */
+
+	ta_properties = ta_dir_watch_props(&ta_proc->content.process.ta_uuid);
+	if (!ta_properties) {
+		OT_LOG(LOG_ERR, "TA with requested UUID is not found");
+		ret = -1;
+		goto unlock;
+	}
+
+	/* Keep alive instance is never terminated */
+	if (ta_properties->user_config.instanceKeepAlive) {
+		ret = 0;
+		goto unlock;
+	}
+
+	/* TA might be signleton or multi-instance TA, but if there is no session opens, terminate */
+	if (active_sess_in_ta(ta_proc))
+		ret = 1;
+
+unlock:
+	ta_dir_watch_unlock_mutex();
+
+	return ret;
+}
+
+static void close_session(struct manager_msg *man_msg)
+{
+	struct com_msg_close_session *close_msg = man_msg->msg;
+
+	/* Valid open session message */
+	if (close_msg->msg_hdr.msg_name != COM_MSG_NAME_CLOSE_SESSION ||
+		close_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
+		OT_LOG(LOG_ERR, "Invalid message");
+		goto ignore_msg;
+	}
+
+	if (man_msg->proc->p_type != proc_t_link) {
+		OT_LOG(LOG_ERR, "Invalid sender");
+		goto ignore_msg;
+	}
+
+	/* Update close message */
+	close_msg->should_ta_destroy =
+			should_ta_destroy(man_msg->proc->content.sesLink.to->content.sesLink.owner);
+	if (close_msg->should_ta_destroy == -1) {
+		goto ignore_msg;
+
+	} else if (close_msg->should_ta_destroy == 1) {
+		/* Session is not removed. It will be removed when TA exit */
+		man_msg->proc->content.sesLink.status = sess_closed;
+		man_msg->proc->content.sesLink.to->content.sesLink.status = sess_closed;
+		/* No new open session message to TA */
+		man_msg->proc->content.sesLink.owner->content.process.status = proc_disconnected;
+
+	} else {
+		/* Remove sessions, because TA will be not terminated */
+		remove_session_between(man_msg->proc->content.sesLink.owner,
+							   man_msg->proc->content.sesLink.to->content.sesLink.owner,
+							   man_msg->proc->content.sesLink.session_id);
+	}
+
+	man_msg->proc = man_msg->proc->content.sesLink.to->content.sesLink.owner;
+	add_msg_done_queue_and_notify(man_msg);
+
+	return;
+
+ignore_msg:
+	free_manager_msg(man_msg);
+}
+
 void *logic_thread_mainloop(void *arg)
 {
 	arg = arg; /* ignored */
@@ -703,7 +805,7 @@ void *logic_thread_mainloop(void *arg)
 			break;
 
 		case COM_MSG_NAME_CLOSE_SESSION:
-
+			close_session(handled_msg);
 			break;
 
 		case COM_MSG_NAME_CA_FINALIZ_CONTEXT:
