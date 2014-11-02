@@ -260,7 +260,7 @@ static proc_t get_ta_by_uuid(TEE_UUID *uuid)
 }
 
 static int comm_launcher_to_launch_ta(struct manager_msg *man_msg,
-									  int *new_ta_fd, pid_t *new_ta_pid)
+				      int *new_ta_fd, pid_t *new_ta_pid)
 {
 	struct com_msg_ta_created *recv_created_msg = NULL;
 
@@ -315,13 +315,13 @@ err:
 	return 1;
 }
 
-static int connect_to_ta(struct manager_msg *man_msg, proc_t conn_ta, TEE_UUID *ta_uuid,
+static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID *ta_uuid,
 						 struct trusted_app_propertie *ta_propertie)
 {
 	int ret = 0;
 
-	conn_ta = get_ta_by_uuid(ta_uuid);
-	if (!conn_ta)
+	*conn_ta = get_ta_by_uuid(ta_uuid);
+	if (!*conn_ta)
 		return 0; /* Connect to existing, because ta is not running/loaded */
 
 	if (ta_dir_watch_lock_mutex())
@@ -356,24 +356,24 @@ ret:
 }
 
 static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid,
-				  proc_t *new_ta_proc, proc_t conn_ta)
+			      proc_t *new_ta_proc, proc_t *conn_ta)
 {
 	struct trusted_app_propertie *ta_propertie = NULL;
 	pid_t new_ta_pid = 0; /* Zero for compiler warning */
 
 	/* Init return values */
-	*new_ta_proc = NULL;
-	conn_ta = NULL; /* NULL for compiler warning */
+	*new_ta_proc = (proc_t)malloc(sizeof(struct __proc));
+	*conn_ta = NULL; /* NULL for compiler warning */
 
 	if (connect_to_ta(man_msg, conn_ta, ta_uuid, ta_propertie))
 		return 1; /* Err logged and send */
 
-	if (conn_ta)
+	if (*conn_ta)
 		return 0; /* Connect to existing TA */
 
 	/* Launch new TA */
 	if (comm_launcher_to_launch_ta(man_msg, &((*new_ta_proc)->sockfd),
-								   &((*new_ta_proc)->content.process.pid)))
+				       &((*new_ta_proc)->content.process.pid)))
 		return 1; /* Err logged and send */
 
 	/* Note: TA is launched and its init process is on going now on its own proc */
@@ -404,7 +404,7 @@ err_2:
 	*new_ta_proc = NULL;
 err_1:
 	kill(new_ta_pid, SIGKILL);
-	conn_ta = NULL;
+	*conn_ta = NULL;
 	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 	return 1;
 }
@@ -474,7 +474,7 @@ static void open_session_query(struct manager_msg *man_msg)
 	open_msg->msg_hdr.sess_id = new_session_id;
 
 	/* Launch new TA, if needed */
-	if (launch_and_init_ta(man_msg, &open_msg->uuid, &new_ta, conn_ta))
+	if (launch_and_init_ta(man_msg, &open_msg->uuid, &new_ta, &conn_ta))
 		return; /* Err msg logged and send to sender */
 
 	/* If new_ta is NULL, should connect existing TA (conn_ta is not NULL)
