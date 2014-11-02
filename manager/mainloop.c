@@ -23,7 +23,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include "core_extern_resources.h"
+#include "core_control_resources.h"
 #include "epoll_wrapper.h"
 #include "extern_resources.h"
 #include "io_thread.h"
@@ -113,11 +113,12 @@ static int init_sock(int *pub_sockfd)
 	return 0;
 }
 
-static void manager_check_signal()
+static void manager_check_signal(struct core_control *control_params, struct epoll_event *event)
 {
 	/* Placeholder */
-	sig_atomic_t cpy_sig_vec = sig_vector;
-	reset_signal_self_pipe();
+	sig_atomic_t cpy_sig_vec = control_params->sig_vector;
+	control_params->reset_signal_self_pipe();
+	event = event;
 
 	cpy_sig_vec = cpy_sig_vec; /* Suppress compiler warning */
 }
@@ -167,7 +168,7 @@ err_1:
 	return 1;
 }
 
-int lib_main_loop(int sockpair_fd)
+int lib_main_loop(struct core_control *control_params)
 {
 	int public_sockfd, i, event_count, event_ta_dir_watch_fd;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
@@ -175,7 +176,7 @@ int lib_main_loop(int sockpair_fd)
 	pthread_attr_t attr;
 	sigset_t sig_empty_set;
 
-	if (init_extern_res(sockpair_fd))
+	if (init_extern_res(control_params->comm_sock_fd))
 		return -1; /* err msg logged */
 
 	if (sigemptyset(&sig_empty_set)) {
@@ -186,7 +187,7 @@ int lib_main_loop(int sockpair_fd)
 	if (init_epoll())
 		return -1; /* err msg logged */
 
-	if (ta_dir_watch_init(&event_ta_dir_watch_fd))
+	if (ta_dir_watch_init(control_params, &event_ta_dir_watch_fd))
 		return -1; /* err msg logged */
 
 	if (init_sock(&public_sockfd))
@@ -201,7 +202,7 @@ int lib_main_loop(int sockpair_fd)
 		return -1; /* err msg logged */
 
 	/* Singnal handling */
-	if (epoll_reg_fd(self_pipe_fd, EPOLLIN))
+	if (epoll_reg_fd(control_params->self_pipe_fd, EPOLLIN))
 		return -1; /* err msg logged */
 
 	/* Init logic thread */
@@ -236,7 +237,7 @@ int lib_main_loop(int sockpair_fd)
 		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);
 		if (event_count == -1) {
 			if (errno == EINTR) {
-				manager_check_signal();
+				manager_check_signal(control_params, NULL);
 				continue;
 			}
 
@@ -253,8 +254,8 @@ int lib_main_loop(int sockpair_fd)
 			} else if (cur_events[i].data.fd == event_done_queue_fd) {
 				handle_done_queue(&cur_events[i]);
 
-			} else if (cur_events[i].data.fd == self_pipe_fd) {
-				manager_check_signal(&cur_events[i]);
+			} else if (cur_events[i].data.fd == control_params->self_pipe_fd) {
+				manager_check_signal(control_params, &cur_events[i]);
 
 			} else if(cur_events[i].data.fd == event_close_sock) {
 

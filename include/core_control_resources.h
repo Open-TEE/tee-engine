@@ -14,8 +14,8 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __CORE_EXTERN_RESOURCES_H__
-#define __CORE_EXTERN_RESOURCES_H__
+#ifndef __CORE_CONTROL_RESOURCES_H__
+#define __CORE_CONTROL_RESOURCES_H__
 
 #include <signal.h>
 #include <unistd.h>
@@ -26,12 +26,19 @@
 #define TEE_SIG_TERM		0x00000002
 #define TEE_SIG_HUP		0x00000004
 
-extern volatile sig_atomic_t sig_vector;
-extern char *argv0;
-extern int argv0_len;
-extern pid_t launcher_pid;
-extern int self_pipe_fd;
-extern struct emulator_config *opentee_conf;
-extern void reset_signal_self_pipe();
+/*!
+ * \brief The core_control struct
+ * A structure that defines many states that are shared between the core, launcher and manager
+ */
+struct core_control {
+	volatile sig_atomic_t sig_vector;
+	char *argv0;
+	int argv0_len;
+	pid_t launcher_pid;
+	int self_pipe_fd;
+	struct emulator_config *opentee_conf;
+	void (*reset_signal_self_pipe)(void);
+	int comm_sock_fd;
+};
 
-#endif /* __CORE_EXTERN_RESOURCES_H__ */
+#endif /* __CORE_CONTROL_RESOURCES_H__ */

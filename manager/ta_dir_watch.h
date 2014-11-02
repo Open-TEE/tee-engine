@@ -29,6 +29,7 @@
 
 #include "epoll_wrapper.h"
 #include "tee_ta_properties.h"
+#include "core_control_resources.h"
 
 #define TA_MAX_FILE_NAME 255
 
@@ -43,10 +44,11 @@ struct trusted_app_propertie {
 /*!
  * \brief ta_dir_watch_init
  * Initializes structeres and register structures
+ * \param control_params Paramaters that control the core process
  * \param man_ta_dir_watch_fd Returns fd, which will be written if file system operation occured
  * \return On success 0
  */
-int ta_dir_watch_init(int *man_ta_dir_watch_fd);
+int ta_dir_watch_init(struct core_control *control_params, int *man_ta_dir_watch_fd);
 
 /*!
  * \brief ta_dir_watch_cleanup

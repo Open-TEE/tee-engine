@@ -28,7 +28,7 @@
 #include <unistd.h>
 
 #include "conf_parser.h"
-#include "core_extern_resources.h"
+#include "core_control_resources.h"
 #include "elf_read.h"
 #include "epoll_wrapper.h"
 #include "h_table.h"
@@ -37,6 +37,7 @@
 #include "tee_logging.h"
 
 static const char *seek_section_name = PROPERTY_SEC_NAME;
+struct core_control *control_params;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static HASHTABLE ta_dir_table;
 static int inotify_fd;
@@ -82,7 +83,8 @@ static void add_new_ta(char *name)
 		return;
 	}
 
-	if (asprintf(&ta_with_path, "%s/%s", opentee_conf->ta_dir_path, name) == -1) {
+	if (asprintf(&ta_with_path, "%s/%s",
+		     control_params->opentee_conf->ta_dir_path, name) == -1) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		goto err;
 	}
@@ -163,7 +165,7 @@ static void read_ta_dir()
 	DIR *ta_dir = NULL;
 	struct dirent *ta_dir_entry = NULL;
 
-	ta_dir = opendir(opentee_conf->ta_dir_path);
+	ta_dir = opendir(control_params->opentee_conf->ta_dir_path);
 	if (!ta_dir)	{
 		OT_LOG(LOG_ERR, "Can not open ta folder");
 		return;
@@ -188,7 +190,8 @@ static int init_notifys()
 		return -1;
 	}
 
-	inotify_wd = inotify_add_watch(inotify_fd, opentee_conf->ta_dir_path, inotify_flags);
+	inotify_wd = inotify_add_watch(inotify_fd, control_params->opentee_conf->ta_dir_path,
+				       inotify_flags);
 	if (inotify_wd == -1) {
 		if (errno == ENOENT) {
 			OT_LOG(LOG_ERR, "Invalid TA folder path");
@@ -289,9 +292,10 @@ reinit_ta_properties:
 	}
 }
 
-int ta_dir_watch_init(int *man_ta_dir_watch_fd)
+int ta_dir_watch_init(struct core_control *c_params, int *man_ta_dir_watch_fd)
 {
 	ta_dir_table = NULL;
+	control_params = c_params;
 
 	h_table_create(&ta_dir_table, ESTIMATE_COUNT_OF_TAS);
 	if (!ta_dir_table) {

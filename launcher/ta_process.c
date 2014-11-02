@@ -14,15 +14,19 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
+#define _GNU_SOURCE
+
 #include <errno.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/eventfd.h>
 #include <sys/prctl.h>
+#include <stdio.h>
 
 #include "com_protocol.h"
-#include "core_extern_resources.h"
+#include "conf_parser.h"
+#include "core_control_resources.h"
 #include "dynamic_loader.h"
 #include "epoll_wrapper.h"
 #include "ta_extern_resources.h"
@@ -51,7 +55,8 @@ struct ta_task tasks_done;
 /* Maximum epoll events */
 #define MAX_CURR_EVENTS 5
 
-int ta_process_loop(int man_sockfd, struct com_msg_open_session *open_msg)
+int ta_process_loop(struct core_control *control_params, int man_sockfd,
+		    struct com_msg_open_session *open_msg)
 {
 	int ret;
 	pthread_t ta_logic_thread;
@@ -60,18 +65,28 @@ int ta_process_loop(int man_sockfd, struct com_msg_open_session *open_msg)
 	int event_count, i;
 	char proc_name[MAX_PR_NAME]; /* For now */
 	sigset_t sig_empty_set;
+	char *path = NULL;
 
 	/* Set new ta process name */
 	strncpy(proc_name, open_msg->ta_so_name, MAX_PR_NAME);
 	prctl(PR_SET_NAME, (unsigned long)proc_name);
-	strncpy(argv0, proc_name, argv0_len);
+	strncpy(control_params->argv0, proc_name, control_params->argv0_len);
+
+	if (asprintf(&path, "%s/%s", control_params->opentee_conf->ta_dir_path,
+		     open_msg->ta_so_name) == -1) {
+		OT_LOG(LOG_ERR, "out of memory");
+		exit(EXIT_FAILURE);
+	}
 
 	/* Load TA to this process */
-	ret = load_ta(open_msg->ta_so_name, &interface);
+	ret = load_ta(path, &interface);
 	if (ret != TEE_SUCCESS || interface == NULL) {
 		OT_LOG(LOG_ERR, "Failed to load the TA");
 		exit(EXIT_FAILURE);
 	}
+
+	/* Finished with the library path name so clean it up */
+	free(path);
 
 	/* Note: All signal are blocked. Prepare allow set when we can accept signals */
 	if (sigemptyset(&sig_empty_set)) {
@@ -106,7 +121,7 @@ int ta_process_loop(int man_sockfd, struct com_msg_open_session *open_msg)
 		exit(EXIT_FAILURE);
 
 	/* Signal handling */
-	if (epoll_reg_fd(self_pipe_fd, EPOLLIN))
+	if (epoll_reg_fd(control_params->self_pipe_fd, EPOLLIN))
 		exit(EXIT_FAILURE);
 
 	/* Init worker thread */
@@ -170,8 +185,7 @@ int ta_process_loop(int man_sockfd, struct com_msg_open_session *open_msg)
 			} else if (cur_events[i].data.fd == event_fd) {
 				reply_to_manager(&cur_events[i], man_sockfd);
 
-			} else if (cur_events[i].data.fd == self_pipe_fd) {
-
+			} else if (cur_events[i].data.fd == control_params->self_pipe_fd) {
 
 			} else {
 				OT_LOG(LOG_ERR, "unknown event source");

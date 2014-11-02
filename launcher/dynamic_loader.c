@@ -14,38 +14,28 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#define _GNU_SOURCE
-
 #include "dynamic_loader.h"
 #include "conf_parser.h"
-#include "core_extern_resources.h"
+#include "core_control_resources.h"
 #include "tee_logging.h"
 
 #include <dlfcn.h>
 #include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 
-TEE_Result load_ta(const char *ta_so_name, struct ta_interface **callbacks)
+TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 {
 	struct ta_interface tmp_cb;
 	char *err = NULL;
-	char *path = NULL;
 
 	memset((void *)&tmp_cb, 0, sizeof(struct ta_interface));
 	*callbacks = NULL;
-
-	if (asprintf(&path, "%s%s", opentee_conf->ta_dir_path, ta_so_name) == -1) {
-		OT_LOG(LOG_ERR, "out of memory");
-		return TEE_ERROR_GENERIC;
-	}
 
 	dlerror();
 
 	tmp_cb.library = dlopen(path, RTLD_LAZY);
 	if (!tmp_cb.library) {
 		OT_LOG(LOG_DEBUG, "Failed to load library : %s : %s", path, dlerror());
-		free(path);
 		return TEE_ERROR_GENERIC;
 	}
 
@@ -97,7 +87,6 @@ TEE_Result load_ta(const char *ta_so_name, struct ta_interface **callbacks)
 	memcpy(*callbacks, (void *)&tmp_cb, sizeof(struct ta_interface));
 
 err_cleanup:
-	free(path);
 
 	if (err || !*callbacks) {
 		if (tmp_cb.destroy)

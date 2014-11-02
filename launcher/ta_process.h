@@ -18,14 +18,17 @@
 #define __TEE_TA_PROCESS_H__
 
 #include "com_protocol.h"
+#include "core_control_resources.h"
 
 /*!
  * \brief ta_process_loop
  * The main loop of the TA process. Ta_process_loop function is TA execution entry function
+ * \param control_params The control paramters that are used to manage the core processes
  * \param man_sockfd The socket on which to communicate with the manager
  * \param open_msg Open session message from CA or TA
  * \return should never return
  */
-int ta_process_loop(int man_sockfd, struct com_msg_open_session *open_msg);
+int ta_process_loop(struct core_control *control_params, int man_sockfd,
+		    struct com_msg_open_session *open_msg);
 
 #endif

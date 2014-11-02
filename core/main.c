@@ -29,22 +29,10 @@
 
 #include "subprocess.h"
 #include "conf_parser.h"
-#include "core_extern_resources.h"
+#include "core_control_resources.h"
 #include "tee_logging.h"
 
-/* Used for process signal handle */
-int self_pipe_fd;
-volatile sig_atomic_t sig_vector;
-
-/* Changing process name (TA) */
-char *argv0;
-int argv0_len;
-
-/* Monitoring TEE status */
-pid_t launcher_pid;
-
-/* Opentee configuration */
-struct emulator_config *opentee_conf;
+static struct core_control control_params;
 
 static void sig_handler(int sig)
 {
@@ -52,17 +40,17 @@ static void sig_handler(int sig)
 
 	switch (sig) {
 	case SIGCHLD:
-		sig_vector |= TEE_SIG_CHILD;
+		control_params.sig_vector |= TEE_SIG_CHILD;
 		break;
 
 	case SIGHUP:
 		/* restart the daemon */
-		sig_vector |= TEE_SIG_HUP;
+		control_params.sig_vector |= TEE_SIG_HUP;
 		break;
 
 	case SIGTERM:
 		/* terminate the app, so clean up */
-		sig_vector |= TEE_SIG_TERM;
+		control_params.sig_vector |= TEE_SIG_TERM;
 		break;
 
 	case SIGPIPE:
@@ -70,21 +58,21 @@ static void sig_handler(int sig)
 		break;
 	}
 
-	if (write(self_pipe_fd, &event, sizeof(uint64_t)) == -1) {
+	if (write(control_params.self_pipe_fd, &event, sizeof(uint64_t)) == -1) {
 		OT_LOG(LOG_ERR, "write error");
 		/* Lets hope that the error clear it self :S */
 	}
 
 }
 
-void reset_signal_self_pipe()
+static void reset_signal_self_pipe()
 {
 	uint64_t event;
 
-	if (read(self_pipe_fd, &event, sizeof(uint64_t)) == -1) {
+	if (read(control_params.self_pipe_fd, &event, sizeof(uint64_t)) == -1) {
 		/* EAGAIN == fd is zero and because it is set as non blocking, it returns EAGAIN */
 		if (errno != EAGAIN) {
-			OT_LOG(LOG_ERR, "Failed to reset self_pipe_fd\n");
+			OT_LOG(LOG_ERR, "Failed to reset control_params.self_pipe_fd\n");
 			/* TODO: See what is causing it! */
 		}
 	}
@@ -176,7 +164,6 @@ int main(int argc, char **argv)
 	struct sigaction sig_act;
 	int sockfd[2];
 	char *lib_to_load = NULL;
-	int comm_sock_fd;
 	main_loop_cb main_loop;
 	char proc_name[MAX_PR_NAME];
 	int cmd_name_len = strnlen(argv[0], MAX_PR_NAME);
@@ -214,33 +201,34 @@ int main(int argc, char **argv)
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1)
 		exit(1);
 
-	if (config_parser_get_config(&opentee_conf) == -1)
+	if (config_parser_get_config(&control_params.opentee_conf) == -1)
 		exit(1);
 
-	self_pipe_fd = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
-	if (self_pipe_fd == -1)
+	control_params.self_pipe_fd = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
+	if (control_params.self_pipe_fd == -1)
 		exit(1);
 
-	argv0 = argv[0];
-	argv0_len = cmd_name_len;
+	control_params.argv0 = argv[0];
+	control_params.argv0_len = cmd_name_len;
+	control_params.reset_signal_self_pipe = reset_signal_self_pipe;
 
 	/* fork now to create the manager and launcher subprocesses */
-	launcher_pid = fork();
-	if (launcher_pid == -1) {
+	control_params.launcher_pid = fork();
+	if (control_params.launcher_pid == -1) {
 		/* failed to fork */
 		return -1;
-	} else if (launcher_pid == 0) {
+	} else if (control_params.launcher_pid == 0) {
 		/* child process will become the launcher*/
 		close(sockfd[0]);
-		comm_sock_fd = sockfd[1];
-		lib_to_load = opentee_conf->subprocess_launcher;
+		control_params.comm_sock_fd = sockfd[1];
+		lib_to_load = control_params.opentee_conf->subprocess_launcher;
 		strncpy(proc_name, "tee_launcher", MAX_PR_NAME);
 		prctl(PR_SET_PDEATHSIG, SIGTERM);
 	} else {
 		/* parent process will become the manager */
 		close(sockfd[1]);
-		comm_sock_fd = sockfd[0];
-		lib_to_load = opentee_conf->subprocess_manager;
+		control_params.comm_sock_fd = sockfd[0];
+		lib_to_load = control_params.opentee_conf->subprocess_manager;
 		strncpy(proc_name, "tee_manager", MAX_PR_NAME);
 	}
 
@@ -258,7 +246,7 @@ int main(int argc, char **argv)
 
 	/* Enter into the main part of the resepctive programs, manager or launcher
 	 * in a proper situation this function should never return */
-	if (main_loop(comm_sock_fd))
+	if (main_loop(&control_params))
 		exit(2);
 
 	exit(0);
