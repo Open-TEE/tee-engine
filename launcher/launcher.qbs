@@ -24,8 +24,7 @@ DynamicLibrary {
     ]
 
     files: [
-        "../core/core_extern_resources.h",
-        "../core/main.c",
+        "../include/core_control_resources.h",
         "dynamic_loader.h",
         "dynamic_loader.c",
         "launcher_mainloop.c",

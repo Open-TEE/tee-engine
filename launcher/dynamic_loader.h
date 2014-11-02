@@ -40,7 +40,7 @@ struct ta_interface {
  * be populated with the entry points into the applet and the create callback will have been called
  * to initialize the TA.  This function will create the memory for the callback struct which must
  * be freed by a call to \sa unload_ta when it is no longer required.
- * \param path The loaded TA so name
+ * \param ta_so_name The TA file to load
  * \param callbacks The structure that is to be created and populated with the entry points to the
  * TA
  * \return TEE_SUCCESS on success, or another value to indicate any errors.

@@ -24,7 +24,7 @@ CppApplication {
     cpp.linkerFlags: "-rdynamic"
 
     files: [
-        "core_extern_resources.h",
+        "../include/core_control_resources.h",
         "main.c",
     ]
 }

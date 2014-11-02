@@ -17,16 +17,16 @@
 #ifndef __TEE_SUBPROCESS_H__
 #define __TEE_SUBPROCESS_H__
 
-typedef void (*sig_status_cb)(void);
+#include "core_control_resources.h"
 
-typedef int (*main_loop_cb)(int sockpair_fd);
+typedef int (*main_loop_cb)(struct core_control *control_paramaters);
 
 /*!
  * \brief lib_main_loop
  * This is the main processing loop of the library that is being loaded.
- * \param sockpair_fd The socket handle that is used to communicate between manager and launcher
+ * \param control_paramaters Paramaters that define the running of the core processes
  * \return This function should never return unless a major error occurs, and then -1.
  */
-int lib_main_loop(int sockpair_fd);
+int lib_main_loop(struct core_control *control_paramaters);
 
 #endif
