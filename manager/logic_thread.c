@@ -464,6 +464,71 @@ discard_msg:
 	free_manager_msg(man_msg);
 }
 
+static void invoke_cmd_query(struct manager_msg *man_msg)
+{
+	((struct com_msg_invoke_cmd *) man_msg->msg)->session_id =
+			man_msg->proc->content.sesLink.session_id;
+
+	man_msg->proc = man_msg->proc->content.sesLink.to->content.sesLink.owner;
+	add_msg_done_queue_and_notify(man_msg);
+}
+
+static void invoke_cmd_response(struct manager_msg *man_msg)
+{
+	struct com_msg_invoke_cmd *invoke_resp_msg = man_msg->msg;
+	proc_t session = NULL;
+
+	session = h_table_get(man_msg->proc->content.process.links,
+						  (unsigned char *)(&invoke_resp_msg->session_id), sizeof(uint64_t));
+	if (!session) {
+		OT_LOG(LOG_ERR, "Session is not found");
+		goto ignore_msg;
+	}
+
+	man_msg->proc = session->content.sesLink.to;
+	add_msg_done_queue_and_notify(man_msg);
+
+	return;
+
+ignore_msg:
+	free_manager_msg(man_msg);
+}
+
+static void invoke_cmd(struct manager_msg *man_msg)
+{
+	struct com_msg_invoke_cmd *invoke_msg = man_msg->msg;
+
+	/* Session link can only be sender */
+	if (man_msg->proc->p_type != proc_t_link) {
+		OT_LOG(LOG_ERR, "Invalid sender");
+		goto ignore_msg;
+	}
+
+	/* Valid open session message */
+	if (invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_CMD) {
+		OT_LOG(LOG_ERR, "Invalid message");
+		goto ignore_msg;
+	}
+
+	/* TODO: Panic handling. Here should be logic, which checks session status! */
+
+	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
+		invoke_cmd_query(man_msg);
+
+	} else if (invoke_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE) {
+		invoke_cmd_response(man_msg);
+
+	} else {
+		OT_LOG(LOG_ERR, "Unkwon msg type");
+		goto ignore_msg;
+	}
+
+	return;
+
+ignore_msg:
+	free_manager_msg(man_msg);
+}
+
 void *logic_thread_mainloop(void *arg)
 {
 	arg = arg; /* ignored */
@@ -527,7 +592,7 @@ void *logic_thread_mainloop(void *arg)
 			break;
 
 		case COM_MSG_NAME_INVOKE_CMD:
-
+			invoke_cmd(handled_msg);
 			break;
 
 		case COM_MSG_NAME_CLOSE_SESSION:
