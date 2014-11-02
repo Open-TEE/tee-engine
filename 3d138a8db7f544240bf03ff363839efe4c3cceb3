@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a6b29fe_09d0594f",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 621,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-02T19:45:23Z",
+      "side": 1,
+      "message": "INIT context ? or Finalize context",
+      "range": {
+        "startLine": 621,
+        "startChar": 38,
+        "endLine": 621,
+        "endChar": 66
+      },
+      "revId": "3d138a8db7f544240bf03ff363839efe4c3cceb3",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
