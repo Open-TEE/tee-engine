@@ -48,6 +48,30 @@
     },
     {
       "key": {
+        "uuid": "7a6b29fe_f4d33436",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 115,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-03T19:41:23Z",
+      "side": 1,
+      "message": "There might be more than one session in TA/CA. This loop is going through all session in process. H_table stepper return NULL when it is reached end.",
+      "parentUuid": "7a6b29fe_3442cc10",
+      "range": {
+        "startLine": 115,
+        "startChar": 0,
+        "endLine": 115,
+        "endChar": 3
+      },
+      "revId": "dab37877b767dd1109878ebd8d00cf0ab77168e6",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "7a6b29fe_744ba42b",
         "filename": "manager/logic_thread.c",
         "patchSetId": 3
