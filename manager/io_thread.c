@@ -370,3 +370,36 @@ err:
 	send_err_msg(event->data.ptr, TEE_ERROR_GENERIC, TEE_ORIGIN_TEE);
 	free_manager_msg(new_man_msg);
 }
+
+void handle_close_sock(struct epoll_event *event)
+{
+	struct sock_to_close *fd_to_close = NULL;
+	struct list_head *pos;
+	uint64_t close_event;
+
+	if (check_event_fd_epoll_status(event))
+		return; /* err msg logged */
+
+	/* Read all events */
+	if (read(event_close_sock, &close_event, sizeof(uint64_t)) == -1) {
+		OT_LOG(LOG_ERR, "Failed to reset eventfd");
+		io_fd_err(errno, event_close_sock);
+	}
+
+	/* Lock task queue from logic thread */
+	if (pthread_mutex_lock(&socks_to_close_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return;
+	}
+
+	if (!list_is_empty(&socks_to_close.list)) {
+
+		LIST_FOR_EACH(pos, &socks_to_close.list) {
+			fd_to_close = LIST_ENTRY(pos, struct sock_to_close, list);
+			close(fd_to_close->sockfd);
+			free(fd_to_close);
+		}
+	}
+	if (pthread_mutex_unlock(&socks_to_close_mutex))
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+}

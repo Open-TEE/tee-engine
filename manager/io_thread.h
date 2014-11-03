@@ -50,4 +50,11 @@ void handle_public_fd(struct epoll_event *event);
  */
 void read_fd_and_add_todo_queue(struct epoll_event *event);
 
+/*!
+ * \brief handle_close_sock
+ * Closes a socket, which is used by logic thread
+ * \param event
+ */
+void handle_close_sock(struct epoll_event *event);
+
 #endif /* __IO_THREAD__ */
