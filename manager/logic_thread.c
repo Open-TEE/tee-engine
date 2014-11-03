@@ -180,14 +180,14 @@ static void open_session_response(struct manager_msg *man_msg)
 			goto err_1;
 		}
 
-		/* Reg CA session socket */
-		if (epoll_reg_data(sockfd[0], EPOLLIN, ta_session->content.sesLink.to))
-			goto err_2; /* Err msg logged */
-
 		ta_session->content.sesLink.to->content.sesLink.sockfd = sockfd[0];
 		ta_session->content.sesLink.status = sess_active;
 		ta_session->content.sesLink.to->content.sesLink.status = sess_active;
 		open_resp_msg->sess_fd_to_caller = sockfd[1];
+
+		/* Reg CA session socket */
+		if (epoll_reg_data(sockfd[0], EPOLLIN, ta_session->content.sesLink.to))
+			goto err_2; /* Err msg logged */
 	}
 
 	/* Send message to its initial sender
@@ -322,8 +322,8 @@ static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID 
 	int ret = 0;
 
 	*conn_ta = get_ta_by_uuid(ta_uuid);
-	if (!*conn_ta)
-		return 0; /* Connect to existing, because ta is not running/loaded */
+	if (*conn_ta)
+		return 0; /* Connect to existing, because ta is running/loaded */
 
 	if (ta_dir_watch_lock_mutex())
 		return 1; /* Err msg logged */
@@ -337,7 +337,7 @@ static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID 
 		goto ret;
 	}
 
-	memcpy(((struct com_msg_open_session *) man_msg->msg)->ta_so_name,
+	memcpy(&((struct com_msg_open_session *) man_msg->msg)->ta_so_name,
 	       ta_propertie->ta_so_name, TA_MAX_FILE_NAME);
 
 	if (ta_propertie->user_config.singletonInstance) {
@@ -372,16 +372,21 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid,
 	if (*conn_ta)
 		return 0; /* Connect to existing TA */
 
+	/* Connection to new TA -> TA will be created */
+	if (create_uninitialized_ta_proc(new_ta_proc, ta_uuid)) {
+		/* Err logged and just send err to sender*/
+		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+		return 1;
+	}
+
 	/* Launch new TA */
-	if (comm_launcher_to_launch_ta(man_msg, &((*new_ta_proc)->sockfd),
-				       &((*new_ta_proc)->content.process.pid)))
+	if (comm_launcher_to_launch_ta(man_msg, &(((*new_ta_proc)->sockfd)),
+				       &((*new_ta_proc)->content.process.pid))) {
+		free(*new_ta_proc);
 		return 1; /* Err logged and send */
+	}
 
 	/* Note: TA is launched and its init process is on going now on its own proc */
-
-	/* Init TA data to manager */
-	if (create_uninitialized_ta_proc(new_ta_proc, ta_uuid))
-		goto err_1; /* Err logged */
 
 	if (epoll_reg_data((*new_ta_proc)->sockfd, EPOLLIN, *new_ta_proc)) {
 		OT_LOG(LOG_ERR, "Epoll reg error");
@@ -401,12 +406,13 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid,
 
 err_2:
 	epoll_unreg((*new_ta_proc)->sockfd);
-	free_proc(*new_ta_proc);
-	*new_ta_proc = NULL;
 err_1:
 	kill(new_ta_pid, SIGKILL);
+	free_proc(*new_ta_proc);
 	*conn_ta = NULL;
+	*new_ta_proc = NULL;
 	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+
 	return 1;
 }
 

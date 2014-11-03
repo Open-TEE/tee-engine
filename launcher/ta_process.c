@@ -72,7 +72,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	prctl(PR_SET_NAME, (unsigned long)proc_name);
 	strncpy(control_params->argv0, proc_name, control_params->argv0_len);
 
-	if (asprintf(&path, "%s/%s", control_params->opentee_conf->ta_dir_path,
+	if (asprintf(&path, "%s%s", control_params->opentee_conf->ta_dir_path,
 		     open_msg->ta_so_name) == -1) {
 		OT_LOG(LOG_ERR, "out of memory");
 		exit(EXIT_FAILURE);

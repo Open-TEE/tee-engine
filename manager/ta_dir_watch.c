@@ -83,7 +83,7 @@ static void add_new_ta(char *name)
 		return;
 	}
 
-	if (asprintf(&ta_with_path, "%s/%s",
+	if (asprintf(&ta_with_path, "%s%s",
 		     control_params->opentee_conf->ta_dir_path, name) == -1) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		goto err;
