@@ -109,6 +109,7 @@ int config_parser_get_config(struct emulator_config **conf)
 	return 0;
 
 err_out:
+	OT_LOG(LOG_ERR, "Failed to read the config paramaters");
 	free(tmp_conf);
 	conf = NULL;
 	return -1;
