@@ -72,7 +72,7 @@ TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buf, size_t s
 	}
 
 	fclose(fd);
-	free (line);
+	free(line);
 
 	return (mem_perms == accessFlags) ? TEEC_SUCCESS : TEEC_ERROR_ACCESS_DENIED;
 }
@@ -93,7 +93,7 @@ void *TEE_Malloc(size_t size, uint32_t hint)
 	return calloc(size, sizeof(uint8_t));
 }
 
-void *TEE_Realloc(void *buffer, uint32_t newSize) //TODO HMM the newSize should be size_t
+void *TEE_Realloc(void *buffer, uint32_t newSize) // TODO HMM the newSize should be size_t
 {
 	return realloc(buffer, newSize);
 }

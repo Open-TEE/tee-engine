@@ -20,11 +20,14 @@
 #include <signal.h>
 #include <unistd.h>
 
+/* clang-format off */
 #define MAX_PR_NAME		16
 
 #define TEE_SIG_CHILD		0x00000001
 #define TEE_SIG_TERM		0x00000002
 #define TEE_SIG_HUP		0x00000004
+
+/* clang-format on */
 
 /*!
  * \brief The core_control struct

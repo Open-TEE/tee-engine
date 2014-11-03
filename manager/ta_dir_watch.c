@@ -42,8 +42,8 @@ static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static HASHTABLE ta_dir_table;
 static int inotify_fd;
 static int inotify_wd;
-static uint32_t inotify_flags = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE |
-				IN_MOVED_FROM | IN_MOVED_TO;
+static uint32_t inotify_flags =
+    IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO;
 #define BUF_LEN (10 * (sizeof(struct inotify_event) + NAME_MAX + 1))
 #define ESTIMATE_COUNT_OF_TAS 40
 
@@ -64,7 +64,8 @@ static void remove_all_tas()
 		if (!ta)
 			break;
 
-		h_table_remove(ta_dir_table, (unsigned char *)&ta->user_config.appID, sizeof(TEE_UUID));
+		h_table_remove(ta_dir_table, (unsigned char *)&ta->user_config.appID,
+			       sizeof(TEE_UUID));
 		free(ta);
 		ta = NULL;
 	}
@@ -89,14 +90,14 @@ static void add_new_ta(char *name)
 		goto err;
 	}
 
-	new_ta_propertie  = calloc(1, sizeof(struct trusted_app_propertie));
+	new_ta_propertie = calloc(1, sizeof(struct trusted_app_propertie));
 	if (!new_ta_propertie) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		goto err;
 	}
 
-	if (get_data_from_elf(ta_with_path, seek_section_name,
-			      &new_ta_propertie->user_config, &ta_user_config_size)) {
+	if (get_data_from_elf(ta_with_path, seek_section_name, &new_ta_propertie->user_config,
+			      &ta_user_config_size)) {
 		OT_LOG(LOG_ERR, "TA properties section is not found");
 		goto err;
 	}
@@ -151,7 +152,8 @@ static void delete_ta(char *name)
 			continue;
 
 		/* Found */
-		h_table_remove(ta_dir_table, (unsigned char *)&ta->user_config.appID, sizeof(TEE_UUID));
+		h_table_remove(ta_dir_table, (unsigned char *)&ta->user_config.appID,
+			       sizeof(TEE_UUID));
 		free(ta);
 		ta = NULL;
 		break;
@@ -166,7 +168,7 @@ static void read_ta_dir()
 	struct dirent *ta_dir_entry = NULL;
 
 	ta_dir = opendir(control_params->opentee_conf->ta_dir_path);
-	if (!ta_dir)	{
+	if (!ta_dir) {
 		OT_LOG(LOG_ERR, "Can not open ta folder");
 		return;
 	}
@@ -190,8 +192,8 @@ static int init_notifys()
 		return -1;
 	}
 
-	inotify_wd = inotify_add_watch(inotify_fd, control_params->opentee_conf->ta_dir_path,
-				       inotify_flags);
+	inotify_wd =
+	    inotify_add_watch(inotify_fd, control_params->opentee_conf->ta_dir_path, inotify_flags);
 	if (inotify_wd == -1) {
 		if (errno == ENOENT) {
 			OT_LOG(LOG_ERR, "Invalid TA folder path");
@@ -311,7 +313,7 @@ int ta_dir_watch_init(struct core_control *c_params, int *man_ta_dir_watch_fd)
 	if (man_ta_dir_watch_fd)
 		*man_ta_dir_watch_fd = inotify_fd;
 
-	return	0;
+	return 0;
 
 err:
 	h_table_free(ta_dir_table);
@@ -325,6 +327,7 @@ void ta_dir_watch_cleanup()
 	close(inotify_fd);
 	remove_all_tas();
 	h_table_free(ta_dir_table);
+
 	while (pthread_mutex_destroy(&mutex)) {
 		if (errno != EBUSY) {
 			OT_LOG(LOG_ERR, "Failed to destroy mutex");

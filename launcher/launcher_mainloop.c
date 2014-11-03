@@ -48,7 +48,6 @@
 
 #define MAX_CURR_EVENTS 5
 
-
 static void check_signal_status(struct core_control *control_params)
 {
 	sig_atomic_t cpy_sig_vec = control_params->sig_vector;
@@ -80,7 +79,7 @@ static void send_err_msg_to_manager(int man_fd, struct com_msg_ta_created *msg)
 	}
 }
 
-int lib_main_loop(struct core_control *control_params)
+int lib_main_loop(struct core_control *ctl_params)
 {
 	int sockfd[2];
 	pid_t new_proc_pid;
@@ -106,12 +105,12 @@ int lib_main_loop(struct core_control *control_params)
 	}
 
 	/* listen to inbound connections from the manager */
-	if (epoll_reg_fd(control_params->comm_sock_fd, EPOLLIN)) {
+	if (epoll_reg_fd(ctl_params->comm_sock_fd, EPOLLIN)) {
 		OT_LOG(LOG_ERR, "Failed reg manager socket");
 		exit(EXIT_FAILURE);
 	}
 
-	if (epoll_reg_fd(control_params->self_pipe_fd, EPOLLIN)) {
+	if (epoll_reg_fd(ctl_params->self_pipe_fd, EPOLLIN)) {
 		OT_LOG(LOG_ERR, "Failed reg self pipe socket");
 		exit(EXIT_FAILURE);
 	}
@@ -127,7 +126,7 @@ int lib_main_loop(struct core_control *control_params)
 		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);
 		if (event_count == -1) {
 			if (errno == EINTR) {
-				check_signal_status(control_params);
+				check_signal_status(ctl_params);
 				continue;
 			}
 
@@ -145,14 +144,14 @@ int lib_main_loop(struct core_control *control_params)
 
 		for (i = 0; i < event_count; i++) {
 
-			if (cur_events[i].data.fd == control_params->self_pipe_fd) {
+			if (cur_events[i].data.fd == ctl_params->self_pipe_fd) {
 
 				if (cur_events[i].events & EPOLLERR) {
 					OT_LOG(LOG_ERR, "Something wrong with self pipe");
 					exit(EXIT_FAILURE);
 				}
 
-				check_signal_status(control_params);
+				check_signal_status(ctl_params);
 				continue;
 			}
 
@@ -162,8 +161,8 @@ int lib_main_loop(struct core_control *control_params)
 				exit(EXIT_FAILURE);
 			}
 
-			ret = com_recv_msg(control_params->comm_sock_fd,
-					   (void **)&recv_open_msg, &recv_bytes);
+			ret = com_recv_msg(ctl_params->comm_sock_fd, (void **)&recv_open_msg,
+					   &recv_bytes);
 			if (ret == -1) {
 				free(recv_open_msg);
 				/* TODO: Figur out why -1, but for now lets
@@ -194,7 +193,7 @@ int lib_main_loop(struct core_control *control_params)
 			/* create a socket pair so the manager and TA can communicate */
 			if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1) {
 				OT_LOG(LOG_ERR, "failed to create a socket pair");
-				send_err_msg_to_manager(control_params->comm_sock_fd, &created_ta);
+				send_err_msg_to_manager(ctl_params->comm_sock_fd, &created_ta);
 				free(recv_open_msg);
 				continue;
 			}
@@ -202,19 +201,19 @@ int lib_main_loop(struct core_control *control_params)
 			/*
 			 * Clone now to create the TA subprocess
 			 */
-			new_proc_pid = syscall(SYS_clone, SIGCHLD | CLONE_PARENT, 0 , 0);
+			new_proc_pid = syscall(SYS_clone, SIGCHLD | CLONE_PARENT, 0, 0);
 			if (new_proc_pid == -1) {
-				send_err_msg_to_manager(control_params->comm_sock_fd, &created_ta);
+				send_err_msg_to_manager(ctl_params->comm_sock_fd, &created_ta);
 				free(recv_open_msg);
 				continue;
 
 			} else if (new_proc_pid == 0) {
 				/* child process will become the TA*/
-				epoll_unreg(control_params->comm_sock_fd);
-				close(control_params->comm_sock_fd);
+				epoll_unreg(ctl_params->comm_sock_fd);
+				close(ctl_params->comm_sock_fd);
 				close(sockfd[0]);
 				prctl(PR_SET_PDEATHSIG, SIGTERM);
-				if (ta_process_loop(control_params, sockfd[1], recv_open_msg)) {
+				if (ta_process_loop(ctl_params, sockfd[1], recv_open_msg)) {
 					OT_LOG(LOG_ERR, "ta_process has failed");
 					exit(1);
 				}
@@ -226,12 +225,11 @@ int lib_main_loop(struct core_control *control_params)
 				 * SIGTERM might not be executed if TA is "stuck" in
 				 * create entry or open session function */
 
-				if (com_send_msg(control_params->comm_sock_fd, &created_ta,
+				if (com_send_msg(ctl_params->comm_sock_fd, &created_ta,
 						 sizeof(struct com_msg_ta_created)) ==
 				    sizeof(struct com_msg_ta_created)) {
 
-					if (send_fd(control_params->comm_sock_fd,
-						    sockfd[0]) == -1) {
+					if (send_fd(ctl_params->comm_sock_fd, sockfd[0]) == -1) {
 						OT_LOG(LOG_ERR, "Failed to send TA sock");
 						kill(new_proc_pid, SIGKILL);
 						/* TODO: Check what is causing error, but for now

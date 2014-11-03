@@ -24,14 +24,14 @@
  * These are the entry points for a trusted application section 4.3 of the specification
  */
 struct ta_interface {
-	TA_CreateEntryPoint_t create;			/*!< Initialize the TA */
-	TA_DestroyEntryPoint_t destroy;			/*!< Clean up the TA */
-	TA_OpenSessionEntryPoint_t open_session;	/*!< Open a communication session with TA */
-	TA_InvokeCommandEntryPoint_t invoke_cmd;	/*!< Call a specific command in the TA */
-	TA_CloseSessionEntryPoint_t close_session;	/*!< Close down the session */
+	TA_CreateEntryPoint_t create;		   /*!< Initialize the TA */
+	TA_DestroyEntryPoint_t destroy;		   /*!< Clean up the TA */
+	TA_OpenSessionEntryPoint_t open_session;   /*!< Open a communication session with TA */
+	TA_InvokeCommandEntryPoint_t invoke_cmd;   /*!< Call a specific command in the TA */
+	TA_CloseSessionEntryPoint_t close_session; /*!< Close down the session */
 	TEE_UUID id;
-	void *library;					/*!< A pointer to the handle returned
-								by dlopen() */
+	void *library; /*!< A pointer to the handle returned
+			       by dlopen() */
 };
 
 /*!

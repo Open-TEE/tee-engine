@@ -26,8 +26,8 @@ TEE_Result TA_EXPORT TA_CreateEntryPoint(void);
 
 void TA_EXPORT TA_DestroyEntryPoint(void);
 
-TEE_Result TA_EXPORT TA_OpenSessionEntryPoint(uint32_t paramTypes,
-					      TEE_Param params[4], void **sessionContext);
+TEE_Result TA_EXPORT TA_OpenSessionEntryPoint(uint32_t paramTypes, TEE_Param params[4],
+					      void **sessionContext);
 
 void TA_EXPORT TA_CloseSessionEntryPoint(void *sessionContext);
 
@@ -40,8 +40,8 @@ typedef TEE_Result (*TA_CreateEntryPoint_t)(void);
 
 typedef void (*TA_DestroyEntryPoint_t)(void);
 
-typedef TEE_Result (*TA_OpenSessionEntryPoint_t)(uint32_t paramTypes,
-						 TEE_Param params[4], void **sessionContext);
+typedef TEE_Result (*TA_OpenSessionEntryPoint_t)(uint32_t paramTypes, TEE_Param params[4],
+						 void **sessionContext);
 
 typedef void (*TA_CloseSessionEntryPoint_t)(void *sessionContext);
 

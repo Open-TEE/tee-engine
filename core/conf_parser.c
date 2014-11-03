@@ -25,7 +25,6 @@
 #include <string.h>
 #include <stdio.h>
 
-
 /* Allow this to be sepecified on the compile line -D */
 #ifndef CONF_FILE_WITH_PATH
 #define CONF_FILE_WITH_PATH "/etc/opentee.conf"

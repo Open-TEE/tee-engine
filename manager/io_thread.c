@@ -59,7 +59,6 @@ static int check_proc_fd_epoll_status(struct epoll_event *event)
 		OT_LOG_INT(((proc_t)event->data.ptr)->sockfd)
 		epoll_unreg(((proc_t)event->data.ptr)->sockfd);
 		return 1;
-
 	}
 
 	if (event->events & EPOLLIN) {
@@ -187,7 +186,7 @@ static int add_client_to_ca_table(proc_t add_client)
 	}
 
 	if (h_table_insert(clientApps, (unsigned char *)(&add_client->sockfd),
-				sizeof(add_client->sockfd), add_client)) {
+			   sizeof(add_client->sockfd), add_client)) {
 		OT_LOG(LOG_ERR, "Failed to add client table(out-of-mem)");
 		ret = 1;
 	}
@@ -205,7 +204,8 @@ static void remove_client_from_ca_table(proc_t rm_client)
 		return;
 	}
 
-	h_table_remove(clientApps, (unsigned char *)(&rm_client->sockfd), sizeof(rm_client->sockfd));
+	h_table_remove(clientApps, (unsigned char *)(&rm_client->sockfd),
+		       sizeof(rm_client->sockfd));
 
 	if (pthread_mutex_unlock(&CA_table_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");

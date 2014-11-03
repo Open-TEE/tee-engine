@@ -47,8 +47,8 @@ struct __TEE_ObjectEnumHandle {
 
 #define KEY_IN_BYTES(key_in_bits) ((key_in_bits + 7) / 8)
 
-static void release_file(TEE_ObjectHandle object, FILE *obj_file,
-			 void *objectID, size_t objectIDLen)
+static void release_file(TEE_ObjectHandle object, FILE *obj_file, void *objectID,
+			 size_t objectIDLen)
 {
 	/* Exact functionality will be add when Manager process is implemented (for example IPC) */
 
@@ -56,8 +56,8 @@ static void release_file(TEE_ObjectHandle object, FILE *obj_file,
 	 * but close functions return values are void */
 
 	if (object != NULL) {
-		ext_release_file(object->per_object.object_file,
-				 object->per_object.obj_id, object->per_object.obj_id_len);
+		ext_release_file(object->per_object.object_file, object->per_object.obj_id,
+				 object->per_object.obj_id_len);
 		object->per_object.object_file = NULL;
 	} else {
 		ext_release_file(obj_file, objectID, objectIDLen);
@@ -73,8 +73,8 @@ static void delete_file(TEE_ObjectHandle object, FILE *obj_file, void *objectID,
 	 * but close functions return values are void */
 
 	if (object != NULL) {
-		ext_delete_file(object->per_object.object_file,
-				 object->per_object.obj_id, object->per_object.obj_id_len);
+		ext_delete_file(object->per_object.object_file, object->per_object.obj_id,
+				object->per_object.obj_id_len);
 		object->per_object.object_file = NULL;
 	} else {
 		ext_delete_file(obj_file, objectID, objectIDLen);
@@ -101,7 +101,7 @@ static bool change_object_ID(TEE_ObjectHandle object, void *new_objectID, size_t
 	/* Exact functionality will be add when Manager process is implemented (for example IPC) */
 
 	if (!ext_change_object_ID(object->per_object.obj_id, object->per_object.obj_id_len,
-				   new_objectID, new_objectIDLen))
+				  new_objectID, new_objectIDLen))
 		return false;
 
 	/* change ID in object */
@@ -115,8 +115,8 @@ static bool change_object_ID(TEE_ObjectHandle object, void *new_objectID, size_t
 	rewind(object->per_object.object_file);
 	memset(&renamed_meta_data, 0, sizeof(struct storage_obj_meta_data));
 
-	if (fread(&renamed_meta_data, sizeof(struct storage_obj_meta_data),
-		  1, object->per_object.object_file) != 1) {
+	if (fread(&renamed_meta_data, sizeof(struct storage_obj_meta_data), 1,
+		  object->per_object.object_file) != 1) {
 		syslog(LOG_ERR, "Read error at renaming\n");
 		return false;
 	}
@@ -126,8 +126,8 @@ static bool change_object_ID(TEE_ObjectHandle object, void *new_objectID, size_t
 
 	rewind(object->per_object.object_file);
 
-	if (fwrite(&renamed_meta_data, sizeof(struct storage_obj_meta_data),
-		   1, object->per_object.object_file) != 1) {
+	if (fwrite(&renamed_meta_data, sizeof(struct storage_obj_meta_data), 1,
+		   object->per_object.object_file) != 1) {
 		syslog(LOG_ERR, "Write error at renaming\n");
 	}
 
@@ -135,8 +135,7 @@ static bool change_object_ID(TEE_ObjectHandle object, void *new_objectID, size_t
 		syslog(LOG_ERR, "Fflush error at renaming\n");
 	}
 
-	if (fseek(object->per_object.object_file,
-		  object->per_object.data_position, SEEK_SET) != 0)
+	if (fseek(object->per_object.object_file, object->per_object.data_position, SEEK_SET) != 0)
 		syslog(LOG_ERR, "Fseek error at renaming\n");
 
 	/* End */
@@ -250,7 +249,7 @@ err_at_read:
 	return TEE_ERROR_GENERIC;
 }
 
-static int get_attr_index_from_attrArr(uint32_t ID, TEE_Attribute* attrs, uint32_t attrCount)
+static int get_attr_index_from_attrArr(uint32_t ID, TEE_Attribute *attrs, uint32_t attrCount)
 {
 	size_t i;
 
@@ -262,22 +261,21 @@ static int get_attr_index_from_attrArr(uint32_t ID, TEE_Attribute* attrs, uint32
 	return -1;
 }
 
-static void cpy_attr(TEE_ObjectHandle srcObj, uint32_t src_index,
-		     TEE_ObjectHandle dstObj, uint32_t dst_index)
+static void cpy_attr(TEE_ObjectHandle srcObj, uint32_t src_index, TEE_ObjectHandle dstObj,
+		     uint32_t dst_index)
 {
 	if (srcObj == NULL || dstObj == NULL)
 		return;
 
 	if (is_value_attribute(srcObj->attrs[src_index].attributeID)) {
-		memcpy(&dstObj->attrs[dst_index],
-		       &srcObj->attrs[src_index], sizeof(TEE_Attribute));
+		memcpy(&dstObj->attrs[dst_index], &srcObj->attrs[src_index], sizeof(TEE_Attribute));
 	} else {
 		memcpy(dstObj->attrs[dst_index].content.ref.buffer,
 		       srcObj->attrs[src_index].content.ref.buffer,
 		       srcObj->attrs[src_index].content.ref.length);
 
 		dstObj->attrs[dst_index].content.ref.length =
-				srcObj->attrs[src_index].content.ref.length;
+		    srcObj->attrs[src_index].content.ref.length;
 
 		dstObj->attrs[dst_index].attributeID = srcObj->attrs[src_index].attributeID;
 	}
@@ -313,11 +311,12 @@ static bool copy_attr_from_obj_to_obj(TEE_ObjectHandle srcObj, uint32_t cpy_attr
 	return true;
 }
 
-static bool copy_attr_from_attrArr_to_object(TEE_Attribute* params, uint32_t paramCount,
+static bool copy_attr_from_attrArr_to_object(TEE_Attribute *params, uint32_t paramCount,
 					     uint32_t cpy_attr_ID, TEE_ObjectHandle object,
 					     uint32_t dest_index)
 {
-	int attr_index = get_attr_index_from_attrArr(cpy_attr_ID, params, paramCount);;
+	int attr_index = get_attr_index_from_attrArr(cpy_attr_ID, params, paramCount);
+	;
 
 	if (attr_index == -1)
 		return false; /* Array does not contain extracted attribute */
@@ -334,7 +333,7 @@ static bool copy_attr_from_attrArr_to_object(TEE_Attribute* params, uint32_t par
 			object->attrs[dest_index].content.ref.length = object->maxObjSizeBytes;
 		else
 			object->attrs[dest_index].content.ref.length =
-					params[attr_index].content.ref.length;
+			    params[attr_index].content.ref.length;
 
 		memcpy(object->attrs[dest_index].content.ref.buffer,
 		       params[attr_index].content.ref.buffer,
@@ -346,7 +345,7 @@ static bool copy_attr_from_attrArr_to_object(TEE_Attribute* params, uint32_t par
 
 static bool bn_to_obj_ref_attr(BIGNUM *bn, uint32_t atrr_ID, TEE_ObjectHandle obj, int obj_index)
 {
-	//add suslog
+	// add suslog
 	obj->attrs[obj_index].content.ref.length = BN_num_bytes(bn);
 	if (obj->attrs[obj_index].content.ref.length > obj->maxObjSizeBytes)
 		return false;
@@ -378,8 +377,8 @@ static TEE_Result gen_des_key(TEE_ObjectHandle object, uint32_t keySize)
 	}
 
 	DES_random_key(&key2);
-	memcpy((unsigned char *)object->attrs->content.ref.buffer + sizeof(key1),
-	       key2, sizeof(key2));
+	memcpy((unsigned char *)object->attrs->content.ref.buffer + sizeof(key1), key2,
+	       sizeof(key2));
 
 	if (keySize <= 112) {
 		object->attrs->content.ref.length = sizeof(key1) + sizeof(key2);
@@ -392,7 +391,6 @@ static TEE_Result gen_des_key(TEE_ObjectHandle object, uint32_t keySize)
 	object->attrs->content.ref.length = sizeof(key1) + sizeof(key2) + sizeof(key3);
 
 	return TEE_SUCCESS;
-
 }
 
 static TEE_Result gen_symmetric_key(TEE_ObjectHandle object, uint32_t keySize)
@@ -408,15 +406,15 @@ static TEE_Result gen_symmetric_key(TEE_ObjectHandle object, uint32_t keySize)
 	return TEE_SUCCESS;
 }
 
-static TEE_Result gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size,
-				  TEE_Attribute* params, uint32_t paramCount)
+static TEE_Result gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size, TEE_Attribute *params,
+				  uint32_t paramCount)
 {
 	int i = 0; /* Attribute index at object */
 	TEE_Result ret_val = TEE_SUCCESS;
 	RSA *rsa_key = NULL;
 	BIGNUM *bn_pub_exp = NULL;
-	int pub_exp_index_at_params = get_attr_index_from_attrArr(TEE_ATTR_RSA_PUBLIC_EXPONENT,
-								  params, paramCount);
+	int pub_exp_index_at_params =
+	    get_attr_index_from_attrArr(TEE_ATTR_RSA_PUBLIC_EXPONENT, params, paramCount);
 
 	rsa_key = RSA_new();
 	if (rsa_key == NULL) {
@@ -433,10 +431,10 @@ static TEE_Result gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size,
 	}
 
 	if (pub_exp_index_at_params != -1) {
-		bn_pub_exp = BN_bin2bn(params[pub_exp_index_at_params].content.ref.buffer,
-				       params[pub_exp_index_at_params].content.ref.length,
-				       bn_pub_exp);
-		if (bn_pub_exp == NULL){
+		bn_pub_exp =
+		    BN_bin2bn(params[pub_exp_index_at_params].content.ref.buffer,
+			      params[pub_exp_index_at_params].content.ref.length, bn_pub_exp);
+		if (bn_pub_exp == NULL) {
 			syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
 			ret_val = TEE_ERROR_GENERIC;
 			goto ret;
@@ -484,8 +482,8 @@ ret:
 	return ret_val;
 }
 
-static TEE_Result gen_dsa_keypair(TEE_ObjectHandle object,
-				  TEE_Attribute* params, uint32_t paramCount)
+static TEE_Result gen_dsa_keypair(TEE_ObjectHandle object, TEE_Attribute *params,
+				  uint32_t paramCount)
 {
 	int i = 0; /* Attribute index at object */
 	int attr_index = 0;
@@ -527,7 +525,7 @@ static TEE_Result gen_dsa_keypair(TEE_ObjectHandle object,
 	attr_index = get_attr_index(object, TEE_ATTR_DSA_BASE);
 	dsa_key->g = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
 			       object->attrs[attr_index].content.ref.length, dsa_key->g);
-	if (!dsa_key->g){
+	if (!dsa_key->g) {
 		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
@@ -551,7 +549,7 @@ ret:
 	return ret_val;
 }
 
-static TEE_Result gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute* params,
+static TEE_Result gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute *params,
 				 uint32_t paramCount)
 {
 	int i = 0; /* Attribute index at object */
@@ -794,7 +792,7 @@ static void free_object(TEE_ObjectHandle object)
 
 	free_attrs(object);
 	TEE_Free(object->attrs);
-	if (!RAND_bytes((unsigned char*)object, sizeof(struct __TEE_ObjectHandle)))
+	if (!RAND_bytes((unsigned char *)object, sizeof(struct __TEE_ObjectHandle)))
 		memset(object, 0, sizeof(struct __TEE_ObjectHandle));
 	TEE_Free(object);
 	object = NULL;
@@ -820,14 +818,14 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 
 		memcpy(cpy_obj, src_obj, sizeof(struct __TEE_ObjectHandle));
 
-		//Move single function
+		// Move single function
 		/* Malloc for attribute pointers */
 		cpy_obj->attrs = TEE_Malloc(src_obj->attrs_count * sizeof(TEE_Attribute), 0);
 		if (cpy_obj->attrs == NULL)
 			goto err_out_of_mem;
 
 		/* Malloc space for attributes (attribute buffers) */
-		switch(src_obj->objectInfo.objectType) {
+		switch (src_obj->objectInfo.objectType) {
 		case TEE_TYPE_AES:
 		case TEE_TYPE_DES:
 		case TEE_TYPE_DES3:
@@ -914,7 +912,7 @@ static uint32_t object_attribute_size(TEE_ObjectHandle object)
 
 	for (i = 0; i < object->attrs_count; ++i) {
 		if (!is_value_attribute(object->attrs[i].attributeID))
-			object_attr_size +=  object->attrs[i].content.ref.length;
+			object_attr_size += object->attrs[i].content.ref.length;
 	}
 
 	return (object_attr_size + object->attrs_count * sizeof(TEE_Attribute));
@@ -922,7 +920,7 @@ static uint32_t object_attribute_size(TEE_ObjectHandle object)
 
 static uint32_t key_raw_size(uint32_t objectType, uint32_t key)
 {
-	switch(objectType) {
+	switch (objectType) {
 	case TEE_TYPE_AES:
 	case TEE_TYPE_DES:
 		/* Always 56 bit 8 parity bit = 64bit */
@@ -950,38 +948,29 @@ static uint32_t key_raw_size(uint32_t objectType, uint32_t key)
 	default:
 		return KEY_IN_BYTES(key);
 	}
-
 }
 
+/************************************************************************************************
+*												 *
+*												 *
+*												 *
+*												 *
+* ############################################################################################# *
+* #											       # *
+* #  ---------------------------------------------------------------------------------------  # *
+* #  |										            |  # *
+* #  | #    #   #  # ## I n t e r n a l   A P I   f u n c t i o n s ## #  #   #    #     # |  # *
+* #  |										            |  # *
+* #  ---------------------------------------------------------------------------------------  # *
+* #											       # *
+* ############################################################################################# *
+*												 *
+*												 *
+*												 *
+*												 *
+************************************************************************************************/
 
-
-
-
- /************************************************************************************************
- *												 *
- *												 *
- *												 *
- *												 *
- * ############################################################################################# *
- * #											       # *
- * #  ---------------------------------------------------------------------------------------  # *
- * #  |										            |  # *
- * #  | #    #   #  # ## I n t e r n a l   A P I   f u n c t i o n s ## #  #   #    #     # |  # *
- * #  |										            |  # *
- * #  ---------------------------------------------------------------------------------------  # *
- * #											       # *
- * ############################################################################################# *
- *												 *
- *												 *
- *												 *
- *												 *
- ************************************************************************************************/
-
-
-
-
-
-void TEE_GetObjectInfo(TEE_ObjectHandle object, TEE_ObjectInfo* objectInfo)
+void TEE_GetObjectInfo(TEE_ObjectHandle object, TEE_ObjectInfo *objectInfo)
 {
 	if (object == NULL || objectInfo == NULL)
 		return;
@@ -1015,8 +1004,8 @@ void TEE_RestrictObjectUsage(TEE_ObjectHandle object, uint32_t objectUsage)
 	object->objectInfo.objectUsage ^= objectUsage;
 }
 
-TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attributeID,
-					void* buffer, size_t* size)
+TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attributeID, void *buffer,
+					size_t *size)
 {
 	int attr_index;
 
@@ -1059,8 +1048,8 @@ TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attrib
 	return TEE_SUCCESS;
 }
 
-TEE_Result TEE_GetObjectValueAttribute(TEE_ObjectHandle object, uint32_t attributeID,
-				       uint32_t* a, uint32_t* b)
+TEE_Result TEE_GetObjectValueAttribute(TEE_ObjectHandle object, uint32_t attributeID, uint32_t *a,
+				       uint32_t *b)
 {
 	int attr_index;
 
@@ -1104,7 +1093,7 @@ void TEE_CloseObject(TEE_ObjectHandle object)
 }
 
 TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSize,
-				       TEE_ObjectHandle* object)
+				       TEE_ObjectHandle *object)
 {
 	TEE_ObjectHandle tmp_handle;
 	int attr_count = valid_obj_type_and_attr_count(objectType);
@@ -1141,7 +1130,7 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 		goto out_of_mem;
 
 	/* Alloc memory for object attributes */
-	switch(objectType) {
+	switch (objectType) {
 	case TEE_TYPE_AES:
 	case TEE_TYPE_DES:
 	case TEE_TYPE_DES3:
@@ -1211,7 +1200,7 @@ void TEE_ResetTransientObject(TEE_ObjectHandle object)
 	reset_attrs(object);
 }
 
-TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* attrs,
+TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute *attrs,
 				       uint32_t attrCount)
 {
 	uint32_t dest_index = 0;
@@ -1232,7 +1221,7 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* a
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
-	switch(object->objectInfo.objectType) {
+	switch (object->objectInfo.objectType) {
 	case TEE_TYPE_AES:
 	case TEE_TYPE_DES:
 	case TEE_TYPE_DES3:
@@ -1243,14 +1232,17 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* a
 	case TEE_TYPE_HMAC_SHA384:
 	case TEE_TYPE_HMAC_SHA512:
 	case TEE_TYPE_GENERIC_SECRET:
-		if (!copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_SECRET_VALUE, object, dest_index++))
+		if (!copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_SECRET_VALUE,
+						      object, dest_index++))
 			goto bad_paras;
 
 		break;
 
 	case TEE_TYPE_RSA_PUBLIC_KEY:
-		if (!copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_RSA_MODULUS, object, dest_index++) ||
-		    !copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_RSA_PUBLIC_EXPONENT, object, dest_index++))
+		if (!copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_RSA_MODULUS,
+						      object, dest_index++) ||
+		    !copy_attr_from_attrArr_to_object(
+			attrs, attrCount, TEE_ATTR_RSA_PUBLIC_EXPONENT, object, dest_index++))
 			goto bad_paras;
 
 		break;
@@ -1275,7 +1267,7 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* a
 		    !copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_RSA_PRIVATE_EXPONENT, object, dest_index++))
 			goto bad_paras;
 
-	break;
+		break;
 
 	case TEE_TYPE_DSA_PUBLIC_KEY:
 		if (!copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_DSA_PRIME, object, dest_index++) ||
@@ -1326,7 +1318,7 @@ bad_paras:
 	return TEE_ERROR_BAD_PARAMETERS; /* Only compile purpose or else reaches non-void.. */
 }
 
-void TEE_InitRefAttribute(TEE_Attribute* attr, uint32_t attributeID, void* buffer, size_t length)
+void TEE_InitRefAttribute(TEE_Attribute *attr, uint32_t attributeID, void *buffer, size_t length)
 {
 	if (attr == NULL)
 		return;
@@ -1341,7 +1333,7 @@ void TEE_InitRefAttribute(TEE_Attribute* attr, uint32_t attributeID, void* buffe
 	attr->content.ref.length = length;
 }
 
-void TEE_InitValueAttribute(TEE_Attribute* attr, uint32_t attributeID, uint32_t a, uint32_t b)
+void TEE_InitValueAttribute(TEE_Attribute *attr, uint32_t attributeID, uint32_t a, uint32_t b)
 {
 	if (attr == NULL)
 		return;
@@ -1407,8 +1399,8 @@ void TEE_CopyObjectAttributes(TEE_ObjectHandle destObject, TEE_ObjectHandle srcO
 	destObject->objectInfo.handleFlags |= TEE_HANDLE_FLAG_INITIALIZED;
 }
 
-TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize,
-			   TEE_Attribute* params, uint32_t paramCount)
+TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attribute *params,
+			   uint32_t paramCount)
 {
 	TEE_Result ret_val = TEE_SUCCESS;
 
@@ -1434,7 +1426,7 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize,
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
-	switch(object->objectInfo.objectType) {
+	switch (object->objectInfo.objectType) {
 	case TEE_TYPE_DES:
 	case TEE_TYPE_DES3:
 		ret_val = gen_des_key(object, keySize);
@@ -1481,8 +1473,8 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize,
 	return ret_val;
 }
 
-TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void* objectID,
-				    size_t objectIDLen, uint32_t flags, TEE_ObjectHandle* object)
+TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
+				    uint32_t flags, TEE_ObjectHandle *object)
 {
 	TEE_ObjectHandle new_object;
 	struct storage_obj_meta_data meta_info_from_storage;
@@ -1522,8 +1514,8 @@ TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void* objectID,
 	/* Read persistant object file meta info from storage and fill it new object */
 	memset(&meta_info_from_storage, 0, sizeof(struct storage_obj_meta_data));
 
-	if (fread(&meta_info_from_storage,
-		  sizeof(struct storage_obj_meta_data), 1, per_storage_file) != 1) {
+	if (fread(&meta_info_from_storage, sizeof(struct storage_obj_meta_data), 1,
+		  per_storage_file) != 1) {
 		syslog(LOG_ERR, "Cannot read object meta data\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto err;
@@ -1557,18 +1549,17 @@ TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void* objectID,
 		goto err;
 	}
 	new_object->per_object.data_size =
-			ftell(new_object->per_object.object_file) -
-			new_object->per_object.data_begin;
-	if (fseek(new_object->per_object.object_file,
-		  new_object->per_object.data_begin, SEEK_SET) != 0) {
+	    ftell(new_object->per_object.object_file) - new_object->per_object.data_begin;
+	if (fseek(new_object->per_object.object_file, new_object->per_object.data_begin,
+		  SEEK_SET) != 0) {
 		ret_val = TEE_ERROR_GENERIC;
 		goto err;
 	}
 
 	/* Handler flags update */
 	new_object->objectInfo.handleFlags = 0; /* reset flags */
-	new_object->objectInfo.handleFlags |= (TEE_HANDLE_FLAG_PERSISTENT |
-					       TEE_HANDLE_FLAG_INITIALIZED | flags);
+	new_object->objectInfo.handleFlags |=
+	    (TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED | flags);
 
 	*object = new_object;
 
@@ -1585,13 +1576,13 @@ err:
 	return ret_val;
 }
 
-TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void* objectID, size_t objectIDLen,
+TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
 				      uint32_t flags, TEE_ObjectHandle attributes,
-				      void* initialData, size_t initialDataLen,
-				      TEE_ObjectHandle* object)
+				      void *initialData, size_t initialDataLen,
+				      TEE_ObjectHandle *object)
 {
 	struct storage_obj_meta_data meta_info_to_storage;
-	FILE* obj_storage_file;
+	FILE *obj_storage_file;
 	TEE_Result ret_obj_alloc;
 
 	if (storageID != TEE_STORAGE_PRIVATE)
@@ -1629,15 +1620,15 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void* objectID, size_t
 		meta_info_to_storage.attrs_count = 0;
 	}
 
-	meta_info_to_storage.meta_size = sizeof(struct storage_obj_meta_data); +
-					  object_attribute_size(attributes);
+	meta_info_to_storage.meta_size = sizeof(struct storage_obj_meta_data) +
+					 object_attribute_size(attributes);
 
 	memcpy(meta_info_to_storage.obj_id, objectID, objectIDLen);
 	meta_info_to_storage.obj_id_len = objectIDLen;
 
 	/* Meta info is filled. Write meta info to storage */
-	if (fwrite(&meta_info_to_storage,
-		   sizeof(struct storage_obj_meta_data), 1, obj_storage_file) != 1)
+	if (fwrite(&meta_info_to_storage, sizeof(struct storage_obj_meta_data), 1,
+		   obj_storage_file) != 1)
 		goto err_at_meta_or_init_data_write;
 
 	/* store attributes */
@@ -1653,20 +1644,20 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void* objectID, size_t
 		goto err_at_meta_or_init_data_write;
 
 	if (object != NULL) {
-		ret_obj_alloc = deep_copy_object(object, attributes) ;
+		ret_obj_alloc = deep_copy_object(object, attributes);
 		if (ret_obj_alloc != TEE_SUCCESS)
 			goto err_at_obj_alloc;
 
 		/* update current state to allocated handle */
 		(*object)->objectInfo.handleFlags = 0; /* reset flags */
-		(*object)->objectInfo.handleFlags |= (TEE_HANDLE_FLAG_PERSISTENT |
-						      TEE_HANDLE_FLAG_INITIALIZED | flags);
+		(*object)->objectInfo.handleFlags |=
+		    (TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED | flags);
 
-		(*object)->per_object.data_position  = ftell(obj_storage_file);
+		(*object)->per_object.data_position = ftell(obj_storage_file);
 		if ((*object)->per_object.data_position == -1L)
 			goto err_at_obj_alloc;
-		(*object)->per_object.data_begin = (*object)->per_object.data_position -
-						   initialDataLen;
+		(*object)->per_object.data_begin =
+		    (*object)->per_object.data_position - initialDataLen;
 
 		(*object)->per_object.data_size = initialDataLen;
 
@@ -1701,7 +1692,7 @@ err_at_obj_alloc:
 	return TEE_ERROR_GENERIC;
 }
 
-TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void* newObjectID,
+TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void *newObjectID,
 				      size_t newObjectIDLen)
 {
 	if (object == NULL || !(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
@@ -1748,7 +1739,7 @@ void TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object)
 	free_object(object);
 }
 
-TEE_Result TEE_AllocatePersistentObjectEnumerator(TEE_ObjectEnumHandle* objectEnumerator)
+TEE_Result TEE_AllocatePersistentObjectEnumerator(TEE_ObjectEnumHandle *objectEnumerator)
 {
 	if (objectEnumerator == NULL)
 		return TEE_ERROR_GENERIC;
@@ -1803,8 +1794,8 @@ TEE_Result TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumer
 }
 
 TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
-				       TEE_ObjectInfo *objectInfo, void* objectID,
-				       size_t* objectIDLen)
+				       TEE_ObjectInfo *objectInfo, void *objectID,
+				       size_t *objectIDLen)
 {
 	struct storage_obj_meta_data recv_per_obj;
 
@@ -1825,7 +1816,7 @@ TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
 	return TEE_SUCCESS;
 }
 
-TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void* buffer, size_t size, uint32_t* count)
+TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size, uint32_t *count)
 {
 	if (object == NULL || buffer == NULL || count == NULL)
 		return TEE_ERROR_GENERIC;
@@ -1854,7 +1845,7 @@ ret:
 	return TEE_SUCCESS;
 }
 
-TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void* buffer, size_t size)
+TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t size)
 {
 	size_t write_bytes;
 	int err_no = 0;
@@ -1910,9 +1901,7 @@ error:
 		return TEE_ERROR_STORAGE_NO_SPACE;
 
 	return TEE_ERROR_GENERIC;
-
 }
-
 
 TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)
 {
@@ -1954,7 +1943,6 @@ error:
 		return TEE_ERROR_STORAGE_NO_SPACE;
 
 	return TEE_ERROR_GENERIC;
-
 }
 
 TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whence whence)
@@ -1970,7 +1958,7 @@ TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whenc
 	end = object->per_object.data_begin + object->per_object.data_size;
 	pos = object->per_object.data_position;
 
-	//if whence is SEEK_CUR should stay as current pos
+	// if whence is SEEK_CUR should stay as current pos
 	if (whence == TEE_DATA_SEEK_END)
 		pos = end;
 	else if (whence == TEE_DATA_SEEK_SET)

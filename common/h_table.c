@@ -84,8 +84,8 @@ static uint32_t hash_func(HASHTABLE table, unsigned char *key, size_t key_len)
 	return hash % table->h_table_size;
 }
 
-static BUCKET *get_bucket(BUCKET *bucket_head, BUCKET **pre_buck,
-			  unsigned char *key, size_t key_len)
+static BUCKET *get_bucket(BUCKET *bucket_head, BUCKET **pre_buck, unsigned char *key,
+			  size_t key_len)
 {
 	if (pre_buck)
 		*pre_buck = bucket_head;
@@ -205,7 +205,6 @@ void *h_table_remove(HASHTABLE table, unsigned char *key, size_t key_len)
 	else
 		pre_buck->next = del_buck->next;
 
-
 	del_buck_data = del_buck->data;
 	free(del_buck->key);
 	free(del_buck);
@@ -269,8 +268,8 @@ void *h_table_step(HASHTABLE table)
 	if (table->h_table_size > table->x_index)
 		table->x_index++;
 
-	for (table->x_index = table->x_index;
-	     table->x_index < table->h_table_size; ++table->x_index) {
+	for (table->x_index = table->x_index; table->x_index < table->h_table_size;
+	     ++table->x_index) {
 
 		if (table->buckets[table->x_index]) {
 			table->y_index = table->buckets[table->x_index]->next;
