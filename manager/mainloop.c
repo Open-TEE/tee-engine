@@ -232,6 +232,8 @@ int lib_main_loop(struct core_control *control_params)
 		return -1;
 	}
 
+	OT_LOG(LOG_ERR, "Entering the Manager mainloop");
+
 	for (;;) {
 		/* Block and wait for a one of the monitored I/Os to become available */
 		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);

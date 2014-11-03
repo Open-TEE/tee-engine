@@ -115,6 +115,9 @@ int lib_main_loop(struct core_control *control_params)
 		OT_LOG(LOG_ERR, "Failed reg self pipe socket");
 		exit(EXIT_FAILURE);
 	}
+
+	OT_LOG(LOG_ERR, "Entering the launcher mainloop");
+
 	for (;;) {
 		if (pthread_sigmask(SIG_SETMASK, &sig_empty_set, NULL)) {
 			OT_LOG(LOG_ERR, "Problem with signal mask setting");
