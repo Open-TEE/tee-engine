@@ -56,7 +56,6 @@ static int check_proc_fd_epoll_status(struct epoll_event *event)
 	/* Placeholder */
 
 	if (event->events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
-		OT_LOG_INT(((proc_t)event->data.ptr)->sockfd)
 		epoll_unreg(((proc_t)event->data.ptr)->sockfd);
 		return 1;
 

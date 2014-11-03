@@ -180,14 +180,14 @@ static void open_session_response(struct manager_msg *man_msg)
 			goto err_1;
 		}
 
-		ta_session->content.sesLink.to->content.sesLink.sockfd = sockfd[0];
-		ta_session->content.sesLink.status = sess_active;
-		ta_session->content.sesLink.to->content.sesLink.status = sess_active;
-		open_resp_msg->sess_fd_to_caller = sockfd[1];
-
 		/* Reg CA session socket */
 		if (epoll_reg_data(sockfd[0], EPOLLIN, ta_session->content.sesLink.to))
 			goto err_2; /* Err msg logged */
+
+		ta_session->content.sesLink.to->sockfd = sockfd[0];
+		ta_session->content.sesLink.status = sess_active;
+		ta_session->content.sesLink.to->content.sesLink.status = sess_active;
+		open_resp_msg->sess_fd_to_caller = sockfd[1];
 	}
 
 	/* Send message to its initial sender
@@ -570,6 +570,12 @@ static void invoke_cmd_response(struct manager_msg *man_msg)
 	struct com_msg_invoke_cmd *invoke_resp_msg = man_msg->msg;
 	proc_t session = NULL;
 
+	/* REsponse to invoke to command can be received only from TA */
+	if (man_msg->proc->p_type != proc_t_TA) {
+		OT_LOG(LOG_ERR, "Invalid sender");
+		goto ignore_msg;
+	}
+
 	session = h_table_get(man_msg->proc->content.process.links,
 			      (unsigned char *)(&invoke_resp_msg->session_id), sizeof(uint64_t));
 	if (!session) {
@@ -591,7 +597,7 @@ static void invoke_cmd(struct manager_msg *man_msg)
 	struct com_msg_invoke_cmd *invoke_msg = man_msg->msg;
 
 	/* Session link can only be sender */
-	if (man_msg->proc->p_type != proc_t_link) {
+	if (man_msg->proc->p_type >= proc_t_last) {
 		OT_LOG(LOG_ERR, "Invalid sender");
 		goto ignore_msg;
 	}
