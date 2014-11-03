@@ -41,7 +41,7 @@ int get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, siz
 	}
 
 	fd = open(elf_file, O_RDONLY, 0);
-	if (!fd) {
+	if (fd == -1) {
 		OT_LOG(LOG_ERR, "Open file");
 		return 1;
 	}

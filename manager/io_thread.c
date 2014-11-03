@@ -41,6 +41,7 @@ static void proc_fd_err(int err_nro, proc_t proc)
 
 	if (proc)
 		epoll_unreg(proc->sockfd);
+
 	err_nro = err_nro;
 }
 
@@ -54,17 +55,19 @@ static int check_proc_fd_epoll_status(struct epoll_event *event)
 {
 	/* Placeholder */
 
-	if (event->events & (EPOLLERR | EPOLLHUP)) {
+	if (event->events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
+		OT_LOG_INT(((proc_t)event->data.ptr)->sockfd)
 		epoll_unreg(((proc_t)event->data.ptr)->sockfd);
 		return 1;
 
-	} else if (event->events & EPOLLIN) {
-		return 0;
-
-	} else {
-		OT_LOG(LOG_ERR, "unknown epoll event")
-		return 1;
 	}
+
+	if (event->events & EPOLLIN) {
+		return 0;
+	}
+
+	OT_LOG(LOG_ERR, "unknown epoll event");
+	return 1;
 }
 
 /*!
@@ -346,11 +349,10 @@ void read_fd_and_add_todo_queue(struct epoll_event *event)
 	new_man_msg->proc = event->data.ptr;
 
 	/* Add message */
-	ret = com_recv_msg(((proc_t)event->data.ptr)->sockfd,
-			   &new_man_msg->msg, &new_man_msg->msg_len);
+	ret = com_recv_msg(new_man_msg->proc->sockfd, &new_man_msg->msg, &new_man_msg->msg_len);
 	if (ret == -1) {
 		OT_LOG(LOG_ERR, "Socket error");
-		proc_fd_err(errno, event->data.ptr);
+		proc_fd_err(errno, new_man_msg->proc);
 		free(new_man_msg);
 		return; /* No error message to CA, because socket status is unknown! */
 
