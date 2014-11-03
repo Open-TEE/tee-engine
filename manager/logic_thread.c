@@ -34,9 +34,117 @@
 /* Used for hashtable init */
 #define TA_SESS_COUNT_EST 50
 
+static void release_ta_file_locks(proc_t ta)
+{
+	ta = ta;
+	/* TODO: Implement */
+}
+
+static void add_and_notify_io_sock_to_close(int fd)
+{
+	struct sock_to_close *fd_to_close = NULL;
+	const uint64_t event = 1;
+
+	/* Notify logic thread */
+	fd_to_close = calloc(1, sizeof(struct sock_to_close));
+	if (!fd_to_close) {
+		OT_LOG(LOG_ERR, "out-of-memory");
+		return;
+	}
+
+	fd_to_close->sockfd = fd;
+
+	/* Lock task queue from logic thread */
+	if (pthread_mutex_lock(&socks_to_close_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		free(fd_to_close);
+		return;
+	}
+
+	list_add_after(&fd_to_close->list, &socks_to_close.list);
+
+	if (pthread_mutex_unlock(&socks_to_close_mutex)) {
+		/* For now, just log error */
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+	}
+
+	/* notify the I/O thread that there is something at output queue */
+	if (write(event_close_sock, &event, sizeof(uint64_t)) == -1) {
+		OT_LOG(LOG_ERR, "Failed to notify the io thread");
+		/* TODO: See what is causing it! */
+	}
+}
+
+static void free_sess(proc_t del_sess)
+{
+	if (!del_sess || del_sess->p_type != proc_t_link)
+		return;
+
+	/* Session in TA is not using socket. All messages from TA will arive to TA process socket.
+	 * And if session is active, function is called from close session function */
+	if (del_sess->content.sesLink.owner->p_type == proc_t_CA &&
+	    del_sess->content.sesLink.status == sess_active &&
+	    epoll_unreg(del_sess->sockfd) == -1)
+		OT_LOG(LOG_ERR, "Failed to unreg socket");
+
+	/* If functions fails. we will leaking FDs */
+	add_and_notify_io_sock_to_close(del_sess->sockfd);
+
+	h_table_remove(del_sess->content.sesLink.owner->content.process.links,
+		       (unsigned char *)&del_sess->content.sesLink.session_id, sizeof(uint64_t));
+
+	free(del_sess);
+	del_sess = NULL;
+}
+
 static void free_proc(proc_t del_proc)
 {
-	del_proc = del_proc;
+	proc_t proc_sess = NULL;
+
+	if (!del_proc || del_proc->p_type == proc_t_link)
+		return;
+
+	/* Free process sessions
+	 * Note: It is a programmer error, if he close session and there is session open */
+	h_table_init_stepper(del_proc->content.process.links);
+	while (1) {
+		proc_sess = h_table_step(del_proc->content.process.links);
+		if (proc_sess)
+			free_sess(proc_sess);
+		else
+			break;
+	}
+
+	/* Free session hashtable */
+	h_table_free(del_proc->content.process.links);
+
+	/* Client process spesific operations */
+	if (del_proc->p_type == proc_t_CA && pthread_mutex_lock(&CA_table_mutex) == -1) {
+
+		h_table_remove(clientApps,
+			       (unsigned char *)&del_proc->sockfd, sizeof(del_proc->sockfd));
+
+		if (pthread_mutex_unlock(&CA_table_mutex))
+			OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+	}
+
+	/* Trusted process spesific operations */
+	if (del_proc->p_type == proc_t_TA) {
+		release_ta_file_locks(del_proc);
+		h_table_remove(trustedApps,
+			       (unsigned char *)&del_proc->content.process.pid, sizeof(pid_t));
+	}
+
+	/* Unreg socket from epoll and close */
+	if ((del_proc->content.process.status == proc_uninitialized ||
+	     del_proc->content.process.status == proc_initialized) &&
+	    epoll_unreg(del_proc->sockfd) == -1)
+		OT_LOG(LOG_ERR, "Failed to unreg socket");
+
+	add_and_notify_io_sock_to_close(del_proc->sockfd);
+
+	free(del_proc);
+	del_proc = NULL;
 }
 
 static void add_msg_done_queue_and_notify(struct manager_msg *man_msg)
@@ -120,11 +228,6 @@ static void ca_init_context(struct manager_msg *man_msg)
 
 discard_msg:
 	free(man_msg);
-}
-
-static void free_sess(proc_t del_sess)
-{
-	del_sess = del_sess;
 }
 
 static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
@@ -711,6 +814,7 @@ unlock:
 static void close_session(struct manager_msg *man_msg)
 {
 	struct com_msg_close_session *close_msg = man_msg->msg;
+	proc_t ta_proc;
 
 	/* Valid open session message */
 	if (close_msg->msg_hdr.msg_name != COM_MSG_NAME_CLOSE_SESSION ||
@@ -723,6 +827,9 @@ static void close_session(struct manager_msg *man_msg)
 		OT_LOG(LOG_ERR, "Invalid sender");
 		goto ignore_msg;
 	}
+
+	/* Save session TO proc addr, because session might be removed */
+	ta_proc = man_msg->proc->content.sesLink.to->content.sesLink.owner;
 
 	/* Update close message */
 	close_msg->should_ta_destroy =
@@ -744,7 +851,7 @@ static void close_session(struct manager_msg *man_msg)
 				       man_msg->proc->content.sesLink.session_id);
 	}
 
-	man_msg->proc = man_msg->proc->content.sesLink.to->content.sesLink.owner;
+	man_msg->proc = ta_proc;
 	add_msg_done_queue_and_notify(man_msg);
 
 	return;
