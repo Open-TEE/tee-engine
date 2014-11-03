@@ -83,12 +83,14 @@ static void free_sess(proc_t del_sess)
 	/* Session in TA is not using socket. All messages from TA will arive to TA process socket.
 	 * And if session is active, function is called from close session function */
 	if (del_sess->content.sesLink.owner->p_type == proc_t_CA &&
-	    del_sess->content.sesLink.status == sess_active &&
-	    epoll_unreg(del_sess->sockfd) == -1)
-		OT_LOG(LOG_ERR, "Failed to unreg socket");
+	    del_sess->content.sesLink.status == sess_active) {
 
-	/* If functions fails. we will leaking FDs */
-	add_and_notify_io_sock_to_close(del_sess->sockfd);
+		if (epoll_unreg(del_sess->sockfd) == -1)
+			OT_LOG(LOG_ERR, "Failed to unreg socket");
+
+		/* If functions fails. we will leaking FDs */
+		add_and_notify_io_sock_to_close(del_sess->sockfd);
+	}
 
 	h_table_remove(del_sess->content.sesLink.owner->content.process.links,
 		       (unsigned char *)&del_sess->content.sesLink.session_id, sizeof(uint64_t));

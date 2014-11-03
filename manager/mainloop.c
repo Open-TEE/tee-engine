@@ -201,6 +201,10 @@ int lib_main_loop(struct core_control *control_params)
 	if (epoll_reg_fd(event_done_queue_fd, EPOLLIN))
 		return -1; /* err msg logged */
 
+	/* Socket(s) need to be closed */
+	if (epoll_reg_fd(event_close_sock, EPOLLIN))
+		return -1; /* err msg logged */
+
 	/* Singnal handling */
 	if (epoll_reg_fd(control_params->self_pipe_fd, EPOLLIN))
 		return -1; /* err msg logged */
@@ -259,9 +263,10 @@ int lib_main_loop(struct core_control *control_params)
 			} else if (cur_events[i].data.fd == control_params->self_pipe_fd) {
 				manager_check_signal(control_params, &cur_events[i]);
 
-			} else if (cur_events[i].data.fd == event_close_sock) {
+			} else if(cur_events[i].data.fd == event_close_sock) {
+				handle_close_sock(&cur_events[i]);
 
-			} else if (cur_events[i].data.fd == event_ta_dir_watch_fd) {
+			} else if(cur_events[i].data.fd == event_ta_dir_watch_fd) {
 				ta_dir_watch_event(&cur_events[i], &event_ta_dir_watch_fd);
 
 			} else {
