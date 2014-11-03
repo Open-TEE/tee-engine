@@ -1,0 +1,73 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a6b29fe_1447d020",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 94,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-03T19:27:00Z",
+      "side": 1,
+      "message": "your alignment is off",
+      "range": {
+        "startLine": 94,
+        "startChar": 0,
+        "endLine": 94,
+        "endChar": 7
+      },
+      "revId": "dab37877b767dd1109878ebd8d00cf0ab77168e6",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_3442cc10",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 115,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-03T19:27:00Z",
+      "side": 1,
+      "message": "why have a while loop here, either the first element is the one you want, or you are going to break",
+      "range": {
+        "startLine": 115,
+        "startChar": 0,
+        "endLine": 115,
+        "endChar": 3
+      },
+      "revId": "dab37877b767dd1109878ebd8d00cf0ab77168e6",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_744ba42b",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 125,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-03T19:27:00Z",
+      "side": 1,
+      "message": "alignment",
+      "range": {
+        "startLine": 125,
+        "startChar": 0,
+        "endLine": 125,
+        "endChar": 8
+      },
+      "revId": "dab37877b767dd1109878ebd8d00cf0ab77168e6",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
