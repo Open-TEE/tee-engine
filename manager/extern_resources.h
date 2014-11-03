@@ -27,14 +27,16 @@
 typedef struct __proc *proc_t;
 
 /* IO thread will close sockfd */
-struct sock_to_close {
+struct sock_to_close
+{
 	struct list_head list;
 	int sockfd;
 };
 
 /* Received message is malloced to msg parameter and it lenght will be in msg_len.
  */
-struct manager_msg {
+struct manager_msg
+{
 	struct list_head list;
 	void *msg;
 	int msg_len;
@@ -110,12 +112,15 @@ enum session_status {
  * Process: ClientApp or TrustedApp
  * Sessionlink: Links CA or TA session to another session.
  * Point: Sessionlink is representing opened session between applicatons */
-struct __proc {
+struct __proc
+{
 	enum proc_type p_type;
 	int sockfd;
 
-	union {
-		struct {
+	union
+	{
+		struct
+		{
 			enum session_status status;
 			int session_id;
 			int sockfd;
@@ -123,7 +128,8 @@ struct __proc {
 			proc_t owner;
 		} sesLink;
 
-		struct {
+		struct
+		{
 			enum proc_status status;
 			pid_t pid;
 			TEE_UUID ta_uuid;

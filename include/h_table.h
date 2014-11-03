@@ -20,7 +20,7 @@
 /* NOTE: Not a thread safe! */
 
 #ifndef __H_TABLE_H__
-#define	__H_TABLE_H__
+#define __H_TABLE_H__
 
 #include <stdint.h>
 #include <stdlib.h>

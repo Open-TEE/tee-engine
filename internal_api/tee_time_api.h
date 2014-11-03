@@ -24,9 +24,10 @@
 /*!
   * \brief Specify a wait time that will only be interupted by seting a cancelation flag.
   */
-#define TEE_TIMEOUT_INFINITE		0xFFFFFFFF
+#define TEE_TIMEOUT_INFINITE 0xFFFFFFFF
 
-typedef struct {
+typedef struct
+{
 	uint32_t seconds;
 	uint32_t millis;
 } TEE_Time;

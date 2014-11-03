@@ -16,7 +16,7 @@
 *****************************************************************************/
 
 #ifndef __TA_DIR_WATCH_H__
-#define	__TA_DIR_WATCH_H__
+#define __TA_DIR_WATCH_H__
 
 /*! \file ta_dir_watch.h
     \brief This is a bit stand alone module and it is only meant to use in OpenTEE manager process.
@@ -36,7 +36,8 @@
 /*!
  * \brief The trusted_app_propertie struct
  */
-struct trusted_app_propertie {
+struct trusted_app_propertie
+{
 	struct gpd_ta_config user_config;
 	char ta_so_name[TA_MAX_FILE_NAME];
 };

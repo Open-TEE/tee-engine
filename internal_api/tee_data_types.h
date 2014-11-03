@@ -23,60 +23,63 @@
 
 #include "../include/tee_shared_data_types.h"
 
-typedef struct {
+typedef struct
+{
 	uint32_t login;
 	TEE_UUID uuid;
 } TEE_Identity;
 
-
-typedef union {
-	struct {
-		void* buffer;
+typedef union
+{
+	struct
+	{
+		void *buffer;
 		size_t size;
 	} memref;
-	struct {
+	struct
+	{
 		uint32_t a;
 		uint32_t b;
 	} value;
 } TEE_Param;
 
-typedef struct __TEE_TASessionHandle* TEE_TASessionHandle;
+typedef struct __TEE_TASessionHandle *TEE_TASessionHandle;
 
-typedef struct __TEE_PropSetHandle* TEE_PropSetHandle;
+typedef struct __TEE_PropSetHandle *TEE_PropSetHandle;
 
 /* Paramater Types */
-#define TEE_PARAM_TYPE_NONE		0x00000000
-#define TEE_PARAM_TYPE_VALUE_INPUT	0x00000001
-#define TEE_PARAM_TYPE_VALUE_OUTPUT	0x00000002
-#define TEE_PARAM_TYPE_VALUE_INOUT	0x00000003
-#define TEE_PARAM_TYPE_MEMREF_INPUT	0x00000005
-#define TEE_PARAM_TYPE_MEMREF_OUTPUT	0x00000006
-#define TEE_PARAM_TYPE_MEMREF_INOUT	0x00000007
+#define TEE_PARAM_TYPE_NONE 0x00000000
+#define TEE_PARAM_TYPE_VALUE_INPUT 0x00000001
+#define TEE_PARAM_TYPE_VALUE_OUTPUT 0x00000002
+#define TEE_PARAM_TYPE_VALUE_INOUT 0x00000003
+#define TEE_PARAM_TYPE_MEMREF_INPUT 0x00000005
+#define TEE_PARAM_TYPE_MEMREF_OUTPUT 0x00000006
+#define TEE_PARAM_TYPE_MEMREF_INOUT 0x00000007
 
 /* Session Login Methods (core api) */
-#define TEE_LOGIN_PUBLIC		0x00000000
-#define TEE_LOGIN_USER			0x00000001
-#define TEE_LOGIN_GROUP			0x00000002
-#define TEE_LOGIN_APPLICATION		0x00000004
-#define TEE_LOGIN_APPLICATION_USER	0x00000005
-#define TEE_LOGIN_APPLICATION_GROUP	0x00000006
-#define TEE_LOGIN_TRUSTED_APP		0xF0000000
+#define TEE_LOGIN_PUBLIC 0x00000000
+#define TEE_LOGIN_USER 0x00000001
+#define TEE_LOGIN_GROUP 0x00000002
+#define TEE_LOGIN_APPLICATION 0x00000004
+#define TEE_LOGIN_APPLICATION_USER 0x00000005
+#define TEE_LOGIN_APPLICATION_GROUP 0x00000006
+#define TEE_LOGIN_TRUSTED_APP 0xF0000000
 
 /* Property Set Pseudo-Handle Constants */
-#define TEE_PROPSET_CURRENT_TA		(TEE_PropSetHandle)0xFFFFFFFF
-#define TEE_PROPSET_CURRENT_CLIENT	(TEE_PropSetHandle)0xFFFFFFFE
-#define TEE_PROPSET_TEE_IMPLEMENTATION	(TEE_PropSetHandle)0xFFFFFFFD
+#define TEE_PROPSET_CURRENT_TA (TEE_PropSetHandle)0xFFFFFFFF
+#define TEE_PROPSET_CURRENT_CLIENT (TEE_PropSetHandle)0xFFFFFFFE
+#define TEE_PROPSET_TEE_IMPLEMENTATION (TEE_PropSetHandle)0xFFFFFFFD
 
-#define TEE_ACCESS_READ			0x00000001
-#define TEE_ACCESS_WRITE		0x00000002
-#define TEE_ACCESS_ANY_OWNER		0x00000004
+#define TEE_ACCESS_READ 0x00000001
+#define TEE_ACCESS_WRITE 0x00000002
+#define TEE_ACCESS_ANY_OWNER 0x00000004
 
 /* Memory Access Rights Constants */
-#define TEE_MEMORY_ACCESS_READ		0x00000001
-#define TEE_MEMORY_ACCESS_WRITE		0x00000002
-#define TEE_MEMORY_ACCESS_ANY_OWNER	0x00000004
+#define TEE_MEMORY_ACCESS_READ 0x00000001
+#define TEE_MEMORY_ACCESS_WRITE 0x00000002
+#define TEE_MEMORY_ACCESS_ANY_OWNER 0x00000004
 
-#define TEE_PARAM_TYPES(param0Type, param1Type, param2Type, param3Type) \
+#define TEE_PARAM_TYPES(param0Type, param1Type, param2Type, param3Type)                            \
 	((param0Type) | ((param1Type) << 4) | ((param2Type) << 8) | ((param3Type) << 12))
 
 #define TEE_PARAM_TYPE_GET(paramsType, index) (((paramsType) >> (index * 4)) & 0xF)
@@ -85,7 +88,7 @@ typedef struct __TEE_PropSetHandle* TEE_PropSetHandle;
 typedef enum {
 	TEE_TYPE_AES = 0xA0000010,
 	TEE_TYPE_DES = 0xA0000011,
-	TEE_TYPE_DES3 =	0xA0000013,
+	TEE_TYPE_DES3 = 0xA0000013,
 	TEE_TYPE_HMAC_MD5 = 0xA0000001,
 	TEE_TYPE_HMAC_SHA1 = 0xA0000002,
 	TEE_TYPE_HMAC_SHA224 = 0xA0000003,
@@ -125,9 +128,6 @@ typedef enum {
 	TEE_ATTR_RSA_PSS_SALT_LENGTH = 0xF0000A30,
 } obj_func_atribute;
 
-typedef enum {
-	TEE_ATTR_FLAG_VALUE = 0x20000000,
-	TEE_ATTR_FLAG_PUBLIC = 0x10000000
-} attr_id_flag;
+typedef enum { TEE_ATTR_FLAG_VALUE = 0x20000000, TEE_ATTR_FLAG_PUBLIC = 0x10000000 } attr_id_flag;
 
 #endif

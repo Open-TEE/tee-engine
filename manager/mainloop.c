@@ -100,7 +100,7 @@ static int init_sock(int *pub_sockfd)
 	strncpy(sock_addr.sun_path, sock_path, sizeof(sock_addr.sun_path) - 1);
 	sock_addr.sun_family = AF_UNIX;
 
-	if (bind(*pub_sockfd, (struct sockaddr *) &sock_addr, sizeof(struct sockaddr_un)) == -1) {
+	if (bind(*pub_sockfd, (struct sockaddr *)&sock_addr, sizeof(struct sockaddr_un)) == -1) {
 		OT_LOG(LOG_ERR, "Error %s", strerror(errno));
 		return -1;
 	}
@@ -259,10 +259,9 @@ int lib_main_loop(struct core_control *control_params)
 			} else if (cur_events[i].data.fd == control_params->self_pipe_fd) {
 				manager_check_signal(control_params, &cur_events[i]);
 
-			} else if(cur_events[i].data.fd == event_close_sock) {
+			} else if (cur_events[i].data.fd == event_close_sock) {
 
-
-			} else if(cur_events[i].data.fd == event_ta_dir_watch_fd) {
+			} else if (cur_events[i].data.fd == event_ta_dir_watch_fd) {
 				ta_dir_watch_event(&cur_events[i], &event_ta_dir_watch_fd);
 
 			} else {

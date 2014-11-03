@@ -22,7 +22,8 @@
 #include "tee_list.h"
 
 /* Struct ta_task will be used for communication between thread */
-struct ta_task {
+struct ta_task
+{
 	struct list_head list;
 	void *msg;
 	int msg_len;

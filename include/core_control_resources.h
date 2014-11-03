@@ -20,17 +20,18 @@
 #include <signal.h>
 #include <unistd.h>
 
-#define MAX_PR_NAME		16
+#define MAX_PR_NAME 16
 
-#define TEE_SIG_CHILD		0x00000001
-#define TEE_SIG_TERM		0x00000002
-#define TEE_SIG_HUP		0x00000004
+#define TEE_SIG_CHILD 0x00000001
+#define TEE_SIG_TERM 0x00000002
+#define TEE_SIG_HUP 0x00000004
 
 /*!
  * \brief The core_control struct
  * A structure that defines many states that are shared between the core, launcher and manager
  */
-struct core_control {
+struct core_control
+{
 	volatile sig_atomic_t sig_vector;
 	char *argv0;
 	int argv0_len;

@@ -23,20 +23,25 @@
  * ## Data Types ##
  */
 
-typedef struct {
+typedef struct
+{
 	uint32_t attributeID;
-	union {
-		struct {
-			void* buffer;
+	union
+	{
+		struct
+		{
+			void *buffer;
 			size_t length;
 		} ref;
-		struct {
+		struct
+		{
 			uint32_t a, b;
 		} value;
 	} content;
 } TEE_Attribute;
 
-typedef struct {
+typedef struct
+{
 	uint32_t objectType;
 	uint32_t objectSize;
 	uint32_t maxObjectSize;
@@ -46,63 +51,55 @@ typedef struct {
 	uint32_t handleFlags;
 } TEE_ObjectInfo;
 
-typedef enum{
-	TEE_DATA_SEEK_SET = 0,
-	TEE_DATA_SEEK_CUR,
-	TEE_DATA_SEEK_END
-} TEE_Whence;
+typedef enum { TEE_DATA_SEEK_SET = 0, TEE_DATA_SEEK_CUR, TEE_DATA_SEEK_END } TEE_Whence;
 
-typedef struct __TEE_ObjectHandle* TEE_ObjectHandle;
+typedef struct __TEE_ObjectHandle *TEE_ObjectHandle;
 
-typedef struct __TEE_ObjectEnumHandle* TEE_ObjectEnumHandle;
-
-
-
+typedef struct __TEE_ObjectEnumHandle *TEE_ObjectEnumHandle;
 
 /*
  * ## Constants ##
  */
 
 /* Object Storage Constants */
-#define TEE_STORAGE_PRIVATE			0x00000001
+#define TEE_STORAGE_PRIVATE 0x00000001
 
 /* Data Flag Constants */
-#define TEE_DATA_FLAG_ACCESS_READ		0x00000001
-#define TEE_DATA_FLAG_ACCESS_WRITE		0x00000002
-#define TEE_DATA_FLAG_ACCESS_WRITE_META		0x00000004
-#define TEE_DATA_FLAG_SHARE_READ		0x00000010
-#define TEE_DATA_FLAG_SHARE_WRITE		0x00000020
-#define TEE_DATA_FLAG_CREATE			0x00000200
-#define TEE_DATA_FLAG_EXCLUSIVE			0x00000400
+#define TEE_DATA_FLAG_ACCESS_READ 0x00000001
+#define TEE_DATA_FLAG_ACCESS_WRITE 0x00000002
+#define TEE_DATA_FLAG_ACCESS_WRITE_META 0x00000004
+#define TEE_DATA_FLAG_SHARE_READ 0x00000010
+#define TEE_DATA_FLAG_SHARE_WRITE 0x00000020
+#define TEE_DATA_FLAG_CREATE 0x00000200
+#define TEE_DATA_FLAG_EXCLUSIVE 0x00000400
 
 /* Usage Constants */
-#define TEE_USAGE_EXTRACTABLE			0x00000001
-#define TEE_USAGE_ENCRYPT			0x00000002
-#define TEE_USAGE_DECRYPT			0x00000004
-#define TEE_USAGE_MAC				0x00000008
-#define TEE_USAGE_SIGN				0x00000010
-#define TEE_USAGE_VERIFY			0x00000020
-#define TEE_USAGE_DERIVE			0x00000040
+#define TEE_USAGE_EXTRACTABLE 0x00000001
+#define TEE_USAGE_ENCRYPT 0x00000002
+#define TEE_USAGE_DECRYPT 0x00000004
+#define TEE_USAGE_MAC 0x00000008
+#define TEE_USAGE_SIGN 0x00000010
+#define TEE_USAGE_VERIFY 0x00000020
+#define TEE_USAGE_DERIVE 0x00000040
 
 /* Handle Flag Constants */
-#define TEE_HANDLE_FLAG_PERSISTENT		0x00010000
-#define TEE_HANDLE_FLAG_INITIALIZED		0x00020000
-#define TEE_HANDLE_FLAG_KEY_SET			0x00040000
-#define TEE_HANDLE_FLAG_EXPECT_TWO_KEYS		0x00080000
+#define TEE_HANDLE_FLAG_PERSISTENT 0x00010000
+#define TEE_HANDLE_FLAG_INITIALIZED 0x00020000
+#define TEE_HANDLE_FLAG_KEY_SET 0x00040000
+#define TEE_HANDLE_FLAG_EXPECT_TWO_KEYS 0x00080000
 
 /* Operation Constants */
-#define TEE_OPERATION_CIPHER			1
-#define TEE_OPERATION_MAC			3
-#define TEE_OPERATION_AE			4
-#define TEE_OPERATION_DIGEST			5
-#define TEE_OPERATION_ASYMMETRIC_CIPHER		6
-#define TEE_OPERATION_ASYMMETRIC_SIGNATURE	7
-#define TEE_OPERATION_KEY_DERIVATION		8
+#define TEE_OPERATION_CIPHER 1
+#define TEE_OPERATION_MAC 3
+#define TEE_OPERATION_AE 4
+#define TEE_OPERATION_DIGEST 5
+#define TEE_OPERATION_ASYMMETRIC_CIPHER 6
+#define TEE_OPERATION_ASYMMETRIC_SIGNATURE 7
+#define TEE_OPERATION_KEY_DERIVATION 8
 
 /* Miscellaneous Constants */
-#define TEE_DATA_MAX_POSITION			0xFFFFFFFF
-#define TEE_OBJECT_ID_MAX_LEN			64
-
+#define TEE_DATA_MAX_POSITION 0xFFFFFFFF
+#define TEE_OBJECT_ID_MAX_LEN 64
 
 /*
  * ## Generic Object Functions ##
@@ -113,7 +110,7 @@ typedef struct __TEE_ObjectEnumHandle* TEE_ObjectEnumHandle;
  * \param object
  * \param objectInfo
  */
-void TEE_GetObjectInfo(TEE_ObjectHandle object, TEE_ObjectInfo* objectInfo);
+void TEE_GetObjectInfo(TEE_ObjectHandle object, TEE_ObjectInfo *objectInfo);
 
 /*!
  * \brief TEE_RestrictObjectUsage
@@ -130,8 +127,8 @@ void TEE_RestrictObjectUsage(TEE_ObjectHandle object, uint32_t objectUsage);
  * \param size
  * \return
  */
-TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attributeID,
-					void* buffer, size_t* size);
+TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attributeID, void *buffer,
+					size_t *size);
 
 /*!
  * \brief TEE_GetObjectValueAttribute
@@ -141,8 +138,8 @@ TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attrib
  * \param b
  * \return
  */
-TEE_Result TEE_GetObjectValueAttribute(TEE_ObjectHandle object, uint32_t attributeID,
-				       uint32_t* a, uint32_t* b);
+TEE_Result TEE_GetObjectValueAttribute(TEE_ObjectHandle object, uint32_t attributeID, uint32_t *a,
+				       uint32_t *b);
 
 /*!
  * \brief TEE_CloseObject
@@ -162,7 +159,7 @@ void TEE_CloseObject(TEE_ObjectHandle object);
  * \return
  */
 TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSize,
-				       TEE_ObjectHandle* object);
+				       TEE_ObjectHandle *object);
 
 /*!
  * \brief TEE_FreeTransientObject
@@ -183,7 +180,7 @@ void TEE_ResetTransientObject(TEE_ObjectHandle object);
  * \param attrCount
  * \return
  */
-TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* attrs,
+TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute *attrs,
 				       uint32_t attrCount);
 
 /*!
@@ -193,7 +190,7 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute* a
  * \param buffer
  * \param length
  */
-void TEE_InitRefAttribute(TEE_Attribute* attr, uint32_t attributeID, void* buffer, size_t length);
+void TEE_InitRefAttribute(TEE_Attribute *attr, uint32_t attributeID, void *buffer, size_t length);
 
 /*!
  * \brief TEE_InitValueAttribute
@@ -202,7 +199,7 @@ void TEE_InitRefAttribute(TEE_Attribute* attr, uint32_t attributeID, void* buffe
  * \param a
  * \param b
  */
-void TEE_InitValueAttribute(TEE_Attribute* attr, uint32_t attributeID, uint32_t a, uint32_t b);
+void TEE_InitValueAttribute(TEE_Attribute *attr, uint32_t attributeID, uint32_t a, uint32_t b);
 
 /*!
  * \brief TEE_CopyObjectAttributes
@@ -219,10 +216,8 @@ void TEE_CopyObjectAttributes(TEE_ObjectHandle destObject, TEE_ObjectHandle srcO
  * \param paramCount
  * \return
  */
-TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize,
-			   TEE_Attribute* params, uint32_t paramCount);
-
-
+TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attribute *params,
+			   uint32_t paramCount);
 
 /*
  * ## Persistent Object Functions ##
@@ -237,8 +232,8 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize,
  * \param object
  * \return
  */
-TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void* objectID, size_t objectIDLen,
-				    uint32_t flags, TEE_ObjectHandle* object);
+TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
+				    uint32_t flags, TEE_ObjectHandle *object);
 
 /*!
  * \brief TEE_CreatePersistentObject
@@ -252,14 +247,10 @@ TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void* objectID, size_t o
  * \param object
  * \return
  */
-TEE_Result TEE_CreatePersistentObject(uint32_t storageID,
-				      void* objectID,
-				      size_t objectIDLen,
-				      uint32_t flags,
-				      TEE_ObjectHandle attributes,
-				      void* initialData,
-				      size_t initialDataLen,
-				      TEE_ObjectHandle* object);
+TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
+				      uint32_t flags, TEE_ObjectHandle attributes,
+				      void *initialData, size_t initialDataLen,
+				      TEE_ObjectHandle *object);
 
 /*!
  * \brief TEE_CloseAndDeletePersistentObject
@@ -274,11 +265,8 @@ void TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object);
  * \param newObjectIDLen
  * \return
  */
-TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void* newObjectID,
+TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void *newObjectID,
 				      size_t newObjectIDLen);
-
-
-
 
 /*
  * ## Persistent Object Enumeration Functions ##
@@ -289,7 +277,7 @@ TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void* newObjectID
  * \param objectEnumerator
  * \return
  */
-TEE_Result TEE_AllocatePersistentObjectEnumerator(TEE_ObjectEnumHandle* objectEnumerator);
+TEE_Result TEE_AllocatePersistentObjectEnumerator(TEE_ObjectEnumHandle *objectEnumerator);
 
 /*!
  * \brief TEE_FreePersistentObjectEnumerator
@@ -321,12 +309,8 @@ TEE_Result TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumer
  * \return
  */
 TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
-				       TEE_ObjectInfo *objectInfo,
-				       void* objectID,
-				       size_t* objectIDLen);
-
-
-
+				       TEE_ObjectInfo *objectInfo, void *objectID,
+				       size_t *objectIDLen);
 
 /*
  * ## Data Stream Access Functions ##
@@ -340,7 +324,7 @@ TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
  * \param count
  * \return
  */
-TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void* buffer, size_t size, uint32_t* count);
+TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size, uint32_t *count);
 
 /*!
  * \brief TEE_WriteObjectData
@@ -349,7 +333,7 @@ TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void* buffer, size_t size
  * \param size
  * \return
  */
-TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void* buffer, size_t size);
+TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t size);
 
 /*!
  * \brief TEE_TruncateObjectData

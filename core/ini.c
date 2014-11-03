@@ -66,7 +66,7 @@ static char *strncpy0(char *dest, const char *src, size_t size)
 int ini_parse_file(FILE *file, int (*handler)(void *, const char *, const char *, const char *),
 		   void *user)
 {
-	/* Uses a fair bit of stack (use heap instead if you need to) */
+/* Uses a fair bit of stack (use heap instead if you need to) */
 #if INI_USE_STACK
 	char line[INI_MAX_LINE];
 #else
@@ -102,7 +102,7 @@ int ini_parse_file(FILE *file, int (*handler)(void *, const char *, const char *
 		start = lskip(rstrip(start));
 
 		if (*start == ';' || *start == '#')
-			;/* Per Python ConfigParser, allow '#' comments at start of line */
+			; /* Per Python ConfigParser, allow '#' comments at start of line */
 #if INI_ALLOW_MULTILINE
 		else if (*prev_name && *start && start > line) {
 			/* Non-black line with leading whitespace, treat as continuation

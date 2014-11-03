@@ -109,7 +109,4 @@ TEE_Result TEE_SetTAPersistentTime(TEE_Time *time)
 	return TEE_SUCCESS;
 }
 
-void TEE_GetREETime(TEE_Time *time) 
-{
-	TEE_GetSystemTime(time);
-}
+void TEE_GetREETime(TEE_Time *time) { TEE_GetSystemTime(time); }

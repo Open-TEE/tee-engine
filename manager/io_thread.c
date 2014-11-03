@@ -184,7 +184,7 @@ static int add_client_to_ca_table(proc_t add_client)
 	}
 
 	if (h_table_insert(clientApps, (unsigned char *)(&add_client->sockfd),
-				sizeof(add_client->sockfd), add_client)) {
+			   sizeof(add_client->sockfd), add_client)) {
 		OT_LOG(LOG_ERR, "Failed to add client table(out-of-mem)");
 		ret = 1;
 	}
@@ -202,7 +202,8 @@ static void remove_client_from_ca_table(proc_t rm_client)
 		return;
 	}
 
-	h_table_remove(clientApps, (unsigned char *)(&rm_client->sockfd), sizeof(rm_client->sockfd));
+	h_table_remove(clientApps, (unsigned char *)(&rm_client->sockfd),
+		       sizeof(rm_client->sockfd));
 
 	if (pthread_mutex_unlock(&CA_table_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
@@ -346,8 +347,8 @@ void read_fd_and_add_todo_queue(struct epoll_event *event)
 	new_man_msg->proc = event->data.ptr;
 
 	/* Add message */
-	ret = com_recv_msg(((proc_t)event->data.ptr)->sockfd,
-			   &new_man_msg->msg, &new_man_msg->msg_len);
+	ret = com_recv_msg(((proc_t)event->data.ptr)->sockfd, &new_man_msg->msg,
+			   &new_man_msg->msg_len);
 	if (ret == -1) {
 		OT_LOG(LOG_ERR, "Socket error");
 		proc_fd_err(errno, event->data.ptr);

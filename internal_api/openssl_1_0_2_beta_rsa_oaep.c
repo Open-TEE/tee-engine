@@ -31,8 +31,8 @@
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 
-int beta_PKCS1_MGF1(unsigned char *mask, long len,
-		    const unsigned char *seed, long seedlen, const EVP_MD *dgst)
+int beta_PKCS1_MGF1(unsigned char *mask, long len, const unsigned char *seed, long seedlen,
+		    const EVP_MD *dgst)
 {
 	long i, outlen = 0;
 	unsigned char cnt[4];
@@ -45,24 +45,19 @@ int beta_PKCS1_MGF1(unsigned char *mask, long len,
 	mdlen = EVP_MD_size(dgst);
 	if (mdlen < 0)
 		goto err;
-	for (i = 0; outlen < len; i++)
-	{
+	for (i = 0; outlen < len; i++) {
 		cnt[0] = (unsigned char)((i >> 24) & 255);
 		cnt[1] = (unsigned char)((i >> 16) & 255);
 		cnt[2] = (unsigned char)((i >> 8)) & 255;
 		cnt[3] = (unsigned char)(i & 255);
-		if (!EVP_DigestInit_ex(&c,dgst, NULL)
-		    || !EVP_DigestUpdate(&c, seed, seedlen)
-		    || !EVP_DigestUpdate(&c, cnt, 4))
+		if (!EVP_DigestInit_ex(&c, dgst, NULL) || !EVP_DigestUpdate(&c, seed, seedlen) ||
+		    !EVP_DigestUpdate(&c, cnt, 4))
 			goto err;
-		if (outlen + mdlen <= len)
-		{
+		if (outlen + mdlen <= len) {
 			if (!EVP_DigestFinal_ex(&c, mask + outlen, NULL))
 				goto err;
 			outlen += mdlen;
-		}
-		else
-		{
+		} else {
 			if (!EVP_DigestFinal_ex(&c, md, NULL))
 				goto err;
 			memcpy(mask + outlen, md, len - outlen);
@@ -75,9 +70,8 @@ err:
 	return rv;
 }
 
-int beta_RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
-					 const unsigned char *from, int flen,
-					 const unsigned char *param, int plen,
+int beta_RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen, const unsigned char *from,
+					 int flen, const unsigned char *param, int plen,
 					 const EVP_MD *md, const EVP_MD *mgf1md)
 {
 	int i, emlen = tlen - 1;
@@ -92,16 +86,14 @@ int beta_RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
 
 	mdlen = EVP_MD_size(md);
 
-	if (flen > emlen - 2 * mdlen - 1)
-	{
-		//RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1,
+	if (flen > emlen - 2 * mdlen - 1) {
+		// RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1,
 		//      RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE);
 		return 0;
 	}
 
-	if (emlen < 2 * mdlen + 1)
-	{
-		//RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1, RSA_R_KEY_SIZE_TOO_SMALL);
+	if (emlen < 2 * mdlen + 1) {
+		// RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1, RSA_R_KEY_SIZE_TOO_SMALL);
 		return 0;
 	}
 
@@ -111,17 +103,15 @@ int beta_RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
 
 	if (!EVP_Digest((void *)param, plen, db, NULL, md, NULL))
 		return 0;
-	memset(db + mdlen, 0,
-	       emlen - flen - 2 * mdlen - 1);
+	memset(db + mdlen, 0, emlen - flen - 2 * mdlen - 1);
 	db[emlen - flen - mdlen - 1] = 0x01;
-	memcpy(db + emlen - flen - mdlen, from, (unsigned int) flen);
+	memcpy(db + emlen - flen - mdlen, from, (unsigned int)flen);
 	if (RAND_bytes(seed, mdlen) <= 0)
 		return 0;
 
 	dbmask = OPENSSL_malloc(emlen - mdlen);
-	if (dbmask == NULL)
-	{
-		//RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1, ERR_R_MALLOC_FAILURE);
+	if (dbmask == NULL) {
+		// RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1, ERR_R_MALLOC_FAILURE);
 		return 0;
 	}
 
@@ -139,9 +129,8 @@ int beta_RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
 	return 1;
 }
 
-int beta_RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
-					   const unsigned char *from, int flen, int num,
-					   const unsigned char *param, int plen,
+int beta_RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen, const unsigned char *from,
+					   int flen, int num, const unsigned char *param, int plen,
 					   const EVP_MD *md, const EVP_MD *mgf1md)
 {
 	int i, dblen, mlen = -1;
@@ -165,8 +154,7 @@ int beta_RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
 		goto decoding_err;
 
 	lzero = num - flen;
-	if (lzero < 0)
-	{
+	if (lzero < 0) {
 		/* signalling this error immediately after detection might allow
 		 * for side-channel attacks (e.g. timing if 'plen' is huge
 		 * -- cf. James H. Manger, "A Chosen Ciphertext Attack on RSA Optimal
@@ -179,9 +167,8 @@ int beta_RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
 
 	dblen = num - mdlen;
 	db = OPENSSL_malloc(dblen + num);
-	if (db == NULL)
-	{
-		//RSAerr(RSA_F_RSA_PADDING_CHECK_PKCS1_OAEP_MGF1, ERR_R_MALLOC_FAILURE);
+	if (db == NULL) {
+		// RSAerr(RSA_F_RSA_PADDING_CHECK_PKCS1_OAEP_MGF1, ERR_R_MALLOC_FAILURE);
 		return -1;
 	}
 
@@ -208,24 +195,21 @@ int beta_RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
 
 	if (CRYPTO_memcmp(db, phash, mdlen) != 0 || bad)
 		goto decoding_err;
-	else
-	{
+	else {
 		for (i = mdlen; i < dblen; i++)
 			if (db[i] != 0x00)
 				break;
 		if (i == dblen || db[i] != 0x01)
 			goto decoding_err;
-		else
-		{
+		else {
 			/* everything looks OK */
 
 			mlen = dblen - ++i;
-			if (tlen < mlen)
-			{
-				//RSAerr(RSA_F_RSA_PADDING_CHECK_PKCS1_OAEP_MGF1, RSA_R_DATA_TOO_LARGE);
+			if (tlen < mlen) {
+				// RSAerr(RSA_F_RSA_PADDING_CHECK_PKCS1_OAEP_MGF1,
+				// RSA_R_DATA_TOO_LARGE);
 				mlen = -1;
-			}
-			else
+			} else
 				memcpy(to, db + i, mlen);
 		}
 	}
@@ -235,7 +219,8 @@ int beta_RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
 decoding_err:
 	/* to avoid chosen ciphertext attacks, the error message should not reveal
 	 * which kind of decoding error happened */
-	//RSAerr(RSA_F_RSA_PADDING_CHECK_PKCS1_OAEP_MGF1, RSA_R_OAEP_DECODING_ERROR);
-	if (db != NULL) OPENSSL_free(db);
+	// RSAerr(RSA_F_RSA_PADDING_CHECK_PKCS1_OAEP_MGF1, RSA_R_OAEP_DECODING_ERROR);
+	if (db != NULL)
+		OPENSSL_free(db);
 	return -1;
 }

@@ -62,7 +62,6 @@ static void sig_handler(int sig)
 		OT_LOG(LOG_ERR, "write error");
 		/* Lets hope that the error clear it self :S */
 	}
-
 }
 
 static void reset_signal_self_pipe()

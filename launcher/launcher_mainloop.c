@@ -48,7 +48,6 @@
 
 #define MAX_CURR_EVENTS 5
 
-
 static void check_signal_status(struct core_control *control_params)
 {
 	sig_atomic_t cpy_sig_vec = control_params->sig_vector;
@@ -162,8 +161,8 @@ int lib_main_loop(struct core_control *control_params)
 				exit(EXIT_FAILURE);
 			}
 
-			ret = com_recv_msg(control_params->comm_sock_fd,
-					   (void **)&recv_open_msg, &recv_bytes);
+			ret = com_recv_msg(control_params->comm_sock_fd, (void **)&recv_open_msg,
+					   &recv_bytes);
 			if (ret == -1) {
 				free(recv_open_msg);
 				/* TODO: Figur out why -1, but for now lets
@@ -202,7 +201,7 @@ int lib_main_loop(struct core_control *control_params)
 			/*
 			 * Clone now to create the TA subprocess
 			 */
-			new_proc_pid = syscall(SYS_clone, SIGCHLD | CLONE_PARENT, 0 , 0);
+			new_proc_pid = syscall(SYS_clone, SIGCHLD | CLONE_PARENT, 0, 0);
 			if (new_proc_pid == -1) {
 				send_err_msg_to_manager(control_params->comm_sock_fd, &created_ta);
 				free(recv_open_msg);
@@ -230,8 +229,8 @@ int lib_main_loop(struct core_control *control_params)
 						 sizeof(struct com_msg_ta_created)) ==
 				    sizeof(struct com_msg_ta_created)) {
 
-					if (send_fd(control_params->comm_sock_fd,
-						    sockfd[0]) == -1) {
+					if (send_fd(control_params->comm_sock_fd, sockfd[0]) ==
+					    -1) {
 						OT_LOG(LOG_ERR, "Failed to send TA sock");
 						kill(new_proc_pid, SIGKILL);
 						/* TODO: Check what is causing error, but for now

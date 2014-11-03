@@ -19,7 +19,8 @@
 
 #include <stdio.h>
 
-struct persistant_object_info {
+struct persistant_object_info
+{
 	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
 	size_t obj_id_len;
 	FILE *object_file;
@@ -28,7 +29,8 @@ struct persistant_object_info {
 	long data_position;
 };
 
-struct __TEE_ObjectHandle {
+struct __TEE_ObjectHandle
+{
 	struct persistant_object_info per_object;
 	TEE_ObjectInfo objectInfo;
 	TEE_Attribute *attrs;

@@ -72,20 +72,14 @@ TEE_Result TEE_CheckMemoryAccessRights(uint32_t accessFlags, void *buf, size_t s
 	}
 
 	fclose(fd);
-	free (line);
+	free(line);
 
 	return (mem_perms == accessFlags) ? TEEC_SUCCESS : TEEC_ERROR_ACCESS_DENIED;
 }
 
-void TEE_SetInstanceData(void *instanceData)
-{
-	instance_data = instanceData;
-}
+void TEE_SetInstanceData(void *instanceData) { instance_data = instanceData; }
 
-void *TEE_GetInstanceData()
-{
-	return instance_data;
-}
+void *TEE_GetInstanceData() { return instance_data; }
 
 void *TEE_Malloc(size_t size, uint32_t hint)
 {
@@ -93,27 +87,18 @@ void *TEE_Malloc(size_t size, uint32_t hint)
 	return calloc(size, sizeof(uint8_t));
 }
 
-void *TEE_Realloc(void *buffer, uint32_t newSize) //TODO HMM the newSize should be size_t
+void *TEE_Realloc(void *buffer, uint32_t newSize) // TODO HMM the newSize should be size_t
 {
 	return realloc(buffer, newSize);
 }
 
-void TEE_Free(void *buffer)
-{
-	free(buffer);
-}
+void TEE_Free(void *buffer) { free(buffer); }
 
-void TEE_MemMove(void *dest, void *src, uint32_t size)
-{
-	memmove(dest, src, size);
-}
+void TEE_MemMove(void *dest, void *src, uint32_t size) { memmove(dest, src, size); }
 
 int32_t TEE_MemCompare(void *buffer1, void *buffer2, uint32_t size)
 {
 	return memcmp(buffer1, buffer2, size);
 }
 
-void TEE_MemFill(void *buffer, uint32_t x, uint32_t size)
-{
-	memset(buffer, x, size);
-}
+void TEE_MemFill(void *buffer, uint32_t x, uint32_t size) { memset(buffer, x, size); }
