@@ -27,7 +27,6 @@
  * TEE_Result		TEE_SetOperationKey(..)
  */
 
-
 #include <openssl/engine.h>
 #include <openssl/conf.h>
 #include <openssl/rand.h>
@@ -54,8 +53,8 @@
 
 #define BITS_TO_BYTES(bits) (bits / 8)
 #define DIGEST_CTX(OPERATION_HANDLE) ((EVP_MD_CTX *)OPERATION_HANDLE->dig_ctx)
-#define RSA_key(OPERATION_HANDLE)  ((RSA *)(OPERATION_HANDLE->key.key))
-#define DSA_key(OPERATION_HANDLE)  ((DSA *)(OPERATION_HANDLE->key.key))
+#define RSA_key(OPERATION_HANDLE) ((RSA *)(OPERATION_HANDLE->key.key))
+#define DSA_key(OPERATION_HANDLE) ((DSA *)(OPERATION_HANDLE->key.key))
 #define DH_key(OPERATION_HANDLE) ((DH *)(OPERATION_HANDLE->key.key))
 #define SYM_ctx(OPERATION_HANDLE) ((EVP_CIPHER_CTX *)(OPERATION_HANDLE->key.ctx))
 #define SYM_key(OPERATION_HANDLE) (OPERATION_HANDLE->key.key)
@@ -82,7 +81,7 @@ struct __TEE_OperationHandle {
 	uint32_t key_size2; /* If operation has two key, this is second key len */
 };
 
-static bool __attribute__ ((constructor)) openssl_init()
+static bool __attribute__((constructor)) openssl_init()
 {
 	int read_bytes;
 	long seed_bytes = 1; /* # INCREASE # */
@@ -100,7 +99,7 @@ static bool __attribute__ ((constructor)) openssl_init()
 	}
 
 	/* test PNRG */
-	if (!RAND_bytes(test_buf, sizeof(test_buf))){
+	if (!RAND_bytes(test_buf, sizeof(test_buf))) {
 		syslog(LOG_ERR, "Openssl init: Problems with random generator (openssl failure)\n");
 		return false;
 	}
@@ -108,7 +107,7 @@ static bool __attribute__ ((constructor)) openssl_init()
 	return true;
 }
 
-static void __attribute__ ((destructor)) openssl_cleanup()
+static void __attribute__((destructor)) openssl_cleanup()
 {
 	ENGINE_cleanup();
 	CONF_modules_unload(1);
@@ -438,9 +437,6 @@ static bool valid_key_size_for_algorithm(uint32_t alg, uint32_t key)
 	return false;
 }
 
-
-
-
 static TEE_Attribute *get_attr_by_ID(TEE_ObjectHandle object, uint32_t attributeID)
 {
 	size_t i;
@@ -464,9 +460,7 @@ static bool cpy_key_comp_to_bn(BIGNUM **bn, uint32_t attrID, TEE_ObjectHandle ke
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
-	*bn = BN_bin2bn(rsa_component->content.ref.buffer,
-			rsa_component->content.ref.length,
-			*bn);
+	*bn = BN_bin2bn(rsa_component->content.ref.buffer, rsa_component->content.ref.length, *bn);
 	if (!*bn) {
 		syslog(LOG_ERR, "cpy RSA comp to op: bin2bn failed (openssl failure)\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
@@ -767,7 +761,6 @@ static bool valid_key_type_for_operation_algorithm(uint32_t key_type, uint32_t o
 			return true;
 		return false;
 
-
 	case TEE_TYPE_DH_KEYPAIR:
 		if (op_algorithm == TEE_ALG_DH_DERIVE_SHARED_SECRET)
 			return true;
@@ -783,11 +776,11 @@ static bool key_usage_allow_operation(uint32_t obj_usage, uint32_t op_mode, uint
 	/* RSA no padding is a special case */
 	if (alg == TEE_ALG_RSA_NOPAD) {
 
-		if ((obj_usage & TEE_USAGE_DECRYPT) &&
-		    (obj_usage & TEE_USAGE_VERIFY) && (op_mode == TEE_MODE_DECRYPT)) {
+		if ((obj_usage & TEE_USAGE_DECRYPT) && (obj_usage & TEE_USAGE_VERIFY) &&
+		    (op_mode == TEE_MODE_DECRYPT)) {
 			return true;
-		} else if ((obj_usage & TEE_USAGE_ENCRYPT) &&
-			   (obj_usage & TEE_USAGE_SIGN) && (op_mode == TEE_MODE_ENCRYPT)) {
+		} else if ((obj_usage & TEE_USAGE_ENCRYPT) && (obj_usage & TEE_USAGE_SIGN) &&
+			   (op_mode == TEE_MODE_ENCRYPT)) {
 			return true;
 		} else {
 			return false;
@@ -895,12 +888,12 @@ static TEE_Result valid_key_and_operation(TEE_ObjectHandle key, TEE_OperationHan
 
 	if (!valid_key_type_for_operation_algorithm(key->objectInfo.objectType,
 						    operation->operation_info.algorithm)) {
-		syslog(LOG_ERR, "valid_key_and_operation: Key does not match operation algorithm\n");
+		syslog(LOG_ERR,
+		       "valid_key_and_operation: Key does not match operation algorithm\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
-	if (!key_usage_allow_operation(key->objectInfo.objectUsage,
-				       operation->operation_info.mode,
+	if (!key_usage_allow_operation(key->objectInfo.objectUsage, operation->operation_info.mode,
 				       operation->operation_info.algorithm)) {
 		syslog(LOG_ERR, "valid_key_and_operation: Key does not allow operation\n");
 		return TEE_ERROR_BAD_STATE;
@@ -924,8 +917,6 @@ static uint32_t get_actual_key_size(uint32_t objectType, uint32_t maxObjectSize)
 
 	return maxObjectSize;
 }
-
-
 
 /*********************************************************************************************
  *											     *
@@ -1127,8 +1118,6 @@ static const EVP_CIPHER *load_evp_sym_cipher(TEE_OperationHandle operation)
 	}
 }
 
-
-
 /*********************************************************************************************
  *											     *
  * D I G E S T   f u n c t i o n s							     *
@@ -1194,8 +1183,6 @@ static TEE_Result init_digest_op(TEE_OperationHandle operation, uint32_t algorit
 
 	return TEE_SUCCESS;
 }
-
-
 
 /*********************************************************************************************
  *											     *
@@ -1326,7 +1313,7 @@ static uint32_t rsa_msg_max_len(TEE_OperationHandle operation, const EVP_MD *has
 }
 
 static TEE_Result check_rsa_bufs_len(TEE_OperationHandle operation, const EVP_MD *hash,
-			       uint32_t dst_buf_len, uint32_t src_buf_len)
+				     uint32_t dst_buf_len, uint32_t src_buf_len)
 {
 	if (operation->operation_info.mode == TEE_MODE_ENCRYPT) {
 
@@ -1357,7 +1344,7 @@ static TEE_Result check_rsa_bufs_len(TEE_OperationHandle operation, const EVP_MD
 	return TEE_SUCCESS;
 }
 
-static void get_rsa_oaep_label(TEE_Attribute* params, uint32_t paramCount,
+static void get_rsa_oaep_label(TEE_Attribute *params, uint32_t paramCount,
 			       unsigned char *oaep_label, int *oaep_label_len)
 {
 	size_t i;
@@ -1393,8 +1380,8 @@ static bool add_rsa_cipher_padding(TEE_OperationHandle operation, void *srcData,
 
 	get_rsa_oaep_label(params, paramCount, oaep_label, &oaep_label_len);
 
-	if (!beta_RSA_padding_add_PKCS1_OAEP_mgf1(destData, *destLen, srcData, srcLen,
-						  oaep_label, oaep_label_len, hash, NULL)) {
+	if (!beta_RSA_padding_add_PKCS1_OAEP_mgf1(destData, *destLen, srcData, srcLen, oaep_label,
+						  oaep_label_len, hash, NULL)) {
 		syslog(LOG_ERR, "add_rsa_cipher_padding: Padding failure (openssl)\n");
 		return false;
 	}
@@ -1447,7 +1434,7 @@ static TEE_Result rsa_op_generic_pre_checks_and_setup(TEE_OperationHandle operat
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
 		syslog(LOG_ERR, "rsa_op_generic_pre_checks_and_setup: Not a asymetric op "
-		       "or not initializes or no key\n");
+				"or not initializes or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1470,7 +1457,7 @@ static TEE_Result rsa_op_generic_pre_checks_and_setup(TEE_OperationHandle operat
 
 /*   S I G N / V E R I F Y   f u n c t i o n s   */
 
-static int get_rsa_salt(TEE_Attribute* params, uint32_t paramCount)
+static int get_rsa_salt(TEE_Attribute *params, uint32_t paramCount)
 {
 	size_t i;
 
@@ -1489,9 +1476,9 @@ static int get_rsa_salt(TEE_Attribute* params, uint32_t paramCount)
 	return -1;
 }
 
-static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle operation, void* digest,
-							uint32_t dig_len, void* signature,
-							uint32_t sig_len, TEE_Attribute* params,
+static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle operation, void *digest,
+							uint32_t dig_len, void *signature,
+							uint32_t sig_len, TEE_Attribute *params,
 							uint32_t paramCount, int *salt,
 							unsigned char **rsa_mod_len_buf,
 							uint32_t *rsa_mod_len, const EVP_MD **hash)
@@ -1502,7 +1489,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 	}
 
 	/* Load/intialize salt */
-	*salt =	get_rsa_salt(params, paramCount);
+	*salt = get_rsa_salt(params, paramCount);
 
 	/* Load hash */
 	*hash = load_evp_asym_hash(operation);
@@ -1510,7 +1497,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 	/* Digest should match to algorithm */
 	if (dig_len != int2uint32(EVP_MD_size(*hash))) {
 		syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
-		       "Digest len err (not equal to alg)\n");
+				"Digest len err (not equal to alg)\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1520,7 +1507,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 	/* Signature buffer correct len */
 	if (sig_len < *rsa_mod_len) {
 		syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
-		       "Signature buf too small\n");
+				"Signature buf too small\n");
 		if (operation->operation_info.mode == TEE_MODE_SIGN)
 			return TEE_ERROR_SHORT_BUFFER;
 		else
@@ -1538,7 +1525,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 
 		if (dig_len > *rsa_mod_len - 11) {
 			syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
-			       "Dig too big for RSA key\n");
+					"Dig too big for RSA key\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 
@@ -1555,7 +1542,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 
 		if (uint322int(*rsa_mod_len) < (EVP_MD_size(*hash) + *salt + 2)) {
 			syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
-			       "Dig too big for RSA key\n");
+					"Dig too big for RSA key\n");
 			TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 		}
 
@@ -1563,7 +1550,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 
 	default:
 		syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
-		       "Digest len err (not equal to alg)\n");
+				"Digest len err (not equal to alg)\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1596,11 +1583,10 @@ static bool add_rsa_signature_padding(TEE_OperationHandle operation, void *EM, v
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
-		if (!RSA_padding_add_PKCS1_PSS_mgf1(RSA_key(operation), EM,
-						    mHash, hash, NULL, salt)) {
+		if (!RSA_padding_add_PKCS1_PSS_mgf1(RSA_key(operation), EM, mHash, hash, NULL,
+						    salt)) {
 			syslog(LOG_ERR, "add_rsa_signuture_padding: Padding failed\n");
 			return false;
-
 		}
 
 		break;
@@ -1614,7 +1600,7 @@ static bool add_rsa_signature_padding(TEE_OperationHandle operation, void *EM, v
 }
 
 static bool verify_rsa_signature(TEE_OperationHandle operation, void *EM, void *mHash,
-				      uint32_t mHash_len, const EVP_MD *hash, int salt)
+				 uint32_t mHash_len, const EVP_MD *hash, int salt)
 {
 	switch (operation->operation_info.algorithm) {
 	case TEE_ALG_RSASSA_PKCS1_V1_5_MD5:
@@ -1649,9 +1635,9 @@ static bool verify_rsa_signature(TEE_OperationHandle operation, void *EM, void *
 	return true;
 }
 
-static TEE_Result rsa_sign(TEE_OperationHandle operation, TEE_Attribute* params,
-			   uint32_t paramCount, void* digest, uint32_t digestLen,
-			   void* signature, uint32_t *signatureLen)
+static TEE_Result rsa_sign(TEE_OperationHandle operation, TEE_Attribute *params,
+			   uint32_t paramCount, void *digest, uint32_t digestLen, void *signature,
+			   uint32_t *signatureLen)
 {
 	TEE_Result ret = TEE_SUCCESS;
 	int salt = 0;
@@ -1705,10 +1691,8 @@ static TEE_Result rsa_sign(TEE_OperationHandle operation, TEE_Attribute* params,
 	return ret;
 }
 
-
-static TEE_Result rsa_ver(TEE_OperationHandle operation, TEE_Attribute* params,
-			   uint32_t paramCount, void* digest, uint32_t digestLen,
-			   void* signature, uint32_t signatureLen)
+static TEE_Result rsa_ver(TEE_OperationHandle operation, TEE_Attribute *params, uint32_t paramCount,
+			  void *digest, uint32_t digestLen, void *signature, uint32_t signatureLen)
 {
 	TEE_Result ret = TEE_SUCCESS;
 	int salt = 0;
@@ -1731,7 +1715,7 @@ static TEE_Result rsa_ver(TEE_OperationHandle operation, TEE_Attribute* params,
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
 		write_bytes = RSA_public_decrypt(signatureLen, signature, rsa_mod_len_buf,
-						  RSA_key(operation), RSA_PKCS1_PADDING);
+						 RSA_key(operation), RSA_PKCS1_PADDING);
 		break;
 
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
@@ -1740,7 +1724,7 @@ static TEE_Result rsa_ver(TEE_OperationHandle operation, TEE_Attribute* params,
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		write_bytes = RSA_public_decrypt(signatureLen, signature, rsa_mod_len_buf,
-						  RSA_key(operation), RSA_NO_PADDING);
+						 RSA_key(operation), RSA_NO_PADDING);
 		break;
 
 	default:
@@ -1785,8 +1769,8 @@ static TEE_Result malloc_and_cpy_dsa_key(TEE_OperationHandle operation, TEE_Obje
 	return TEE_SUCCESS;
 }
 
-TEE_Result dsa_sign(TEE_OperationHandle operation, void* digest, uint32_t digestLen,
-		    void* signature, uint32_t *signatureLen)
+TEE_Result dsa_sign(TEE_OperationHandle operation, void *digest, uint32_t digestLen,
+		    void *signature, uint32_t *signatureLen)
 {
 	unsigned int sig_len = *signatureLen;
 
@@ -1809,8 +1793,8 @@ TEE_Result dsa_sign(TEE_OperationHandle operation, void* digest, uint32_t digest
 	return TEE_SUCCESS;
 }
 
-TEE_Result dsa_ver(TEE_OperationHandle operation, void* digest, uint32_t digestLen,
-		    void* signature, uint32_t signatureLen)
+TEE_Result dsa_ver(TEE_OperationHandle operation, void *digest, uint32_t digestLen, void *signature,
+		   uint32_t signatureLen)
 {
 	if (!digest || !signature) {
 		syslog(LOG_ERR, "dsa_ver: Digest or Sig buf NULL\n");
@@ -1921,8 +1905,6 @@ err:
 	TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 }
 
-
-
 /*********************************************************************************************
  *											     *
  * D E R I V E   f u n c t i o n s						             *
@@ -1947,7 +1929,7 @@ static TEE_Result malloc_and_cpy_dh_key(TEE_OperationHandle operation, TEE_Objec
 	return TEE_SUCCESS;
 }
 
-static TEE_Attribute *get_dh_pub_val(TEE_Attribute* params, uint32_t paramCount)
+static TEE_Attribute *get_dh_pub_val(TEE_Attribute *params, uint32_t paramCount)
 {
 	size_t i;
 
@@ -1973,13 +1955,11 @@ static void dup_dh_key(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 			goto err;
 	}
 
-
 	if (DH_key(srcOperation)->priv_key) {
 		DH_key(dstOperation)->priv_key = BN_dup(DH_key(srcOperation)->priv_key);
 		if (!DH_key(dstOperation)->priv_key)
 			goto err;
 	}
-
 
 	if (DH_key(srcOperation)->pub_key) {
 		DH_key(dstOperation)->pub_key = BN_dup(DH_key(srcOperation)->pub_key);
@@ -1994,8 +1974,6 @@ err:
 	TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 }
 
-
-
 /*********************************************************************************************
  *											     *
  * M A C   f u n c t i o n s							             *
@@ -2008,7 +1986,7 @@ static const EVP_CIPHER *load_evp_mac_cipher(TEE_OperationHandle operation)
 	uint32_t key_size = operation->operation_info.keySize;
 
 	switch (algorithm) {
-		case TEE_ALG_AES_CMAC:
+	case TEE_ALG_AES_CMAC:
 		switch (key_size) {
 		case 128:
 			return EVP_aes_128_cbc();
@@ -2101,7 +2079,6 @@ static int max_mac_len(TEE_OperationHandle operation)
 
 	return 0; /* Suppress compiler warning */
 }
-
 
 /*********************************************************************************************
  *											     *
@@ -2248,18 +2225,6 @@ static void clear_key_from_operation(TEE_OperationHandle operation)
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 /*************************************************************************************************
 *												 *
 *												 *
@@ -2280,19 +2245,8 @@ static void clear_key_from_operation(TEE_OperationHandle operation)
 *												 *
 *************************************************************************************************/
 
-
-
-
-
-
-
-
-
-
-
-
-TEE_Result TEE_AllocateOperation(TEE_OperationHandle *operation, uint32_t algorithm,
-				 uint32_t mode, uint32_t maxKeySize)
+TEE_Result TEE_AllocateOperation(TEE_OperationHandle *operation, uint32_t algorithm, uint32_t mode,
+				 uint32_t maxKeySize)
 {
 	/* NOTICE: This func should Alloc all resources here, but now it is divited this func and
 	 * setOperationKey -func. This function alloc and init structures that is needed for op
@@ -2304,7 +2258,7 @@ TEE_Result TEE_AllocateOperation(TEE_OperationHandle *operation, uint32_t algori
 
 	if (!valid_mode_and_algorithm(algorithm, mode)) {
 		syslog(LOG_ERR, "TEE_AllocateOperation: Not a valid mode,"
-		       "algorithm or mode for algorithm\n");
+				"algorithm or mode for algorithm\n");
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
 
@@ -2405,7 +2359,7 @@ TEE_Result TEE_GetOperationInfoMultiple(TEE_OperationHandle operation,
 	} else {
 		operationInfoMultiple->numberOfKeys = 1;
 		operationInfoMultiple->keyInformation[0].keySize =
-				operation->operation_info.keySize;
+		    operation->operation_info.keySize;
 
 		if (alg_requires_2_keys(operation->operation_info.algorithm)) {
 			operationInfoMultiple->numberOfKeys = 2;
@@ -2418,7 +2372,6 @@ TEE_Result TEE_GetOperationInfoMultiple(TEE_OperationHandle operation,
 
 	return TEE_SUCCESS;
 }
-
 
 void TEE_ResetOperation(TEE_OperationHandle operation)
 {
@@ -2599,8 +2552,8 @@ TEE_Result TEE_SetOperationKey(TEE_OperationHandle operation, TEE_ObjectHandle k
 	}
 
 	operation->operation_info.handleState |= TEE_HANDLE_FLAG_KEY_SET;
-	operation->operation_info.keySize = get_actual_key_size(key->objectInfo.objectType,
-								key->objectInfo.maxObjectSize);
+	operation->operation_info.keySize =
+	    get_actual_key_size(key->objectInfo.objectType, key->objectInfo.maxObjectSize);
 
 retu:
 	return ret;
@@ -2674,7 +2627,7 @@ TEE_Result TEE_SetOperationKey2(TEE_OperationHandle operation, TEE_ObjectHandle 
 	 * example at aes128xts case key size would be 256. Tweak is provited with IV parameter */
 	memcpy(operation->key.key, sym_key1->content.ref.buffer, sym_key1->content.ref.length);
 	memcpy((unsigned char *)operation->key.key + sym_key1->content.ref.length,
-		sym_key2->content.ref.buffer, sym_key2->content.ref.length);
+	       sym_key2->content.ref.buffer, sym_key2->content.ref.length);
 
 	operation->operation_info.keySize = sym_key1->content.ref.length * 8;
 	operation->key_size2 = sym_key2->content.ref.length;
@@ -2721,17 +2674,16 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 	if (srcOperation->operation_info.operationClass == TEE_OPERATION_CIPHER) {
 
 		/* cpy key */
-		memcpy(dstOperation->key.key,
-		       srcOperation->key.key, srcOperation->key.key_len);
+		memcpy(dstOperation->key.key, srcOperation->key.key, srcOperation->key.key_len);
 		dstOperation->key.key_len = srcOperation->key.key_len;
 
 		if (srcOperation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED)
-			TEE_CipherInit(dstOperation,
-				       srcOperation->key.IV, srcOperation->key.IV_len);
+			TEE_CipherInit(dstOperation, srcOperation->key.IV,
+				       srcOperation->key.IV_len);
 
 	} else if (srcOperation->operation_info.operationClass == TEE_OPERATION_DIGEST) {
 
-		if(EVP_MD_CTX_copy_ex(dstOperation->dig_ctx, srcOperation->dig_ctx) != 1) {
+		if (EVP_MD_CTX_copy_ex(dstOperation->dig_ctx, srcOperation->dig_ctx) != 1) {
 			syslog(LOG_ERR, "TEE_CopyOperation: ctx dup (openssl failure)\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
@@ -2739,8 +2691,7 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 	} else if (srcOperation->operation_info.operationClass == TEE_OPERATION_MAC) {
 
 		/* cpy key */
-		memcpy(dstOperation->key.key,
-		       srcOperation->key.key, srcOperation->key.key_len);
+		memcpy(dstOperation->key.key, srcOperation->key.key, srcOperation->key.key_len);
 		dstOperation->key.key_len = srcOperation->key.key_len;
 
 		if (srcOperation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) {
@@ -2806,10 +2757,10 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 	dstOperation->operation_info.handleState = srcOperation->operation_info.handleState;
 	dstOperation->operation_info.keySize = srcOperation->operation_info.keySize;
 	dstOperation->operation_info.requiredKeyUsage =
-			srcOperation->operation_info.requiredKeyUsage;
+	    srcOperation->operation_info.requiredKeyUsage;
 }
 
-void TEE_DigestUpdate(TEE_OperationHandle operation, void* chunk, uint32_t chunkSize)
+void TEE_DigestUpdate(TEE_OperationHandle operation, void *chunk, uint32_t chunkSize)
 {
 	if (!operation || !chunk) {
 		syslog(LOG_ERR, "Digest update: Problem with parameters\n");
@@ -2831,8 +2782,8 @@ void TEE_DigestUpdate(TEE_OperationHandle operation, void* chunk, uint32_t chunk
 	operation->op_state = TEE_OP_STATE_ACTIVE;
 }
 
-TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void* chunk,
-			     uint32_t chunkLen, void* hash, uint32_t *hashLen)
+TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void *chunk, uint32_t chunkLen,
+			     void *hash, uint32_t *hashLen)
 {
 	unsigned int int_hashLen;
 
@@ -2872,7 +2823,7 @@ TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void* chunk,
 	return TEE_SUCCESS;
 }
 
-void TEE_CipherInit(TEE_OperationHandle operation, void* IV, uint32_t IVLen)
+void TEE_CipherInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 {
 	const EVP_CIPHER *cipher = NULL;
 	TEE_Result ret = TEE_SUCCESS;
@@ -2885,7 +2836,8 @@ void TEE_CipherInit(TEE_OperationHandle operation, void* IV, uint32_t IVLen)
 	if (operation->operation_info.operationClass != TEE_OPERATION_CIPHER ||
 	    operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR, "TEE_CipherInit: Not a cipher operation or initialized or no key\n");
+		syslog(LOG_ERR,
+		       "TEE_CipherInit: Not a cipher operation or initialized or no key\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto err;
 	}
@@ -2967,8 +2919,8 @@ err:
 	TEE_Panic(ret);
 }
 
-TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void* srcData, uint32_t srcLen,
-			    void* destData, uint32_t *destLen)
+TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void *srcData, uint32_t srcLen,
+			    void *destData, uint32_t *destLen)
 {
 	int int_destLen;
 
@@ -2994,8 +2946,8 @@ TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void* srcData, uint32
 			return TEE_ERROR_SHORT_BUFFER;
 		}
 
-		if (EVP_EncryptUpdate(SYM_ctx(operation), destData, &int_destLen,
-				      srcData, uint322int(srcLen)) == 0) {
+		if (EVP_EncryptUpdate(SYM_ctx(operation), destData, &int_destLen, srcData,
+				      uint322int(srcLen)) == 0) {
 			syslog(LOG_ERR, "Cipher update: Enc operation failed (openssl failure)\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
@@ -3007,8 +2959,8 @@ TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void* srcData, uint32
 			return TEE_ERROR_SHORT_BUFFER;
 		}
 
-		if (EVP_DecryptUpdate(SYM_ctx(operation), destData, &int_destLen,
-				      srcData, uint322int(srcLen)) == 0) {
+		if (EVP_DecryptUpdate(SYM_ctx(operation), destData, &int_destLen, srcData,
+				      uint322int(srcLen)) == 0) {
 			syslog(LOG_ERR, "Cipher update: Dec operation failed (openssl failure)\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
@@ -3024,8 +2976,8 @@ TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void* srcData, uint32
 	return TEE_SUCCESS;
 }
 
-TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void* srcData, uint32_t srcLen,
-			     void* destData, uint32_t *destLen)
+TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void *srcData, uint32_t srcLen,
+			     void *destData, uint32_t *destLen)
 {
 	int int_destLen = 0;
 	int total_int_destLen = 0;
@@ -3037,7 +2989,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void* srcData, uint3
 	}
 
 	if (operation->operation_info.operationClass != TEE_OPERATION_CIPHER ||
-	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED)||
+	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET) ||
 	    operation->op_state != TEE_OP_STATE_ACTIVE) {
 		syslog(LOG_ERR, "Cipher final: Not a cipher op or not initialized or no key\n");
@@ -3051,7 +3003,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void* srcData, uint3
 
 		ret = TEE_CipherUpdate(operation, srcData, srcLen, destData, destLen);
 		if (ret != TEE_SUCCESS) {
-			syslog(LOG_ERR, "Cipher final: src data problem\n");			;
+			syslog(LOG_ERR, "Cipher final: src data problem\n");
 			return ret;
 		}
 
@@ -3091,7 +3043,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void* srcData, uint3
 	return ret;
 }
 
-void TEE_MACInit(TEE_OperationHandle operation, void* IV, uint32_t IVLen)
+void TEE_MACInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 {
 	IV = IV;
 	IVLen = IVLen;
@@ -3123,8 +3075,8 @@ void TEE_MACInit(TEE_OperationHandle operation, void* IV, uint32_t IVLen)
 
 	case TEE_ALG_AES_CMAC:
 
-		if (!CMAC_Init(CMAC_ctx(operation), SYM_key(operation),
-			       SYM_key_len(operation), load_evp_mac_cipher(operation), NULL)) {
+		if (!CMAC_Init(CMAC_ctx(operation), SYM_key(operation), SYM_key_len(operation),
+			       load_evp_mac_cipher(operation), NULL)) {
 			syslog(LOG_ERR, "TEE_MACInit: CMAC init fail\n");
 			TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 		}
@@ -3139,8 +3091,8 @@ void TEE_MACInit(TEE_OperationHandle operation, void* IV, uint32_t IVLen)
 	case TEE_ALG_HMAC_SHA512:
 
 		HMAC_CTX_init(HMAC_ctx(operation));
-		if (!HMAC_Init_ex(HMAC_ctx(operation), SYM_key(operation),
-				  SYM_key_len(operation), load_evp_mac_hash(operation), NULL)) {
+		if (!HMAC_Init_ex(HMAC_ctx(operation), SYM_key(operation), SYM_key_len(operation),
+				  load_evp_mac_hash(operation), NULL)) {
 			syslog(LOG_ERR, "TEE_MACInit: HMAC init fail\n");
 			TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 		}
@@ -3157,7 +3109,7 @@ void TEE_MACInit(TEE_OperationHandle operation, void* IV, uint32_t IVLen)
 	operation->operation_info.handleState |= TEE_HANDLE_FLAG_INITIALIZED;
 }
 
-void TEE_MACUpdate(TEE_OperationHandle operation, void* chunk, uint32_t chunkSize)
+void TEE_MACUpdate(TEE_OperationHandle operation, void *chunk, uint32_t chunkSize)
 {
 	if (!operation || !chunk) {
 		syslog(LOG_ERR, "TEE_MACUpdate: Operation or chunk null\n");
@@ -3170,7 +3122,7 @@ void TEE_MACUpdate(TEE_OperationHandle operation, void* chunk, uint32_t chunkSiz
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
 		syslog(LOG_ERR, "TEE_MACUpdate: Not a mac operation or "
-		       "not initialized or no key\n");
+				"not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
@@ -3206,8 +3158,8 @@ void TEE_MACUpdate(TEE_OperationHandle operation, void* chunk, uint32_t chunkSiz
 	}
 }
 
-TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void* message,
-			       uint32_t messageLen, void* mac, uint32_t *macLen)
+TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uint32_t messageLen,
+			       void *mac, uint32_t *macLen)
 {
 	size_t cmac_len_out;
 
@@ -3222,7 +3174,7 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void* message,
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
 		syslog(LOG_ERR, "TEE_MACComputeFinal: Not a mac operation or "
-		       "not initialized or no key\n");
+				"not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
@@ -3273,8 +3225,8 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void* message,
 	return TEE_SUCCESS;
 }
 
-TEE_Result TEE_MACCompareFinal(TEE_OperationHandle operation, void* message,
-			       uint32_t messageLen, void* mac, uint32_t *macLen)
+TEE_Result TEE_MACCompareFinal(TEE_OperationHandle operation, void *message, uint32_t messageLen,
+			       void *mac, uint32_t *macLen)
 {
 	void *comp_mac = NULL;
 	uint32_t comp_mac_len;
@@ -3312,9 +3264,8 @@ TEE_Result TEE_MACCompareFinal(TEE_OperationHandle operation, void* message,
 	return ret;
 }
 
-
 /* GP TEE AE API is not supported */
-TEE_Result TEE_AEInit(TEE_OperationHandle operation, void* nonce, uint32_t nonceLen,
+TEE_Result TEE_AEInit(TEE_OperationHandle operation, void *nonce, uint32_t nonceLen,
 		      uint32_t tagLen, uint32_t AADLen, uint32_t payloadLen)
 {
 	operation = operation;
@@ -3327,15 +3278,15 @@ TEE_Result TEE_AEInit(TEE_OperationHandle operation, void* nonce, uint32_t nonce
 	return TEE_ERROR_NOT_SUPPORTED;
 }
 
-void TEE_AEUpdateAAD(TEE_OperationHandle operation, void* AADdata, uint32_t AADdataLen)
+void TEE_AEUpdateAAD(TEE_OperationHandle operation, void *AADdata, uint32_t AADdataLen)
 {
 	operation = operation;
 	AADdata = AADdata;
 	AADdataLen = AADdataLen;
 }
 
-TEE_Result TEE_AEUpdate(TEE_OperationHandle operation, void* srcData,
-			uint32_t srcLen, void* destData, uint32_t *destLen)
+TEE_Result TEE_AEUpdate(TEE_OperationHandle operation, void *srcData, uint32_t srcLen,
+			void *destData, uint32_t *destLen)
 {
 	operation = operation;
 	srcData = srcData;
@@ -3346,22 +3297,8 @@ TEE_Result TEE_AEUpdate(TEE_OperationHandle operation, void* srcData,
 	return TEE_ERROR_NOT_SUPPORTED;
 }
 
-TEE_Result TEE_AEEncryptFinal(TEE_OperationHandle operation, void* srcData, uint32_t srcLen,
-			      void* destData, uint32_t *destLen, void* tag, uint32_t *tagLen)
-{
-	operation = operation;
-	srcData = srcData;
-	srcLen = srcLen;
-	destData = destData;
-	destLen = destLen;
-	tag = tag;
-	tagLen = tagLen;
-
-	return TEE_ERROR_NOT_SUPPORTED;
-}
-
-TEE_Result TEE_AEDecryptFinal(TEE_OperationHandle operation, void* srcData, uint32_t srcLen,
-			      void* destData, uint32_t *destLen, void* tag, uint32_t tagLen)
+TEE_Result TEE_AEEncryptFinal(TEE_OperationHandle operation, void *srcData, uint32_t srcLen,
+			      void *destData, uint32_t *destLen, void *tag, uint32_t *tagLen)
 {
 	operation = operation;
 	srcData = srcData;
@@ -3374,9 +3311,23 @@ TEE_Result TEE_AEDecryptFinal(TEE_OperationHandle operation, void* srcData, uint
 	return TEE_ERROR_NOT_SUPPORTED;
 }
 
-TEE_Result TEE_AsymmetricEncrypt(TEE_OperationHandle operation, TEE_Attribute* params,
-				 uint32_t paramCount, void* srcData, uint32_t srcLen,
-				 void* destData, uint32_t *destLen)
+TEE_Result TEE_AEDecryptFinal(TEE_OperationHandle operation, void *srcData, uint32_t srcLen,
+			      void *destData, uint32_t *destLen, void *tag, uint32_t tagLen)
+{
+	operation = operation;
+	srcData = srcData;
+	srcLen = srcLen;
+	destData = destData;
+	destLen = destLen;
+	tag = tag;
+	tagLen = tagLen;
+
+	return TEE_ERROR_NOT_SUPPORTED;
+}
+
+TEE_Result TEE_AsymmetricEncrypt(TEE_OperationHandle operation, TEE_Attribute *params,
+				 uint32_t paramCount, void *srcData, uint32_t srcLen,
+				 void *destData, uint32_t *destLen)
 {
 	TEE_Result ret = TEE_SUCCESS;
 	const EVP_MD *hash = NULL;
@@ -3386,7 +3337,7 @@ TEE_Result TEE_AsymmetricEncrypt(TEE_OperationHandle operation, TEE_Attribute* p
 
 	if (!operation || operation->operation_info.mode != TEE_MODE_ENCRYPT) {
 		syslog(LOG_ERR, "TEE_AsymmetricEncrypt: Not a valid operationhandler "
-		       "or wrong operation mode\n");
+				"or wrong operation mode\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -3396,17 +3347,17 @@ TEE_Result TEE_AsymmetricEncrypt(TEE_OperationHandle operation, TEE_Attribute* p
 		return ret; /* Err msg has been written to log */
 
 	/* Add padding, if needed */
-	if (!add_rsa_cipher_padding(operation, srcData, srcLen, rsa_mod_len_buf,
-				    &rsa_mod_len, params, paramCount, hash))
+	if (!add_rsa_cipher_padding(operation, srcData, srcLen, rsa_mod_len_buf, &rsa_mod_len,
+				    params, paramCount, hash))
 		TEE_Panic(TEE_ERROR_GENERIC); /* Err msg has been written to log */
 
 	/* Encryption */
 	if (operation->operation_info.algorithm == TEE_ALG_RSAES_PKCS1_V1_5) {
-		write_bytes = RSA_public_encrypt(srcLen, srcData, destData,
-						 RSA_key(operation), RSA_PKCS1_PADDING);
+		write_bytes = RSA_public_encrypt(srcLen, srcData, destData, RSA_key(operation),
+						 RSA_PKCS1_PADDING);
 	} else {
-		write_bytes = RSA_public_encrypt(rsa_mod_len, rsa_mod_len_buf,
-						 destData, RSA_key(operation), RSA_NO_PADDING);
+		write_bytes = RSA_public_encrypt(rsa_mod_len, rsa_mod_len_buf, destData,
+						 RSA_key(operation), RSA_NO_PADDING);
 	}
 
 	if (write_bytes == -1) {
@@ -3419,9 +3370,9 @@ TEE_Result TEE_AsymmetricEncrypt(TEE_OperationHandle operation, TEE_Attribute* p
 	return ret;
 }
 
-TEE_Result TEE_AsymmetricDecrypt(TEE_OperationHandle operation, TEE_Attribute* params,
-				 uint32_t paramCount, void* srcData, uint32_t srcLen,
-				 void* destData, uint32_t *destLen)
+TEE_Result TEE_AsymmetricDecrypt(TEE_OperationHandle operation, TEE_Attribute *params,
+				 uint32_t paramCount, void *srcData, uint32_t srcLen,
+				 void *destData, uint32_t *destLen)
 {
 	TEE_Result ret = TEE_SUCCESS;
 	const EVP_MD *hash = NULL;
@@ -3431,7 +3382,7 @@ TEE_Result TEE_AsymmetricDecrypt(TEE_OperationHandle operation, TEE_Attribute* p
 
 	if (!operation || operation->operation_info.mode != TEE_MODE_DECRYPT) {
 		syslog(LOG_ERR, "TEE_AsymmetricDecrypt: Not a valid operationhandler "
-		       "or wrong operation mode\n");
+				"or wrong operation mode\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -3455,8 +3406,8 @@ TEE_Result TEE_AsymmetricDecrypt(TEE_OperationHandle operation, TEE_Attribute* p
 	}
 
 	/* Remove padding, if needed */
-	if (!remove_rsa_cipher_padding(operation, rsa_mod_len_buf, rsa_mod_len, destData,
-				       destLen, params, paramCount, hash))
+	if (!remove_rsa_cipher_padding(operation, rsa_mod_len_buf, rsa_mod_len, destData, destLen,
+				       params, paramCount, hash))
 		TEE_Panic(TEE_ERROR_GENERIC); /* Err msg has been written to log */
 
 	*destLen = int2uint32(write_bytes);
@@ -3464,15 +3415,15 @@ TEE_Result TEE_AsymmetricDecrypt(TEE_OperationHandle operation, TEE_Attribute* p
 	return ret;
 }
 
-TEE_Result TEE_AsymmetricSignDigest(TEE_OperationHandle operation, TEE_Attribute* params,
-				    uint32_t paramCount, void* digest, uint32_t digestLen,
-				    void* signature, uint32_t *signatureLen)
+TEE_Result TEE_AsymmetricSignDigest(TEE_OperationHandle operation, TEE_Attribute *params,
+				    uint32_t paramCount, void *digest, uint32_t digestLen,
+				    void *signature, uint32_t *signatureLen)
 {
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!operation || !signatureLen || operation->operation_info.mode != TEE_MODE_SIGN) {
 		syslog(LOG_ERR, "TEE_AsymmetricSignDigest: Not a valid operationhandler "
-		       "or wrong operation mode or error with parameters\n");
+				"or wrong operation mode or error with parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -3480,28 +3431,28 @@ TEE_Result TEE_AsymmetricSignDigest(TEE_OperationHandle operation, TEE_Attribute
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
 		syslog(LOG_ERR, "TEE_AsymmetricSignDigest: Not a asymetric sign op "
-		       "or not initialized or no key\n");
+				"or not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (operation->operation_info.algorithm == TEE_ALG_DSA_SHA1)
 		ret = dsa_sign(operation, digest, digestLen, signature, signatureLen);
 	else
-		ret = rsa_sign(operation, params, paramCount, digest,
-			       digestLen, signature, signatureLen);
+		ret = rsa_sign(operation, params, paramCount, digest, digestLen, signature,
+			       signatureLen);
 
 	return ret;
 }
 
-TEE_Result TEE_AsymmetricVerifyDigest(TEE_OperationHandle operation, TEE_Attribute* params,
-				      uint32_t paramCount, void* digest, uint32_t digestLen,
-				      void* signature, uint32_t signatureLen)
+TEE_Result TEE_AsymmetricVerifyDigest(TEE_OperationHandle operation, TEE_Attribute *params,
+				      uint32_t paramCount, void *digest, uint32_t digestLen,
+				      void *signature, uint32_t signatureLen)
 {
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!operation || operation->operation_info.mode != TEE_MODE_VERIFY) {
 		syslog(LOG_ERR, "TEE_AsymmetricVerifyDigest: Not a valid operationhandler "
-		       "or wrong operation mode\n");
+				"or wrong operation mode\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -3509,22 +3460,21 @@ TEE_Result TEE_AsymmetricVerifyDigest(TEE_OperationHandle operation, TEE_Attribu
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
 		syslog(LOG_ERR, "TEE_AsymmetricVerifyDigest: Not a asymetric sign op "
-		       "or not initialized or no key\n");
+				"or not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (operation->operation_info.algorithm == TEE_ALG_DSA_SHA1)
 		ret = dsa_ver(operation, digest, digestLen, signature, signatureLen);
 	else
-		ret = rsa_ver(operation, params, paramCount, digest,
-			      digestLen, signature, signatureLen);
+		ret = rsa_ver(operation, params, paramCount, digest, digestLen, signature,
+			      signatureLen);
 
 	return ret;
 }
 
-
-void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute* params,
-		   uint32_t paramCount, TEE_ObjectHandle derivedKey)
+void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute *params, uint32_t paramCount,
+		   TEE_ObjectHandle derivedKey)
 {
 	TEE_Attribute *dh_pub_val = NULL;
 	TEE_Attribute *der_key_gen_sec = NULL;
@@ -3600,7 +3550,7 @@ retu:
 		TEE_Panic(ret);
 }
 
-void TEE_GenerateRandom(void* randomBuffer, uint32_t randomBufferLen)
+void TEE_GenerateRandom(void *randomBuffer, uint32_t randomBufferLen)
 {
 	if (!randomBuffer)
 		return;

@@ -33,7 +33,6 @@
 #include "tee_storage_common.h"
 #include "storage_key_apis_external_funcs.h"
 
-
 #define SECURE_STORAGE_PATH "/home/dettenbo/TEE_secure_storage/"
 #define TEE_OBJ_ID_LEN_HEX TEE_OBJECT_ID_MAX_LEN * 2 + 1
 #define TEE_UUID_LEN_HEX sizeof(TEE_UUID) * 2 + 1
@@ -51,7 +50,8 @@ struct storage_enumerator {
 /*!
  * \brief get_uuid
  * Retrieve TAs UUID
- * \param uuid is filled with TAs uuid. UUID is converted to HEX format and containing NULL character.
+ * \param uuid is filled with TAs uuid. UUID is converted to HEX format and containing NULL
+ * character.
  * Use TEE_UUID_LEN_HEX for buffer size reservation.
  * \return
  */
@@ -60,12 +60,12 @@ static bool get_uuid(char *uuid)
 	char UUID_test[] = "1234567890123456789012345678901234567890";
 	size_t i;
 
-	//TODO: name should end with NULL character!
+	// TODO: name should end with NULL character!
 	if (uuid == NULL)
 		return false;
 
 	for (i = 0; i < sizeof(TEE_UUID); ++i)
-		sprintf(uuid + i * 2, "%02x", *((unsigned char*)UUID_test + i));
+		sprintf(uuid + i * 2, "%02x", *((unsigned char *)UUID_test + i));
 
 	uuid[TEE_UUID_LEN_HEX] = '\0';
 
@@ -112,7 +112,7 @@ void ext_delete_file(FILE *object_file, void *objectID, size_t objectIDLen)
 		return;
 
 	for (i = 0; i < objectIDLen; ++i)
-		sprintf(hex_ID + i * 2, "%02x", *((unsigned char*)objectID + i));
+		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
 	hex_ID[ADD_NULL_CHAR_END_TO_HEX(objectIDLen)] = '\0';
 
@@ -142,9 +142,9 @@ void ext_delete_file(FILE *object_file, void *objectID, size_t objectIDLen)
 	free(dir_path);
 }
 
-void ext_release_file(FILE *object_file, void* objectID, size_t objectIDLen)
+void ext_release_file(FILE *object_file, void *objectID, size_t objectIDLen)
 {
-	//xattr
+	// xattr
 	objectID = objectID;
 	objectIDLen = objectIDLen;
 
@@ -184,7 +184,7 @@ static FILE *request_file(char *file_name_with_path, size_t request_access)
 
 FILE *ext_request_for_open(void *objectID, size_t objectIDLen, size_t request_access)
 {
-	FILE* per_obj_file = NULL;
+	FILE *per_obj_file = NULL;
 	char *name_with_dir_path;
 	char *dir_path;
 	size_t i;
@@ -195,7 +195,7 @@ FILE *ext_request_for_open(void *objectID, size_t objectIDLen, size_t request_ac
 		return NULL;
 
 	for (i = 0; i < objectIDLen; ++i)
-		sprintf(hex_ID + i * 2, "%02x", *((unsigned char*)objectID + i));
+		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
 	hex_ID[ADD_NULL_CHAR_END_TO_HEX(objectIDLen)] = '\0';
 
@@ -223,7 +223,7 @@ ret:
 
 FILE *ext_request_for_create(void *objectID, size_t objectIDLen, size_t request_access)
 {
-	FILE* per_obj_file = NULL;
+	FILE *per_obj_file = NULL;
 	char *name_with_dir_path;
 	char *dir_path;
 	size_t i;
@@ -235,7 +235,7 @@ FILE *ext_request_for_create(void *objectID, size_t objectIDLen, size_t request_
 		return NULL;
 
 	for (i = 0; i < objectIDLen; ++i)
-		sprintf(hex_ID + i * 2, "%02x", *((unsigned char*)objectID + i));
+		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
 	hex_ID[ADD_NULL_CHAR_END_TO_HEX(objectIDLen)] = '\0';
 
@@ -274,7 +274,8 @@ ret:
 	return per_obj_file;
 }
 
-bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID, size_t new_objectIDLen)
+bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID,
+			  size_t new_objectIDLen)
 {
 	char *name_with_dir_path;
 	char *new_name_with_dir_path;
@@ -283,17 +284,17 @@ bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID
 	char UUID[TEE_UUID_LEN_HEX];
 	size_t i;
 
-	if (objectIDLen > TEE_OBJECT_ID_MAX_LEN || objectID == NULL  ||
-	    new_objectID == NULL || !get_uuid(UUID))
+	if (objectIDLen > TEE_OBJECT_ID_MAX_LEN || objectID == NULL || new_objectID == NULL ||
+	    !get_uuid(UUID))
 		return false;
 
 	for (i = 0; i < objectIDLen; ++i)
-		sprintf(hex_ID + i * 2, "%02x", *((unsigned char*)objectID + i));
+		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
 	hex_ID[ADD_NULL_CHAR_END_TO_HEX(objectIDLen)] = '\0';
 
 	for (i = 0; i < new_objectIDLen; ++i)
-		sprintf(new_hex_ID + i * 2, "%02x", *((unsigned char*)new_objectID + i));
+		sprintf(new_hex_ID + i * 2, "%02x", *((unsigned char *)new_objectID + i));
 
 	new_hex_ID[ADD_NULL_CHAR_END_TO_HEX(new_objectIDLen)] = '\0';
 
@@ -301,7 +302,8 @@ bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID
 		return false; // TEE_ERROR_OUT_OF_MEMORY;
 	}
 
-	if (asprintf(&new_name_with_dir_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, new_hex_ID) == -1) {
+	if (asprintf(&new_name_with_dir_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, new_hex_ID) ==
+	    -1) {
 		free(name_with_dir_path);
 		return false; // TEE_ERROR_OUT_OF_MEMORY;
 	}
@@ -502,8 +504,8 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 			return false;
 		}
 
-		if (asprintf(&name_with_path, "%s%s/%s",
-			     SECURE_STORAGE_PATH, UUID, entry->d_name) == -1) {
+		if (asprintf(&name_with_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID,
+			     entry->d_name) == -1) {
 			syslog(LOG_ERR, "Enumerator: Out of memory\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
@@ -515,8 +517,8 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 		if (next_object == NULL)
 			continue;
 
-		if (fread(recv_data_to_caller,
-			  sizeof(struct storage_obj_meta_data), 1, next_object) != 1) {
+		if (fread(recv_data_to_caller, sizeof(struct storage_obj_meta_data), 1,
+			  next_object) != 1) {
 			syslog(LOG_ERR, "Error at read file (enumeration); errno: %i\n", errno);
 			memset(recv_data_to_caller, 0, sizeof(struct storage_obj_meta_data));
 			fclose(next_object); /* Skip to next object */
@@ -525,8 +527,7 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 
 		/* meta size - object meta info == attributes (structs) + buffers == all Attrs */
 		recv_data_to_caller->info.objectSize =
-				recv_data_to_caller->meta_size -
-				sizeof(struct storage_obj_meta_data);
+		    recv_data_to_caller->meta_size - sizeof(struct storage_obj_meta_data);
 
 		/* calculate data size */
 		if (fseek(next_object, 0, SEEK_END) != 0)
@@ -539,8 +540,8 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 		if (end_pos - recv_data_to_caller->meta_size > UINT32_MAX)
 			recv_data_to_caller->info.dataSize = UINT32_MAX;
 		else
-			recv_data_to_caller->info.dataSize = ftell(next_object) -
-							     recv_data_to_caller->meta_size;
+			recv_data_to_caller->info.dataSize =
+			    ftell(next_object) - recv_data_to_caller->meta_size;
 
 		/* Zero data position */
 		recv_data_to_caller->info.dataPosition = 0;

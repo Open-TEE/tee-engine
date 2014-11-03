@@ -29,10 +29,10 @@ struct list_head {
 /*!
  * Initialize a linked list
  */
-#define INIT_LIST(list)			\
-	do {                            \
-		(list)->prev = (list);  \
-		(list)->next = (list);  \
+#define INIT_LIST(list)                                                                            \
+	do {                                                                                       \
+		(list)->prev = (list);                                                             \
+		(list)->next = (list);                                                             \
 	} while (0)
 
 /*!
@@ -55,7 +55,7 @@ struct list_head {
  *   LIST_FOR_EACH(pos, &pool.list) {
  *      element = LIST_ENTRY(pos, struct my_data, list);
  */
-#define LIST_ENTRY(ptr, type, element)                                  \
+#define LIST_ENTRY(ptr, type, element)                                                             \
 	((type *)(void *)((char *)(ptr) - (unsigned long)(&((type *)0)->element)))
 
 /*!
@@ -63,15 +63,14 @@ struct list_head {
  *  \param pos a struct list_head entry point to the current entry
  *  \param head The main list to iterating over
  */
-#define LIST_FOR_EACH(pos, head)                                \
-	for ((pos) = (head)->next; (pos) != (head); (pos) = (pos)->next)
+#define LIST_FOR_EACH(pos, head) for ((pos) = (head)->next; (pos) != (head); (pos) = (pos)->next)
 
 /*!
  *  \brief Iterate over a list backwards
  *  \param pos a struct list_head entry point to the current entry
  *  \param head The main list to iterating over
  */
-#define LIST_FOR_EACH_PREV(pos, head)                           \
+#define LIST_FOR_EACH_PREV(pos, head)                                                              \
 	for ((pos) = (head)->prev; (pos) != (head); (pos) = (pos)->prev)
 
 /*!
@@ -80,8 +79,9 @@ struct list_head {
  *  \param la a struct list_head entry used for look ahead to ensure safety
  *  \param head The main list to iterating over
  */
-#define LIST_FOR_EACH_SAFE(pos, la, head)                      \
-for ((pos) = (head)->next, (la) = (pos)->next; (pos) != (head); (pos) = (la), (la) = (pos)->next)
+#define LIST_FOR_EACH_SAFE(pos, la, head)                                                          \
+	for ((pos) = (head)->next, (la) = (pos)->next; (pos) != (head);                            \
+	     (pos) = (la), (la) = (pos)->next)
 
 /*!
  * \brief list_is_empty

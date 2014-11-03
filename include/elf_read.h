@@ -15,7 +15,7 @@
 *****************************************************************************/
 
 #ifndef __ELF_READ__
-#define	__ELF_READ__
+#define __ELF_READ__
 
 /*!
  * \brief get_data_from_elf

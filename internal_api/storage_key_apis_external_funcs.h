@@ -22,7 +22,7 @@
 #include "tee_storage_common.h"
 
 void ext_delete_file(FILE *object_file, void *objectID, size_t objectIDLen);
-void ext_release_file(FILE *object_file, void* objectID, size_t objectIDLen);
+void ext_release_file(FILE *object_file, void *objectID, size_t objectIDLen);
 FILE *ext_request_for_open(void *objectID, size_t objectIDLen, size_t request_access);
 FILE *ext_request_for_create(void *objectID, size_t objectIDLen, size_t request_access);
 bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID,

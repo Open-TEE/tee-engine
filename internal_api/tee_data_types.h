@@ -44,6 +44,7 @@ typedef struct __TEE_TASessionHandle* TEE_TASessionHandle;
 
 typedef struct __TEE_PropSetHandle* TEE_PropSetHandle;
 
+/* clang-format off */
 /* Paramater Types */
 #define TEE_PARAM_TYPE_NONE		0x00000000
 #define TEE_PARAM_TYPE_VALUE_INPUT	0x00000001
@@ -130,4 +131,5 @@ typedef enum {
 	TEE_ATTR_FLAG_PUBLIC = 0x10000000
 } attr_id_flag;
 
+/* clang-format on */
 #endif

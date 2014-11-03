@@ -197,4 +197,3 @@ void *ta_internal_thread(void *arg)
 	exit(EXIT_FAILURE);
 	return NULL;
 }
-

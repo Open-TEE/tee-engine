@@ -64,8 +64,8 @@ static void add_msg_done_queue_and_notify(struct manager_msg *man_msg)
 	}
 }
 
-static void gen_err_msg_and_add_to_done(struct manager_msg *man_msg,
-					uint32_t err_origin, uint32_t err_name)
+static void gen_err_msg_and_add_to_done(struct manager_msg *man_msg, uint32_t err_origin,
+					uint32_t err_name)
 {
 	free(man_msg->msg); /* replace old message with error */
 
@@ -78,9 +78,9 @@ static void gen_err_msg_and_add_to_done(struct manager_msg *man_msg,
 	man_msg->msg_len = sizeof(struct com_msg_error);
 
 	/* Fill error message */
-	((struct com_msg_error *) man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
-	((struct com_msg_error *) man_msg->msg)->ret_origin = err_origin;
-	((struct com_msg_error *) man_msg->msg)->ret = err_name;
+	((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
+	((struct com_msg_error *)man_msg->msg)->ret_origin = err_origin;
+	((struct com_msg_error *)man_msg->msg)->ret = err_name;
 
 	add_msg_done_queue_and_notify(man_msg);
 }
@@ -129,11 +129,11 @@ static void free_sess(proc_t del_sess)
 
 static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
 {
-	free_sess(h_table_get(owner->content.process.links,
-			      (unsigned char *)(&sess_id), sizeof(uint64_t)));
+	free_sess(h_table_get(owner->content.process.links, (unsigned char *)(&sess_id),
+			      sizeof(uint64_t)));
 
-	free_sess(h_table_get(to->content.process.links,
-			      (unsigned char *)(&sess_id), sizeof(uint64_t)));
+	free_sess(h_table_get(to->content.process.links, (unsigned char *)(&sess_id),
+			      sizeof(uint64_t)));
 }
 
 static void open_session_response(struct manager_msg *man_msg)
@@ -150,9 +150,9 @@ static void open_session_response(struct manager_msg *man_msg)
 	}
 
 	/* Sender is TA. Lets get TA session from TA proc session links */
-	ta_session = h_table_get(man_msg->proc->content.process.links,
-				 (unsigned char *)(&open_resp_msg->msg_hdr.sess_id),
-				 sizeof(uint64_t));
+	ta_session =
+	    h_table_get(man_msg->proc->content.process.links,
+			(unsigned char *)(&open_resp_msg->msg_hdr.sess_id), sizeof(uint64_t));
 	if (!ta_session) {
 		OT_LOG(LOG_ERR, "Invalid session ID");
 		goto ignore_msg;
@@ -202,8 +202,7 @@ err_2:
 err_1:
 	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
 	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
-	remove_session_between(ta_session->content.sesLink.owner,
-			       ta_session->content.sesLink.to,
+	remove_session_between(ta_session->content.sesLink.owner, ta_session->content.sesLink.to,
 			       open_resp_msg->msg_hdr.sess_id);
 	/* TODO: should TA killed == KEEP ALIVE */
 	return;
@@ -260,8 +259,8 @@ static proc_t get_ta_by_uuid(TEE_UUID *uuid)
 	return ta;
 }
 
-static int comm_launcher_to_launch_ta(struct manager_msg *man_msg,
-				      int *new_ta_fd, pid_t *new_ta_pid)
+static int comm_launcher_to_launch_ta(struct manager_msg *man_msg, int *new_ta_fd,
+				      pid_t *new_ta_pid)
 {
 	struct com_msg_ta_created *recv_created_msg = NULL;
 
@@ -309,7 +308,7 @@ static int comm_launcher_to_launch_ta(struct manager_msg *man_msg,
 
 err:
 	if (*new_ta_pid != -1)
-		kill(*new_ta_pid , SIGKILL);
+		kill(*new_ta_pid, SIGKILL);
 
 	free(recv_created_msg);
 	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
@@ -337,7 +336,7 @@ static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID 
 		goto ret;
 	}
 
-	memcpy(&((struct com_msg_open_session *) man_msg->msg)->ta_so_name,
+	memcpy(&((struct com_msg_open_session *)man_msg->msg)->ta_so_name,
 	       ta_propertie->ta_so_name, TA_MAX_FILE_NAME);
 
 	if (ta_propertie->user_config.singletonInstance) {
@@ -345,7 +344,8 @@ static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID 
 		goto ret; /* Singleton and TA running */
 	}
 
-	if (ta_propertie->user_config.singletonInstance && !ta_propertie->user_config.multiSession) {
+	if (ta_propertie->user_config.singletonInstance &&
+	    !ta_propertie->user_config.multiSession) {
 		/* Singleton and running and not supporting multi session! */
 		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_ACCESS_CONFLICT);
 		ret = 1;
@@ -356,8 +356,8 @@ ret:
 	return ret;
 }
 
-static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid,
-			      proc_t *new_ta_proc, proc_t *conn_ta)
+static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid, proc_t *new_ta_proc,
+			      proc_t *conn_ta)
 {
 	struct trusted_app_propertie *ta_propertie = NULL;
 	pid_t new_ta_pid = 0; /* Zero for compiler warning */
@@ -416,8 +416,8 @@ err_1:
 	return 1;
 }
 
-static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner,
-				   proc_t to, uint64_t sess_id)
+static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner, proc_t to,
+				   uint64_t sess_id)
 {
 	*sesLink = (proc_t)malloc(sizeof(struct __proc));
 	if (!*sesLink) {
@@ -434,14 +434,14 @@ static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner,
 	return 0;
 }
 
-static int add_new_session_to_proc(proc_t owner, proc_t to,
-				   uint64_t session_id, proc_t *new_sesLink)
+static int add_new_session_to_proc(proc_t owner, proc_t to, uint64_t session_id,
+				   proc_t *new_sesLink)
 {
 	if (alloc_and_init_sessLink(new_sesLink, owner, to, session_id))
 		return 1;
 
-	if (h_table_insert(owner->content.process.links,
-			   (unsigned char *)&session_id, sizeof(uint64_t), *new_sesLink)) {
+	if (h_table_insert(owner->content.process.links, (unsigned char *)&session_id,
+			   sizeof(uint64_t), *new_sesLink)) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		return 1;
 	}
@@ -454,7 +454,8 @@ static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
 	proc_t new_owner_ses = NULL;
 	proc_t new_to_ses = NULL;
 
-	/* Following code will be generating two session link and cross linking sessions to gether */
+	/* Following code will be generating two session link and cross linking sessions to gether
+	 */
 
 	if (add_new_session_to_proc(owner, NULL, sess_id, &new_owner_ses))
 		return 1;
@@ -558,8 +559,8 @@ discard_msg:
 
 static void invoke_cmd_query(struct manager_msg *man_msg)
 {
-	((struct com_msg_invoke_cmd *) man_msg->msg)->session_id =
-			man_msg->proc->content.sesLink.session_id;
+	((struct com_msg_invoke_cmd *)man_msg->msg)->session_id =
+	    man_msg->proc->content.sesLink.session_id;
 
 	man_msg->proc = man_msg->proc->content.sesLink.to->content.sesLink.owner;
 	add_msg_done_queue_and_notify(man_msg);
@@ -656,7 +657,7 @@ static bool active_sess_in_ta(proc_t ta_proc)
 
 	h_table_init_stepper(ta_proc->content.process.links);
 
-	while(1) {
+	while (1) {
 		sess = h_table_step(ta_proc->content.process.links);
 		if (!sess)
 			return false;
@@ -696,7 +697,8 @@ static int should_ta_destroy(proc_t ta_proc)
 		goto unlock;
 	}
 
-	/* TA might be signleton or multi-instance TA, but if there is no session opens, terminate */
+	/* TA might be signleton or multi-instance TA, but if there is no session opens, terminate
+	 */
 	if (active_sess_in_ta(ta_proc))
 		ret = 1;
 
@@ -724,7 +726,7 @@ static void close_session(struct manager_msg *man_msg)
 
 	/* Update close message */
 	close_msg->should_ta_destroy =
-			should_ta_destroy(man_msg->proc->content.sesLink.to->content.sesLink.owner);
+	    should_ta_destroy(man_msg->proc->content.sesLink.to->content.sesLink.owner);
 	if (close_msg->should_ta_destroy == -1) {
 		goto ignore_msg;
 

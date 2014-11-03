@@ -20,7 +20,7 @@
 
 #include "tee_panic.h"
 
-void  TEE_Panic(TEE_Result panicCode)
+void TEE_Panic(TEE_Result panicCode)
 {
 	panicCode = panicCode;
 

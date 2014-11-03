@@ -16,8 +16,7 @@
 
 #include "tee_list.h"
 
-static void list_add_between(struct list_head *ele, struct list_head *prev,
-			     struct list_head *next)
+static void list_add_between(struct list_head *ele, struct list_head *prev, struct list_head *next)
 {
 	prev->next = ele;
 	ele->prev = prev;
