@@ -25,7 +25,6 @@
 
 #include <limits.h>
 #include <stdio.h>
-#include <syslog.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +39,7 @@
 #include "tee_panic.h"
 #include "tee_storage_common.h"
 #include "tee_object_handle.h"
+#include "tee_logging.h"
 
 struct __TEE_ObjectEnumHandle {
 	uint32_t ID;
@@ -117,7 +117,7 @@ static bool change_object_ID(TEE_ObjectHandle object, void *new_objectID, size_t
 
 	if (fread(&renamed_meta_data, sizeof(struct storage_obj_meta_data), 1,
 		  object->per_object.object_file) != 1) {
-		syslog(LOG_ERR, "Read error at renaming\n");
+		OT_LOG(LOG_ERR, "Read error at renaming\n");
 		return false;
 	}
 
@@ -128,15 +128,15 @@ static bool change_object_ID(TEE_ObjectHandle object, void *new_objectID, size_t
 
 	if (fwrite(&renamed_meta_data, sizeof(struct storage_obj_meta_data), 1,
 		   object->per_object.object_file) != 1) {
-		syslog(LOG_ERR, "Write error at renaming\n");
+		OT_LOG(LOG_ERR, "Write error at renaming\n");
 	}
 
 	if (fflush(object->per_object.object_file) != 0) {
-		syslog(LOG_ERR, "Fflush error at renaming\n");
+		OT_LOG(LOG_ERR, "Fflush error at renaming\n");
 	}
 
 	if (fseek(object->per_object.object_file, object->per_object.data_position, SEEK_SET) != 0)
-		syslog(LOG_ERR, "Fseek error at renaming\n");
+		OT_LOG(LOG_ERR, "Fseek error at renaming\n");
 
 	/* End */
 
@@ -204,7 +204,7 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 	size_t i;
 
 	if (obj == NULL || obj->per_object.object_file == NULL) {
-		syslog(LOG_ERR, "Something went wrong with persistant object attribute loading\n");
+		OT_LOG(LOG_ERR, "Something went wrong with persistant object attribute loading\n");
 		return TEE_ERROR_GENERIC;
 	}
 
@@ -216,7 +216,7 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 	/* Alloc memory for attributes (pointers) */
 	obj->attrs = TEE_Malloc(obj->attrs_count * sizeof(TEE_Attribute), 0);
 	if (obj->attrs == NULL) {
-		syslog(LOG_ERR, "Cannot load attributes, because out of memory\n");
+		OT_LOG(LOG_ERR, "Cannot load attributes, because out of memory\n");
 		return TEE_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -243,7 +243,7 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 	return TEE_SUCCESS;
 
 err_at_read:
-	syslog(LOG_ERR, "Error at fread\n");
+	OT_LOG(LOG_ERR, "Error at fread\n");
 	free_attrs(obj);
 	TEE_Free(obj->attrs);
 	return TEE_ERROR_GENERIC;
@@ -286,7 +286,7 @@ static void copy_all_attributes(TEE_ObjectHandle srcObj, TEE_ObjectHandle destOb
 	size_t i;
 
 	if (srcObj->attrs_count != destObj->attrs_count) {
-		syslog(LOG_ERR, "Copy fail: Attribute count do not match\n");
+		OT_LOG(LOG_ERR, "Copy fail: Attribute count do not match\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -352,7 +352,7 @@ static bool bn_to_obj_ref_attr(BIGNUM *bn, uint32_t atrr_ID, TEE_ObjectHandle ob
 
 	obj->attrs[obj_index].attributeID = atrr_ID;
 	if (BN_bn2bin(bn, obj->attrs[obj_index].content.ref.buffer) == 0) {
-		syslog(LOG_ERR, "BN2bin failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "BN2bin failed (openssl failure)\n");
 		return false;
 	}
 
@@ -396,7 +396,7 @@ static TEE_Result gen_des_key(TEE_ObjectHandle object, uint32_t keySize)
 static TEE_Result gen_symmetric_key(TEE_ObjectHandle object, uint32_t keySize)
 {
 	if (!RAND_bytes(object->attrs->content.ref.buffer, KEY_IN_BYTES(keySize))) {
-		syslog(LOG_ERR, "Cannot create random bytes (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Cannot create random bytes (openssl failure)\n");
 		return TEE_ERROR_GENERIC;
 	}
 
@@ -418,14 +418,14 @@ static TEE_Result gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size, TEE_A
 
 	rsa_key = RSA_new();
 	if (rsa_key == NULL) {
-		syslog(LOG_ERR, "Cannot malloc space for RSA key (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Cannot malloc space for RSA key (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
 
 	bn_pub_exp = BN_new();
 	if (bn_pub_exp == NULL) {
-		syslog(LOG_ERR, "Cannot malloc space for public exp (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Cannot malloc space for public exp (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -435,27 +435,27 @@ static TEE_Result gen_rsa_keypair(TEE_ObjectHandle obj, uint32_t key_size, TEE_A
 		    BN_bin2bn(params[pub_exp_index_at_params].content.ref.buffer,
 			      params[pub_exp_index_at_params].content.ref.length, bn_pub_exp);
 		if (bn_pub_exp == NULL) {
-			syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
+			OT_LOG(LOG_ERR, "bin2bn failed (openssl failure)\n");
 			ret_val = TEE_ERROR_GENERIC;
 			goto ret;
 		}
 	} else {
 		/* RSA_F4 == 65537 */
 		if (BN_set_word(bn_pub_exp, RSA_F4) == 0) {
-			syslog(LOG_ERR, "bn_set_word failed (openssl failure)\n");
+			OT_LOG(LOG_ERR, "bn_set_word failed (openssl failure)\n");
 			ret_val = TEE_ERROR_GENERIC;
 			goto ret;
 		}
 	}
 
 	if (!RSA_generate_key_ex(rsa_key, key_size, bn_pub_exp, NULL)) {
-		syslog(LOG_ERR, "RSA key generation failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "RSA key generation failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
 
 	if (!RSA_check_key(rsa_key)) {
-		syslog(LOG_ERR, "RSA key generation failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "RSA key generation failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -492,7 +492,7 @@ static TEE_Result gen_dsa_keypair(TEE_ObjectHandle object, TEE_Attribute *params
 
 	dsa_key = DSA_new();
 	if (dsa_key == NULL) {
-		syslog(LOG_ERR, "Cannot malloc space for DSA key (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Cannot malloc space for DSA key (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -500,7 +500,7 @@ static TEE_Result gen_dsa_keypair(TEE_ObjectHandle object, TEE_Attribute *params
 	if (!copy_attr_from_attrArr_to_object(params, paramCount, TEE_ATTR_DSA_PRIME, object, i++) ||
 	    !copy_attr_from_attrArr_to_object(params, paramCount, TEE_ATTR_DSA_SUBPRIME,  object, i++) ||
 	    !copy_attr_from_attrArr_to_object(params, paramCount, TEE_ATTR_DSA_BASE, object, i++)) {
-		syslog(LOG_ERR, "DSA key generation failed. Provide all mandatory parameters\n");
+		OT_LOG(LOG_ERR, "DSA key generation failed. Provide all mandatory parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -508,7 +508,7 @@ static TEE_Result gen_dsa_keypair(TEE_ObjectHandle object, TEE_Attribute *params
 	dsa_key->p = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
 			       object->attrs[attr_index].content.ref.length, dsa_key->p);
 	if (dsa_key->p == NULL) {
-		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -517,7 +517,7 @@ static TEE_Result gen_dsa_keypair(TEE_ObjectHandle object, TEE_Attribute *params
 	dsa_key->q = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
 			       object->attrs[attr_index].content.ref.length, dsa_key->q);
 	if (!dsa_key->q) {
-		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -526,13 +526,13 @@ static TEE_Result gen_dsa_keypair(TEE_ObjectHandle object, TEE_Attribute *params
 	dsa_key->g = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
 			       object->attrs[attr_index].content.ref.length, dsa_key->g);
 	if (!dsa_key->g) {
-		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
 
 	if (!DSA_generate_key(dsa_key)) {
-		syslog(LOG_ERR, "DSA key generation failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "DSA key generation failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -559,14 +559,14 @@ static TEE_Result gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute *params,
 
 	dh_key = DH_new();
 	if (dh_key == NULL) {
-		syslog(LOG_ERR, "Cannot malloc space for DH key (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Cannot malloc space for DH key (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
 
 	if (!copy_attr_from_attrArr_to_object(params, paramCount, TEE_ATTR_DH_PRIME, object, i++) ||
 	    !copy_attr_from_attrArr_to_object(params, paramCount, TEE_ATTR_DH_BASE, object, i++)) {
-		syslog(LOG_ERR, "DH key generation failed. Provide all mandatory parameters\n");
+		OT_LOG(LOG_ERR, "DH key generation failed. Provide all mandatory parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -574,7 +574,7 @@ static TEE_Result gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute *params,
 	dh_key->p = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
 			      object->attrs[attr_index].content.ref.length, dh_key->p);
 	if (dh_key->p == NULL) {
-		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -583,13 +583,13 @@ static TEE_Result gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute *params,
 	dh_key->g = BN_bin2bn(object->attrs[attr_index].content.ref.buffer,
 			      object->attrs[attr_index].content.ref.length, dh_key->g);
 	if (dh_key->g == NULL) {
-		syslog(LOG_ERR, "bin2bn failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "bin2bn failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
 
 	if (!DH_generate_key(dh_key)) {
-		syslog(LOG_ERR, "DH key generation failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "DH key generation failed (openssl failure)\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -772,13 +772,13 @@ static int valid_obj_type_and_attr_count(object_type obj)
 static int get_attr_index_and_check_rights(TEE_ObjectHandle object, uint32_t attributeID)
 {
 	if (!(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED)) {
-		syslog(LOG_ERR, "Object not initialized\n");
+		OT_LOG(LOG_ERR, "Object not initialized\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	if (!(attributeID & TEE_ATTR_FLAG_PUBLIC) &&
 	    !(object->objectInfo.objectUsage & TEE_USAGE_EXTRACTABLE)) {
-		syslog(LOG_ERR, "Not axtractable attribute\n");
+		OT_LOG(LOG_ERR, "Not axtractable attribute\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
@@ -863,7 +863,7 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 	return TEE_SUCCESS;
 
 err_out_of_mem:
-	syslog(LOG_ERR, "Cannot malloc space for object\n");
+	OT_LOG(LOG_ERR, "Cannot malloc space for object\n");
 	free_object(cpy_obj);
 	*dst_obj = NULL;
 	return TEE_ERROR_OUT_OF_MEMORY;
@@ -1011,32 +1011,32 @@ TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attrib
 
 	/* Check input parameters */
 	if (object == NULL) {
-		syslog(LOG_ERR, "Object NULL\n");
+		OT_LOG(LOG_ERR, "Object NULL\n");
 		return TEE_ERROR_ITEM_NOT_FOUND;
 	}
 
 	if (buffer == NULL || size == NULL) {
-		syslog(LOG_ERR, "Size or buffer NULL\n");
+		OT_LOG(LOG_ERR, "Size or buffer NULL\n");
 		return TEE_ERROR_SHORT_BUFFER;
 	}
 
 	/* Is this buffer attribute */
 	if (is_value_attribute(attributeID)) {
-		syslog(LOG_ERR, "Not a buffer attribute\n");
+		OT_LOG(LOG_ERR, "Not a buffer attribute\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	/* Find attribute, if it is found */
 	attr_index = get_attr_index_and_check_rights(object, attributeID);
 	if (attr_index == -1) {
-		syslog(LOG_ERR, "Attribute not found\n");
+		OT_LOG(LOG_ERR, "Attribute not found\n");
 		return TEE_ERROR_ITEM_NOT_FOUND;
 	}
 
 	/* Attribute found */
 
 	if (object->attrs[attr_index].content.ref.length > *size) {
-		syslog(LOG_ERR, "Short buffer\n");
+		OT_LOG(LOG_ERR, "Short buffer\n");
 		return TEE_ERROR_SHORT_BUFFER;
 	}
 
@@ -1055,18 +1055,18 @@ TEE_Result TEE_GetObjectValueAttribute(TEE_ObjectHandle object, uint32_t attribu
 
 	/* Check input parameters */
 	if (object == NULL) {
-		syslog(LOG_ERR, "Object NULL\n");
+		OT_LOG(LOG_ERR, "Object NULL\n");
 		return TEE_ERROR_ITEM_NOT_FOUND;
 	}
 
 	if (!is_value_attribute(attributeID)) {
-		syslog(LOG_ERR, "Not a value attribute\n");
+		OT_LOG(LOG_ERR, "Not a value attribute\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	attr_index = get_attr_index_and_check_rights(object, attributeID);
 	if (attr_index == -1) {
-		syslog(LOG_ERR, "Attribute not found\n");
+		OT_LOG(LOG_ERR, "Attribute not found\n");
 		return TEE_ERROR_ITEM_NOT_FOUND;
 	}
 
@@ -1100,12 +1100,12 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 
 	/* Check parameters */
 	if (attr_count == -1) {
-		syslog(LOG_ERR, "Not valid object type\n");
+		OT_LOG(LOG_ERR, "Not valid object type\n");
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
 
 	if (!valid_object_max_size(objectType, maxObjectSize)) {
-		syslog(LOG_ERR, "Not valid object max size\n");
+		OT_LOG(LOG_ERR, "Not valid object max size\n");
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
 
@@ -1167,7 +1167,7 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 	return TEE_SUCCESS;
 
 out_of_mem:
-	syslog(LOG_ERR, "Out of memory\n");
+	OT_LOG(LOG_ERR, "Out of memory\n");
 	free_object(tmp_handle);
 	*object = NULL;
 	return TEE_ERROR_OUT_OF_MEMORY;
@@ -1179,7 +1179,7 @@ void TEE_FreeTransientObject(TEE_ObjectHandle object)
 		return;
 
 	if (object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT) {
-		syslog(LOG_ERR, "Function is not allowed to a persistant object\n");
+		OT_LOG(LOG_ERR, "Function is not allowed to a persistant object\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
 
@@ -1210,14 +1210,14 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute *a
 
 	if (object->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED ||
 	    object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT) {
-		syslog(LOG_ERR, "Can not populate initialized object or persistant\n");
+		OT_LOG(LOG_ERR, "Can not populate initialized object or persistant\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (object->attrs_count !=
 	    (uint32_t)valid_obj_type_and_attr_count(object->objectInfo.objectType)) {
 		/* Should never get here */
-		syslog(LOG_ERR, "Something is not right with object\n");
+		OT_LOG(LOG_ERR, "Something is not right with object\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -1304,7 +1304,7 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute *a
 
 	default:
 		/* should never get here */
-		syslog(LOG_ERR, "Something went wrong when populating transient object\n");
+		OT_LOG(LOG_ERR, "Something went wrong when populating transient object\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -1313,7 +1313,7 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute *a
 	return TEE_SUCCESS;
 
 bad_paras:
-	syslog(LOG_ERR, "Provide all mandatory parameters\n");
+	OT_LOG(LOG_ERR, "Provide all mandatory parameters\n");
 	TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	return TEE_ERROR_BAD_PARAMETERS; /* Only compile purpose or else reaches non-void.. */
 }
@@ -1324,7 +1324,7 @@ void TEE_InitRefAttribute(TEE_Attribute *attr, uint32_t attributeID, void *buffe
 		return;
 
 	if (is_value_attribute(attributeID)) {
-		syslog(LOG_ERR, "Not a value attribute\n");
+		OT_LOG(LOG_ERR, "Not a value attribute\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1339,7 +1339,7 @@ void TEE_InitValueAttribute(TEE_Attribute *attr, uint32_t attributeID, uint32_t 
 		return;
 
 	if (!is_value_attribute(attributeID)) {
-		syslog(LOG_ERR, "Not a value attribute\n");
+		OT_LOG(LOG_ERR, "Not a value attribute\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1357,19 +1357,19 @@ void TEE_CopyObjectAttributes(TEE_ObjectHandle destObject, TEE_ObjectHandle srcO
 
 	if (destObject->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED ||
 	    !(srcObject->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED)) {
-		syslog(LOG_ERR, "Dest object initalized and source object is uninitialized\n");
+		OT_LOG(LOG_ERR, "Dest object initalized and source object is uninitialized\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	if (srcObject->maxObjSizeBytes > destObject->maxObjSizeBytes) {
-		syslog(LOG_ERR, "Problem with destination and source object size\n");
+		OT_LOG(LOG_ERR, "Problem with destination and source object size\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	/* Copy attributes, if possible */
 	if (destObject->objectInfo.objectType == srcObject->objectInfo.objectType) {
 		if (srcObject->attrs_count != destObject->attrs_count) {
-			syslog(LOG_ERR, "Can't copy objs, because attribute count do not match\n");
+			OT_LOG(LOG_ERR, "Can't copy objs, because attribute count do not match\n");
 			TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 		}
 
@@ -1379,7 +1379,7 @@ void TEE_CopyObjectAttributes(TEE_ObjectHandle destObject, TEE_ObjectHandle srcO
 		   srcObject->objectInfo.objectType == TEE_TYPE_RSA_KEYPAIR) {
 		if (!copy_attr_from_obj_to_obj(srcObject, TEE_ATTR_RSA_MODULUS, destObject, dest_index++) ||
 		    !copy_attr_from_obj_to_obj(srcObject, TEE_ATTR_RSA_PUBLIC_EXPONENT, destObject, dest_index++)) {
-			syslog(LOG_ERR, "Can not copy objects, because something went wrong\n");
+			OT_LOG(LOG_ERR, "Can not copy objects, because something went wrong\n");
 			TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 		}
 	} else if (destObject->objectInfo.objectType == TEE_TYPE_DSA_PUBLIC_KEY &&
@@ -1388,11 +1388,11 @@ void TEE_CopyObjectAttributes(TEE_ObjectHandle destObject, TEE_ObjectHandle srcO
 		    !copy_attr_from_obj_to_obj(srcObject, TEE_ATTR_DSA_SUBPRIME, destObject, dest_index++) ||
 		    !copy_attr_from_obj_to_obj(srcObject, TEE_ATTR_DSA_BASE, destObject, dest_index++) ||
 		    !copy_attr_from_obj_to_obj(srcObject, TEE_ATTR_DSA_PRIME, destObject, dest_index++)) {
-			syslog(LOG_ERR, "Can not copy objects, because something went wrong\n");
+			OT_LOG(LOG_ERR, "Can not copy objects, because something went wrong\n");
 			TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 		}
 	} else {
-		syslog(LOG_ERR, "Error in copying attributes: Problem with compatibles\n");
+		OT_LOG(LOG_ERR, "Error in copying attributes: Problem with compatibles\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1408,21 +1408,21 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	if (object->objectInfo.maxObjectSize < keySize) {
-		syslog(LOG_ERR, "KeySize is too large\n");
+		OT_LOG(LOG_ERR, "KeySize is too large\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	/* Should be a transient object and uninit */
 	if (object->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED ||
 	    object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT) {
-		syslog(LOG_ERR, "Object initialized or not a transient object\n");
+		OT_LOG(LOG_ERR, "Object initialized or not a transient object\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (object->attrs_count !=
 	    (uint32_t)valid_obj_type_and_attr_count(object->objectInfo.objectType)) {
 		/* Should never get here */
-		syslog(LOG_ERR, "Something is not right with object\n");
+		OT_LOG(LOG_ERR, "Something is not right with object\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -1457,14 +1457,14 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 
 	default:
 		/* Should never get here */
-		syslog(LOG_ERR, "Something went wrong in key generation\n");
+		OT_LOG(LOG_ERR, "Something went wrong in key generation\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
 	openssl_cleanup();
 
 	if (ret_val == TEE_ERROR_GENERIC) {
-		syslog(LOG_ERR, "Something went wrong in key generation\n");
+		OT_LOG(LOG_ERR, "Something went wrong in key generation\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -1488,25 +1488,25 @@ TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t o
 		return TEE_ERROR_ITEM_NOT_FOUND;
 
 	if (objectID == NULL) {
-		syslog(LOG_ERR, "ObjectID buffer is NULL\n");
+		OT_LOG(LOG_ERR, "ObjectID buffer is NULL\n");
 		return TEE_ERROR_GENERIC;
 	}
 
 	if (objectIDLen > TEE_OBJECT_ID_MAX_LEN) {
-		syslog(LOG_ERR, "ObjectID length too big\n");
+		OT_LOG(LOG_ERR, "ObjectID length too big\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	per_storage_file = request_for_open(objectID, objectIDLen, flags);
 	if (per_storage_file == NULL) {
-		syslog(LOG_ERR, "Open: Access conflict\n");
+		OT_LOG(LOG_ERR, "Open: Access conflict\n");
 		return TEE_ERROR_ACCESS_CONFLICT;
 	}
 
 	/* Access granted. Malloc space for new object handler */
 	new_object = TEE_Malloc(sizeof(struct __TEE_ObjectHandle), 0);
 	if (new_object == NULL) {
-		syslog(LOG_ERR, "Cannot malloc space for object handler\n");
+		OT_LOG(LOG_ERR, "Cannot malloc space for object handler\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto err;
 	}
@@ -1516,7 +1516,7 @@ TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t o
 
 	if (fread(&meta_info_from_storage, sizeof(struct storage_obj_meta_data), 1,
 		  per_storage_file) != 1) {
-		syslog(LOG_ERR, "Cannot read object meta data\n");
+		OT_LOG(LOG_ERR, "Cannot read object meta data\n");
 		ret_val = TEE_ERROR_GENERIC;
 		goto err;
 	}
@@ -1589,24 +1589,24 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t
 		return TEE_ERROR_ITEM_NOT_FOUND;
 
 	if (objectID == NULL) {
-		syslog(LOG_ERR, "ObjectID buffer is NULL\n");
+		OT_LOG(LOG_ERR, "ObjectID buffer is NULL\n");
 		return TEE_ERROR_GENERIC;
 	}
 
 	if (objectIDLen > TEE_OBJECT_ID_MAX_LEN) {
-		syslog(LOG_ERR, "ObjectID length too big\n");
+		OT_LOG(LOG_ERR, "ObjectID length too big\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (attributes != NULL &&
 	    !(attributes->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED)) {
-		syslog(LOG_ERR, "CAnnot create a persistant object from unitialized object\n");
+		OT_LOG(LOG_ERR, "CAnnot create a persistant object from unitialized object\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	obj_storage_file = request_for_create(objectID, objectIDLen, flags);
 	if (obj_storage_file == NULL) {
-		syslog(LOG_ERR, "Create: Access conflict\n");
+		OT_LOG(LOG_ERR, "Create: Access conflict\n");
 		return TEE_ERROR_ACCESS_CONFLICT;
 	}
 
@@ -1675,7 +1675,7 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t
 	return TEE_SUCCESS;
 
 err_at_meta_or_init_data_write:
-	syslog(LOG_ERR, "Error with fwrite or fflush\n");
+	OT_LOG(LOG_ERR, "Error with fwrite or fflush\n");
 	delete_file(NULL, obj_storage_file, objectID, objectIDLen);
 	if (obj_storage_file != NULL && errno == ENOSPC)
 		return TEE_ERROR_STORAGE_NO_SPACE;
@@ -1683,7 +1683,7 @@ err_at_meta_or_init_data_write:
 	return TEE_ERROR_GENERIC;
 
 err_at_obj_alloc:
-	syslog(LOG_ERR, "Cannot alloc adsfasdfasdfasdfadsf\n");
+	OT_LOG(LOG_ERR, "Cannot alloc adsfasdfasdfasdfadsf\n");
 	delete_file(NULL, obj_storage_file, objectID, objectIDLen);
 	(*object) = NULL;
 	if (ret_obj_alloc == TEE_ERROR_OUT_OF_MEMORY)
@@ -1696,23 +1696,23 @@ TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void *newObjectID
 				      size_t newObjectIDLen)
 {
 	if (object == NULL || !(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
-		syslog(LOG_ERR, "ObjectID buffer is NULL or not persistant object\n");
+		OT_LOG(LOG_ERR, "ObjectID buffer is NULL or not persistant object\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (newObjectIDLen > TEE_OBJECT_ID_MAX_LEN) {
-		syslog(LOG_ERR, "ObjectID length too big\n");
+		OT_LOG(LOG_ERR, "ObjectID length too big\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META) ||
 	    object->per_object.object_file == NULL) {
-		syslog(LOG_ERR, "TEE_RenamePerObj: No rights or not valid object\n");
+		OT_LOG(LOG_ERR, "TEE_RenamePerObj: No rights or not valid object\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	if (!change_object_ID(object, newObjectID, newObjectIDLen)) {
-		syslog(LOG_ERR, "Access conflict: ID exists\n");
+		OT_LOG(LOG_ERR, "Access conflict: ID exists\n");
 		return TEE_ERROR_ACCESS_CONFLICT;
 	}
 
@@ -1725,13 +1725,13 @@ void TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object)
 		return;
 
 	if (!(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
-		syslog(LOG_ERR, "Not a persistant object\n");
+		OT_LOG(LOG_ERR, "Not a persistant object\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
 
 	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META) ||
 	    object->per_object.object_file == NULL) {
-		syslog(LOG_ERR, "TEE_CloAndDelPerObj: No rights or not valid object\n");
+		OT_LOG(LOG_ERR, "TEE_CloAndDelPerObj: No rights or not valid object\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
 
@@ -1824,17 +1824,17 @@ TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size
 	*count = 0;
 
 	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_READ)) {
-		syslog(LOG_ERR, "Can not read persistant object data: Not proper access rights\n");
+		OT_LOG(LOG_ERR, "Can not read persistant object data: Not proper access rights\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
 
 	if (object->per_object.object_file == NULL) {
-		syslog(LOG_ERR, "Not a proper persistant object. Something is wrong\n");
+		OT_LOG(LOG_ERR, "Not a proper persistant object. Something is wrong\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
 
 	if (feof(object->per_object.object_file)) {
-		syslog(LOG_ERR, "Can't read: end of file\n");
+		OT_LOG(LOG_ERR, "Can't read: end of file\n");
 		goto ret;
 	}
 
@@ -1856,17 +1856,17 @@ TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t siz
 		return TEE_ERROR_GENERIC;
 
 	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE)) {
-		syslog(LOG_ERR, "Can not write persistant object data: Not proper access rights\n");
+		OT_LOG(LOG_ERR, "Can not write persistant object data: Not proper access rights\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
 
 	if (object->per_object.object_file == NULL) {
-		syslog(LOG_ERR, "Not a proper persistant object. Something is wrong\n");
+		OT_LOG(LOG_ERR, "Not a proper persistant object. Something is wrong\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
 
 	if (fflush(object->per_object.object_file) != 0) {
-		syslog(LOG_ERR, "Cannot flush before write\n");
+		OT_LOG(LOG_ERR, "Cannot flush before write\n");
 		goto error;
 	}
 
@@ -1876,12 +1876,12 @@ TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t siz
 	write_bytes = fwrite(buffer, 1, size, object->per_object.object_file);
 
 	if (write_bytes != size) {
-		syslog(LOG_DEBUG, "Stream write error has been occured\n");
+		OT_LOG(LOG_DEBUG, "Stream write error has been occured\n");
 		goto error;
 	}
 
 	if (fflush(object->per_object.object_file) != 0) {
-		syslog(LOG_ERR, "Cannot flush after write\n");
+		OT_LOG(LOG_ERR, "Cannot flush after write\n");
 		goto error;
 	}
 
@@ -1896,7 +1896,7 @@ error:
 	err_no = errno;
 	/* TODO: atomic write. For now a cheap solution: set file handler as it was before write */
 	if (fseek(object->per_object.object_file, object->per_object.data_position, SEEK_SET) != 0)
-		syslog(LOG_ERR, "fseek error at write object data\n");
+		OT_LOG(LOG_ERR, "fseek error at write object data\n");
 	if (err_no == ENOSPC)
 		return TEE_ERROR_STORAGE_NO_SPACE;
 
@@ -1912,12 +1912,12 @@ TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)
 		return TEE_ERROR_GENERIC;
 
 	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META)) {
-		syslog(LOG_ERR, "Can not write persistant object data: Not proper access rights\n");
+		OT_LOG(LOG_ERR, "Can not write persistant object data: Not proper access rights\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
 
 	if (object->per_object.object_file == NULL) {
-		syslog(LOG_ERR, "Not a proper persistant object. Something is wrong\n");
+		OT_LOG(LOG_ERR, "Not a proper persistant object. Something is wrong\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
 
@@ -1930,7 +1930,7 @@ TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)
 	if (pos > (size + begin)) {
 		/* TODO: If fseek fail -> kabum, so some solution is needed */
 		if (fseek(object->per_object.object_file, size + begin, SEEK_SET) != 0)
-			syslog(LOG_ERR, "fseek error at truncate object data\n");
+			OT_LOG(LOG_ERR, "fseek error at truncate object data\n");
 		object->per_object.data_position = size + begin;
 	}
 
@@ -1976,7 +1976,7 @@ TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whenc
 
 	/* TODO: If fseek fail -> kabum, so some solution is needed */
 	if (fseek(object->per_object.object_file, pos, TEE_DATA_SEEK_SET) != 0)
-		syslog(LOG_ERR, "Fseek failed at seek data\n");
+		OT_LOG(LOG_ERR, "Fseek failed at seek data\n");
 
 	return TEE_SUCCESS;
 }

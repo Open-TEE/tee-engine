@@ -18,7 +18,6 @@
 
 #include <string.h>
 #include <stdio.h>
-#include <syslog.h>
 #include <dirent.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -32,6 +31,7 @@
 #include "tee_memory.h"
 #include "tee_storage_common.h"
 #include "storage_key_apis_external_funcs.h"
+#include "tee_logging.h"
 
 #define SECURE_STORAGE_PATH "/home/dettenbo/TEE_secure_storage/"
 #define TEE_OBJ_ID_LEN_HEX TEE_OBJECT_ID_MAX_LEN * 2 + 1
@@ -80,7 +80,7 @@ static bool is_directory_empty(char *dir_path)
 	int file_count = 0;
 
 	if (dir_path == NULL) {
-		syslog(LOG_ERR, "Dir path is NULL\n");
+		OT_LOG(LOG_ERR, "Dir path is NULL\n");
 		return false;
 	}
 
@@ -128,7 +128,7 @@ void ext_delete_file(FILE *object_file, void *objectID, size_t objectIDLen)
 	/* TODO: Check that correct file is closed and removed! FILE == objectID */
 
 	if (fclose(object_file) != 0) {
-		syslog(LOG_ERR, "Something went wrong with file closening\n");
+		OT_LOG(LOG_ERR, "Something went wrong with file closening\n");
 		TEE_Panic(TEE_ERROR_GENERIC); /* Kill TA */
 	}
 
@@ -154,7 +154,7 @@ void ext_release_file(FILE *object_file, void *objectID, size_t objectIDLen)
 	/* TODO: Check that correct file is closed! FILE == objectID */
 
 	if (fclose(object_file) != 0) {
-		syslog(LOG_ERR, "Something went wrong with file closening\n");
+		OT_LOG(LOG_ERR, "Something went wrong with file closening\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 }
@@ -177,7 +177,7 @@ static FILE *request_file(char *file_name_with_path, size_t request_access)
 		return fopen(file_name_with_path, "rb");
 
 	} else {
-		syslog(LOG_ERR, "Cannot open file\n");
+		OT_LOG(LOG_ERR, "Cannot open file\n");
 		return NULL;
 	}
 }
@@ -209,7 +209,7 @@ FILE *ext_request_for_open(void *objectID, size_t objectIDLen, size_t request_ac
 	}
 
 	if (access(name_with_dir_path, F_OK) != 0) {
-		syslog(LOG_ERR, "Access conflict: File not exists\n");
+		OT_LOG(LOG_ERR, "Access conflict: File not exists\n");
 		goto ret;
 	}
 
@@ -249,18 +249,18 @@ FILE *ext_request_for_create(void *objectID, size_t objectIDLen, size_t request_
 	}
 
 	if ((request_access & TEE_DATA_FLAG_EXCLUSIVE) && (access(name_with_dir_path, F_OK) == 0)) {
-		syslog(LOG_ERR, "Access conflict: File exists\n");
+		OT_LOG(LOG_ERR, "Access conflict: File exists\n");
 		goto ret;
 	}
 
 	ret_mkdir = mkdir(SECURE_STORAGE_PATH, 0777);
 	if (ret_mkdir != 0 && errno != EEXIST) {
-		syslog(LOG_ERR, "Cannot create Secure Storage directory: %s\n", strerror(errno));
+		OT_LOG(LOG_ERR, "Cannot create Secure Storage directory: %s\n", strerror(errno));
 		goto ret;
 	}
 	ret_mkdir = mkdir(dir_path, 0777);
 	if (ret_mkdir != 0 && errno != EEXIST) {
-		syslog(LOG_ERR, "Cannot create UUID directory: %s\n", strerror(errno));
+		OT_LOG(LOG_ERR, "Cannot create UUID directory: %s\n", strerror(errno));
 		goto ret;
 	}
 
@@ -311,12 +311,12 @@ bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID
 	/* TODO: Check if TA can change object ID */
 
 	if (access(new_name_with_dir_path, F_OK) == 0) {
-		syslog(LOG_ERR, "Cannot change object ID, because new ID is in use\n");
+		OT_LOG(LOG_ERR, "Cannot change object ID, because new ID is in use\n");
 		return false;
 	}
 
 	if (rename(name_with_dir_path, new_name_with_dir_path) != 0) {
-		syslog(LOG_ERR, "Rename function failed\n");
+		OT_LOG(LOG_ERR, "Rename function failed\n");
 		return false;
 	}
 
@@ -335,7 +335,7 @@ bool ext_alloc_for_enumerator(uint32_t *ID)
 	/* MAlloc for handle and fill */
 	new_enumerator = TEE_Malloc(sizeof(struct storage_enumerator), 0);
 	if (new_enumerator == NULL) {
-		syslog(LOG_ERR, "Cannot malloc for enumerator: Out of memory\n");
+		OT_LOG(LOG_ERR, "Cannot malloc for enumerator: Out of memory\n");
 		return false;
 	}
 
@@ -359,7 +359,7 @@ void ext_free_enumerator(uint32_t free_enum_ID)
 	struct storage_enumerator *del_enum, *prev_enum;
 
 	if (enumerators_head == NULL) {
-		syslog(LOG_ERR, "Enumerator: Not a valid enumerator\n");
+		OT_LOG(LOG_ERR, "Enumerator: Not a valid enumerator\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -381,7 +381,7 @@ void ext_free_enumerator(uint32_t free_enum_ID)
 	}
 
 	/* should never end up here */
-	syslog(LOG_ERR, "Enumerator: Something went wrong with file closening\n");
+	OT_LOG(LOG_ERR, "Enumerator: Something went wrong with file closening\n");
 	TEE_Panic(TEE_ERROR_GENERIC);
 
 free_and_close:
@@ -409,13 +409,13 @@ void ext_reset_enumerator(uint32_t reset_enum_ID)
 	struct storage_enumerator *reset_enum;
 
 	if (enumerators_head == NULL) {
-		syslog(LOG_ERR, "Enumerator: Not a valid enumerator\n");
+		OT_LOG(LOG_ERR, "Enumerator: Not a valid enumerator\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
 	reset_enum = get_enum(reset_enum_ID);
 	if (reset_enum == NULL) {
-		syslog(LOG_ERR, "Enumerator: Enumerator not valid\n");
+		OT_LOG(LOG_ERR, "Enumerator: Enumerator not valid\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -443,7 +443,7 @@ bool ext_start_enumerator(uint32_t start_enum_ID)
 
 	start_enum = get_enum(start_enum_ID);
 	if (start_enum == NULL) {
-		syslog(LOG_ERR, "Enumerator: Enumerator not valid\n");
+		OT_LOG(LOG_ERR, "Enumerator: Enumerator not valid\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -452,7 +452,7 @@ bool ext_start_enumerator(uint32_t start_enum_ID)
 
 	start_enum->dir = opendir(dir_path);
 	if (start_enum->dir == NULL) {
-		syslog(LOG_ERR, "Enumerator: Something went wrong (dirent failure)\n");
+		OT_LOG(LOG_ERR, "Enumerator: Something went wrong (dirent failure)\n");
 		return false; /* NULL == directory empty */
 	}
 
@@ -480,7 +480,7 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 
 	get_from_enum = get_enum(get_next_ID);
 	if (get_from_enum == NULL) {
-		syslog(LOG_ERR, "Enumerator: Enumerator not valid\n");
+		OT_LOG(LOG_ERR, "Enumerator: Enumerator not valid\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -504,9 +504,9 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 			return false;
 		}
 
-		if (asprintf(&name_with_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID,
-			     entry->d_name) == -1) {
-			syslog(LOG_ERR, "Enumerator: Out of memory\n");
+		if (asprintf(&name_with_path, "%s%s/%s",
+			     SECURE_STORAGE_PATH, UUID, entry->d_name) == -1) {
+			OT_LOG(LOG_ERR, "Enumerator: Out of memory\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 
@@ -517,9 +517,9 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 		if (next_object == NULL)
 			continue;
 
-		if (fread(recv_data_to_caller, sizeof(struct storage_obj_meta_data), 1,
-			  next_object) != 1) {
-			syslog(LOG_ERR, "Error at read file (enumeration); errno: %i\n", errno);
+		if (fread(recv_data_to_caller,
+			  sizeof(struct storage_obj_meta_data), 1, next_object) != 1) {
+			OT_LOG(LOG_ERR, "Error at read file (enumeration); errno: %i\n", errno);
 			memset(recv_data_to_caller, 0, sizeof(struct storage_obj_meta_data));
 			fclose(next_object); /* Skip to next object */
 			continue;
@@ -531,11 +531,11 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 
 		/* calculate data size */
 		if (fseek(next_object, 0, SEEK_END) != 0)
-			syslog(LOG_ERR, "fseek error at get next enumeration; errno: %i\n", errno);
+			OT_LOG(LOG_ERR, "fseek error at get next enumeration; errno: %i\n", errno);
 
 		end_pos = ftell(next_object);
 		if (end_pos == -1L)
-			syslog(LOG_ERR, "ftell error at get next enumeration; errno: %i\n", errno);
+			OT_LOG(LOG_ERR, "ftell error at get next enumeration; errno: %i\n", errno);
 
 		if (end_pos - recv_data_to_caller->meta_size > UINT32_MAX)
 			recv_data_to_caller->info.dataSize = UINT32_MAX;

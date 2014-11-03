@@ -10,11 +10,16 @@ DynamicLibrary {
         cpp.includePaths: ["../include", "."]
     }
 
+    cpp.includePaths: [
+        "../include"
+    ]
+
     destinationDirectory: '.'
 
     files: [
         "../include/tee_internal_api.h",
         "../include/tee_shared_data_types.h",
+        "../include/tee_logging.h",
         "openssl_1_0_2_beta_rsa_oaep.h",
         "openssl_1_0_2_beta_rsa_oaep.c",
         "storage_key_apis_external_funcs.h",

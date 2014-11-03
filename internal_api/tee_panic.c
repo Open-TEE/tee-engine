@@ -14,11 +14,11 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <syslog.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "tee_panic.h"
+#include "tee_logging.h"
 
 void TEE_Panic(TEE_Result panicCode)
 {
@@ -26,7 +26,7 @@ void TEE_Panic(TEE_Result panicCode)
 
 	printf("P A N I C !\n");
 
-	syslog(LOG_DEBUG, "TA panicked and panic func has been reached\n");
+	OT_LOG(LOG_DEBUG, "TA panicked and panic func has been reached\n");
 
 	exit(panicCode);
 }

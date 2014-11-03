@@ -39,7 +39,6 @@
 #include <openssl/hmac.h>
 
 #include <string.h>
-#include <syslog.h>
 #include <limits.h>
 #include <stdint.h>
 
@@ -50,6 +49,7 @@
 #include "tee_panic.h"
 #include "tee_data_types.h"
 #include "openssl_1_0_2_beta_rsa_oaep.h"
+#include "tee_logging.h"
 
 #define BITS_TO_BYTES(bits) (bits / 8)
 #define DIGEST_CTX(OPERATION_HANDLE) ((EVP_MD_CTX *)OPERATION_HANDLE->dig_ctx)
@@ -94,13 +94,13 @@ static bool __attribute__((constructor)) openssl_init()
 	/* seed random generator */
 	read_bytes = RAND_load_file("/dev/random", seed_bytes);
 	if (read_bytes != seed_bytes) {
-		syslog(LOG_ERR, "Openssl init: PRNG seed fail (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Openssl init: PRNG seed fail (openssl failure)\n");
 		return false;
 	}
 
 	/* test PNRG */
 	if (!RAND_bytes(test_buf, sizeof(test_buf))) {
-		syslog(LOG_ERR, "Openssl init: Problems with random generator (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Openssl init: Problems with random generator (openssl failure)\n");
 		return false;
 	}
 
@@ -433,7 +433,7 @@ static bool valid_key_size_for_algorithm(uint32_t alg, uint32_t key)
 		break;
 	}
 
-	syslog(LOG_ERR, "valid_key_size_for_algorithm: Algorithm do not sup that key\n");
+	OT_LOG(LOG_ERR, "valid_key_size_for_algorithm: Algorithm do not sup that key\n");
 	return false;
 }
 
@@ -456,13 +456,13 @@ static bool cpy_key_comp_to_bn(BIGNUM **bn, uint32_t attrID, TEE_ObjectHandle ke
 
 	rsa_component = get_attr_by_ID(key, attrID);
 	if (!rsa_component) {
-		syslog(LOG_ERR, "cpy RSA comp to op: RSA attribute ID is not found at key\n");
+		OT_LOG(LOG_ERR, "cpy RSA comp to op: RSA attribute ID is not found at key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	*bn = BN_bin2bn(rsa_component->content.ref.buffer, rsa_component->content.ref.length, *bn);
 	if (!*bn) {
-		syslog(LOG_ERR, "cpy RSA comp to op: bin2bn failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "cpy RSA comp to op: bin2bn failed (openssl failure)\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -545,7 +545,7 @@ static void free_key_and_ctx(TEE_OperationHandle operation)
 			break;
 
 		default:
-			syslog(LOG_ERR, "max_mac_len: Alg not supported\n");
+			OT_LOG(LOG_ERR, "max_mac_len: Alg not supported\n");
 			TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 		}
 	}
@@ -565,7 +565,7 @@ static bool alg_requires_2_keys(uint32_t alg)
 static int uint322int(uint32_t cast_uint32)
 {
 	if (cast_uint32 > INT_MAX) {
-		syslog(LOG_ERR, "uint322int: uint32_t to int overflow!\n");
+		OT_LOG(LOG_ERR, "uint322int: uint32_t to int overflow!\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -575,7 +575,7 @@ static int uint322int(uint32_t cast_uint32)
 static uint32_t int2uint32(int cast_int)
 {
 	if (cast_int < 0) {
-		syslog(LOG_ERR, "int2uint32: int to uint32_t underflow!\n");
+		OT_LOG(LOG_ERR, "int2uint32: int to uint32_t underflow!\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -650,7 +650,7 @@ static uint32_t get_operation_class(uint32_t alg)
 		return TEE_OPERATION_KEY_DERIVATION;
 
 	default:
-		syslog(LOG_ERR, "Seems so that algorithm can not match operation type\n");
+		OT_LOG(LOG_ERR, "Seems so that algorithm can not match operation type\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 		return 0; /* return for compiler */
 	}
@@ -820,7 +820,7 @@ static bool key_usage_allow_operation(uint32_t obj_usage, uint32_t op_mode, uint
 
 	case TEE_MODE_DIGEST:
 		/* Should never happen */
-		syslog(LOG_ERR, "No need key-object for digest\n");
+		OT_LOG(LOG_ERR, "No need key-object for digest\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 
 	case TEE_MODE_DERIVE:
@@ -849,53 +849,53 @@ static bool object_type_compatible_to_op(uint32_t obj_type, uint32_t op_mode)
 static TEE_Result valid_key_and_operation(TEE_ObjectHandle key, TEE_OperationHandle operation)
 {
 	if (!(key->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED)) {
-		syslog(LOG_ERR, "valid_key_and_operation: Key is not initialized\n");
+		OT_LOG(LOG_ERR, "valid_key_and_operation: Key is not initialized\n");
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
 	if (operation->op_state == TEE_OP_STATE_ACTIVE) {
-		syslog(LOG_ERR, "valid_key_and_operation: Operation in active state\n");
+		OT_LOG(LOG_ERR, "valid_key_and_operation: Operation in active state\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
 	if ((operation->operation_info.operationClass == TEE_OPERATION_CIPHER ||
 	     operation->operation_info.operationClass == TEE_OPERATION_MAC) &&
 	    operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) {
-		syslog(LOG_ERR, "valid_key_and_operation: Operation is initialized\n");
+		OT_LOG(LOG_ERR, "valid_key_and_operation: Operation is initialized\n");
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
 	if (operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET) {
-		syslog(LOG_ERR, "valid_key_and_operation: Operation key is set");
+		OT_LOG(LOG_ERR, "valid_key_and_operation: Operation key is set");
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
 	if ((operation->operation_info.mode == TEE_MODE_DIGEST) && key) {
-		syslog(LOG_ERR, "valid_key_and_operation: Not expected a key\n");
+		OT_LOG(LOG_ERR, "valid_key_and_operation: Not expected a key\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
 	if (key->objectInfo.maxObjectSize > operation->operation_info.maxKeySize) {
-		syslog(LOG_ERR, "valid_key_and_operation: Key does not fit to operation\n");
+		OT_LOG(LOG_ERR, "valid_key_and_operation: Key does not fit to operation\n");
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
 	if (!object_type_compatible_to_op(key->objectInfo.objectType,
 					  operation->operation_info.mode)) {
-		syslog(LOG_ERR, "valid_key_and_operation: Not compatible operation mode for key\n");
+		OT_LOG(LOG_ERR, "valid_key_and_operation: Not compatible operation mode for key\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
 	if (!valid_key_type_for_operation_algorithm(key->objectInfo.objectType,
 						    operation->operation_info.algorithm)) {
-		syslog(LOG_ERR,
+		OT_LOG(LOG_ERR,
 		       "valid_key_and_operation: Key does not match operation algorithm\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
 	if (!key_usage_allow_operation(key->objectInfo.objectUsage, operation->operation_info.mode,
 				       operation->operation_info.algorithm)) {
-		syslog(LOG_ERR, "valid_key_and_operation: Key does not allow operation\n");
+		OT_LOG(LOG_ERR, "valid_key_and_operation: Key does not allow operation\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
@@ -930,13 +930,13 @@ static TEE_Result malloc_and_cpy_symmetric_key(TEE_OperationHandle operation, TE
 
 	sym_key = get_attr_by_ID(key, TEE_ATTR_SECRET_VALUE);
 	if (!sym_key) {
-		syslog(LOG_ERR, "Malloc and cpy sym; Key does not contain symmetric key\n");
+		OT_LOG(LOG_ERR, "Malloc and cpy sym; Key does not contain symmetric key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	operation->key.key = TEE_Malloc(sym_key->content.ref.length, 0);
 	if (!operation->key.key) {
-		syslog(LOG_ERR, "Malloc and cpy sym; Cannot malloc space for symmetric key\n");
+		OT_LOG(LOG_ERR, "Malloc and cpy sym; Cannot malloc space for symmetric key\n");
 		return TEE_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -955,7 +955,7 @@ static void check_IV_and_malloc_cpy2op(TEE_OperationHandle operation, void *IV, 
 	switch (operation->operation_info.algorithm) {
 	case TEE_ALG_AES_CCM:
 		if (IV_len < 7 || IV_len > 13) {
-			syslog(LOG_ERR, "check malloc cpy IV: AES-CCM nonce problem\n");
+			OT_LOG(LOG_ERR, "check malloc cpy IV: AES-CCM nonce problem\n");
 			TEE_Panic(TEE_ERROR_BAD_STATE);
 		}
 
@@ -963,7 +963,7 @@ static void check_IV_and_malloc_cpy2op(TEE_OperationHandle operation, void *IV, 
 
 	case TEE_ALG_AES_GCM:
 		if (IV_len % 8) {
-			syslog(LOG_ERR, "check malloc cpy IV: AES-GCM IV problem\n");
+			OT_LOG(LOG_ERR, "check malloc cpy IV: AES-GCM IV problem\n");
 			TEE_Panic(TEE_ERROR_BAD_STATE);
 		}
 
@@ -980,7 +980,7 @@ static void check_IV_and_malloc_cpy2op(TEE_OperationHandle operation, void *IV, 
 	case TEE_ALG_DES3_CBC_NOPAD:
 		ctx_iv_len = int2uint32(EVP_CIPHER_CTX_iv_length((SYM_ctx(operation))));
 		if (ctx_iv_len > IV_len) {
-			syslog(LOG_ERR, "check malloc cpy IV: Algorithm IV too short\n");
+			OT_LOG(LOG_ERR, "check malloc cpy IV: Algorithm IV too short\n");
 			TEE_Panic(TEE_ERROR_BAD_STATE);
 		}
 
@@ -993,7 +993,7 @@ static void check_IV_and_malloc_cpy2op(TEE_OperationHandle operation, void *IV, 
 	/* IV OK. Malloc and cpy */
 	operation->key.IV = TEE_Malloc(IV_len, 0);
 	if (!operation->key.IV) {
-		syslog(LOG_ERR, "check malloc cpy IV: IV malloc\n");
+		OT_LOG(LOG_ERR, "check malloc cpy IV: IV malloc\n");
 		TEE_Panic(TEE_ERROR_OUT_OF_MEMORY);
 	}
 
@@ -1161,18 +1161,18 @@ static TEE_Result init_digest_op(TEE_OperationHandle operation, uint32_t algorit
 
 	default:
 		/* should never end up here */
-		syslog(LOG_ERR, "Init deigest op: Digest alg is not supported or found\n");
+		OT_LOG(LOG_ERR, "Init deigest op: Digest alg is not supported or found\n");
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
 
 	operation->dig_ctx = (EVP_MD_CTX *)EVP_MD_CTX_create();
 	if (!DIGEST_CTX(operation)) {
-		syslog(LOG_ERR, "Init deigest op: out of memory: EVP_MD_ctx\n");
+		OT_LOG(LOG_ERR, "Init deigest op: out of memory: EVP_MD_ctx\n");
 		return TEE_ERROR_OUT_OF_MEMORY;
 	}
 
 	if (EVP_DigestInit_ex(DIGEST_CTX(operation), digest, NULL) != 1) {
-		syslog(LOG_ERR, "Init deigest op: Problem with digest init (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Init deigest op: Problem with digest init (openssl failure)\n");
 		return TEE_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -1225,7 +1225,7 @@ static const EVP_MD *load_evp_asym_hash(TEE_OperationHandle operation)
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		return EVP_sha512();
 	default:
-		syslog(LOG_ERR, "load_evp_asym_hash: Alg not supported\n");
+		OT_LOG(LOG_ERR, "load_evp_asym_hash: Alg not supported\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
@@ -1235,14 +1235,14 @@ static const EVP_MD *load_evp_asym_hash(TEE_OperationHandle operation)
 static TEE_Result malloc_and_cpy_rsa_key(TEE_OperationHandle operation, TEE_ObjectHandle key)
 {
 	if (!RSA_key(operation)) {
-		syslog(LOG_ERR, "cpy RSA key: Not a proper operation handler\n");
+		OT_LOG(LOG_ERR, "cpy RSA key: Not a proper operation handler\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	/* Every RSA object contain modulo and public exponent ( == TEE_TYPE_RSA_PUBLIC_KEY) */
 	if (!cpy_key_comp_to_bn(&RSA_key(operation)->n, TEE_ATTR_RSA_MODULUS, key) ||
 	    !cpy_key_comp_to_bn(&RSA_key(operation)->e, TEE_ATTR_RSA_PUBLIC_EXPONENT, key)) {
-		syslog(LOG_ERR, "cpy RSA key: Error with modulo|public exponent\n");
+		OT_LOG(LOG_ERR, "cpy RSA key: Error with modulo|public exponent\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1250,7 +1250,7 @@ static TEE_Result malloc_and_cpy_rsa_key(TEE_OperationHandle operation, TEE_Obje
 
 		/* Key pair minimum is modulo, public and private exponent */
 		if (!cpy_key_comp_to_bn(&RSA_key(operation)->d, TEE_ATTR_RSA_PRIVATE_EXPONENT, key)) {
-			syslog(LOG_ERR, "cpy RSA key: Error with private exponent\n");
+			OT_LOG(LOG_ERR, "cpy RSA key: Error with private exponent\n");
 			TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 		}
 
@@ -1266,14 +1266,14 @@ static TEE_Result malloc_and_cpy_rsa_key(TEE_OperationHandle operation, TEE_Obje
 			    !cpy_key_comp_to_bn(&RSA_key(operation)->dmp1, TEE_ATTR_RSA_EXPONENT1, key) ||
 			    !cpy_key_comp_to_bn(&RSA_key(operation)->dmq1, TEE_ATTR_RSA_EXPONENT2, key) ||
 			    !cpy_key_comp_to_bn(&RSA_key(operation)->iqmp, TEE_ATTR_RSA_COEFFICIENT, key)) {
-				syslog(LOG_ERR, "cpy RSA key: Error with RSA other component\n");
+				OT_LOG(LOG_ERR, "cpy RSA key: Error with RSA other component\n");
 				TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 			}
 		}
 	}
 
 	if (!RSA_check_key(RSA_key(operation))) {
-		syslog(LOG_ERR, "cpy RSA key: Not a proper RSA key (openssl failure)\n");
+		OT_LOG(LOG_ERR, "cpy RSA key: Not a proper RSA key (openssl failure)\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -1296,7 +1296,7 @@ static uint32_t rsa_msg_max_len(TEE_OperationHandle operation, const EVP_MD *has
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512:
 
 		if (!hash) {
-			syslog(LOG_ERR, "rsa_msg_max_len: Expected EVP hash algorithm\n");
+			OT_LOG(LOG_ERR, "rsa_msg_max_len: Expected EVP hash algorithm\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 
@@ -1305,7 +1305,7 @@ static uint32_t rsa_msg_max_len(TEE_OperationHandle operation, const EVP_MD *has
 
 	default:
 		/* Should never end up here */
-		syslog(LOG_ERR, "rsa_msg_max_len: algorithm not supported\n");
+		OT_LOG(LOG_ERR, "rsa_msg_max_len: algorithm not supported\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -1318,12 +1318,12 @@ static TEE_Result check_rsa_bufs_len(TEE_OperationHandle operation, const EVP_MD
 	if (operation->operation_info.mode == TEE_MODE_ENCRYPT) {
 
 		if (RSA_size(RSA_key(operation)) != uint322int(dst_buf_len)) {
-			syslog(LOG_ERR, "check_rsa_bufs_len: Dest buf should be rsa mod size\n");
+			OT_LOG(LOG_ERR, "check_rsa_bufs_len: Dest buf should be rsa mod size\n");
 			return TEE_ERROR_SHORT_BUFFER;
 		}
 
 		if (src_buf_len > rsa_msg_max_len(operation, hash)) {
-			syslog(LOG_ERR, "check_rsa_bufs_len: Src buf too small\n");
+			OT_LOG(LOG_ERR, "check_rsa_bufs_len: Src buf too small\n");
 			return TEE_ERROR_BAD_PARAMETERS;
 		}
 	}
@@ -1331,12 +1331,12 @@ static TEE_Result check_rsa_bufs_len(TEE_OperationHandle operation, const EVP_MD
 	if (operation->operation_info.mode == TEE_MODE_DECRYPT) {
 
 		if (rsa_msg_max_len(operation, hash) > dst_buf_len) {
-			syslog(LOG_ERR, "check_rsa_bufs_len: Dest buf too small\n");
+			OT_LOG(LOG_ERR, "check_rsa_bufs_len: Dest buf too small\n");
 			return TEE_ERROR_SHORT_BUFFER;
 		}
 
 		if (RSA_size(RSA_key(operation)) != uint322int(src_buf_len)) {
-			syslog(LOG_ERR, "check_rsa_bufs_len: Src buf should be rsa mod size\n");
+			OT_LOG(LOG_ERR, "check_rsa_bufs_len: Src buf should be rsa mod size\n");
 			return TEE_ERROR_BAD_PARAMETERS;
 		}
 	}
@@ -1360,7 +1360,7 @@ static void get_rsa_oaep_label(TEE_Attribute *params, uint32_t paramCount,
 	}
 
 	if (!oaep_label && *oaep_label_len > 0) {
-		syslog(LOG_ERR, "get_rsa_oaep_label: Label buffer NULL, but len > 0\n");
+		OT_LOG(LOG_ERR, "get_rsa_oaep_label: Label buffer NULL, but len > 0\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 }
@@ -1382,7 +1382,7 @@ static bool add_rsa_cipher_padding(TEE_OperationHandle operation, void *srcData,
 
 	if (!beta_RSA_padding_add_PKCS1_OAEP_mgf1(destData, *destLen, srcData, srcLen, oaep_label,
 						  oaep_label_len, hash, NULL)) {
-		syslog(LOG_ERR, "add_rsa_cipher_padding: Padding failure (openssl)\n");
+		OT_LOG(LOG_ERR, "add_rsa_cipher_padding: Padding failure (openssl)\n");
 		return false;
 	}
 
@@ -1409,7 +1409,7 @@ static bool remove_rsa_cipher_padding(TEE_OperationHandle operation, void *srcDa
 						    (unsigned char *)srcData + 1, srcLen - 1,
 						    RSA_size(RSA_key(operation)),
 						    oaep_label, oaep_label_len, hash, NULL)) {
-		syslog(LOG_ERR, "remove_rsa_cipher_padding: Padding failure (openssl)\n");
+		OT_LOG(LOG_ERR, "remove_rsa_cipher_padding: Padding failure (openssl)\n");
 		return false;
 	}
 
@@ -1426,14 +1426,14 @@ static TEE_Result rsa_op_generic_pre_checks_and_setup(TEE_OperationHandle operat
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!operation || !srcData || !destData || !destLen) {
-		syslog(LOG_ERR, "rsa_op_generic_pre_checks_and_setup: Error with parameters\n");
+		OT_LOG(LOG_ERR, "rsa_op_generic_pre_checks_and_setup: Error with parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (operation->operation_info.operationClass != TEE_OPERATION_ASYMMETRIC_CIPHER ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR, "rsa_op_generic_pre_checks_and_setup: Not a asymetric op "
+		OT_LOG(LOG_ERR, "rsa_op_generic_pre_checks_and_setup: Not a asymetric op "
 				"or not initializes or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -1448,7 +1448,7 @@ static TEE_Result rsa_op_generic_pre_checks_and_setup(TEE_OperationHandle operat
 	*rsa_mod_len = RSA_size(RSA_key(operation));
 	*rsa_mod_len_buf = TEE_Malloc(*rsa_mod_len, 0);
 	if (!*rsa_mod_len_buf) {
-		syslog(LOG_ERR, "rsa_op_generic_pre_checks_and_setup: Out of memory\n");
+		OT_LOG(LOG_ERR, "rsa_op_generic_pre_checks_and_setup: Out of memory\n");
 		TEE_Panic(TEE_ERROR_OUT_OF_MEMORY);
 	}
 
@@ -1465,7 +1465,7 @@ static int get_rsa_salt(TEE_Attribute *params, uint32_t paramCount)
 		for (i = 0; i < paramCount; ++i) {
 			if (params[i].attributeID == TEE_ATTR_RSA_PSS_SALT_LENGTH) {
 				if (params[i].content.value.a > UINT_MAX) {
-					syslog(LOG_ERR, "get_rsa_salt: Salt is too big\n");
+					OT_LOG(LOG_ERR, "get_rsa_salt: Salt is too big\n");
 					TEE_Panic(TEE_ERROR_OVERFLOW);
 				}
 
@@ -1484,7 +1484,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 							uint32_t *rsa_mod_len, const EVP_MD **hash)
 {
 	if (!digest || !signature) {
-		syslog(LOG_ERR, "rsa_sign_ver_generic_checks: Digest or Sig buf NULL\n");
+		OT_LOG(LOG_ERR, "rsa_sign_ver_generic_checks: Digest or Sig buf NULL\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1496,7 +1496,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 
 	/* Digest should match to algorithm */
 	if (dig_len != int2uint32(EVP_MD_size(*hash))) {
-		syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
+		OT_LOG(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
 				"Digest len err (not equal to alg)\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -1506,7 +1506,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 
 	/* Signature buffer correct len */
 	if (sig_len < *rsa_mod_len) {
-		syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
+		OT_LOG(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
 				"Signature buf too small\n");
 		if (operation->operation_info.mode == TEE_MODE_SIGN)
 			return TEE_ERROR_SHORT_BUFFER;
@@ -1524,7 +1524,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
 
 		if (dig_len > *rsa_mod_len - 11) {
-			syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
+			OT_LOG(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
 					"Dig too big for RSA key\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
@@ -1541,7 +1541,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 			*salt = EVP_MD_size(*hash);
 
 		if (uint322int(*rsa_mod_len) < (EVP_MD_size(*hash) + *salt + 2)) {
-			syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
+			OT_LOG(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
 					"Dig too big for RSA key\n");
 			TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 		}
@@ -1549,7 +1549,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 		break;
 
 	default:
-		syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
+		OT_LOG(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
 				"Digest len err (not equal to alg)\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -1557,7 +1557,7 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 	/* Malloc temp buffer */
 	*rsa_mod_len_buf = TEE_Malloc(*rsa_mod_len, 0);
 	if (!*rsa_mod_len_buf) {
-		syslog(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: Out of memory\n");
+		OT_LOG(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: Out of memory\n");
 		TEE_Panic(TEE_ERROR_OUT_OF_MEMORY);
 	}
 
@@ -1585,14 +1585,14 @@ static bool add_rsa_signature_padding(TEE_OperationHandle operation, void *EM, v
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		if (!RSA_padding_add_PKCS1_PSS_mgf1(RSA_key(operation), EM, mHash, hash, NULL,
 						    salt)) {
-			syslog(LOG_ERR, "add_rsa_signuture_padding: Padding failed\n");
+			OT_LOG(LOG_ERR, "add_rsa_signuture_padding: Padding failed\n");
 			return false;
 		}
 
 		break;
 
 	default:
-		syslog(LOG_ERR, "add_rsa_signuture_padding: Alg not supported\n");
+		OT_LOG(LOG_ERR, "add_rsa_signuture_padding: Alg not supported\n");
 		return false;
 	}
 
@@ -1621,14 +1621,14 @@ static bool verify_rsa_signature(TEE_OperationHandle operation, void *EM, void *
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		if (!RSA_verify_PKCS1_PSS_mgf1(RSA_key(operation), mHash, hash, hash, EM, salt)) {
-			syslog(LOG_ERR, "verify_rsa_signature: Bad signature\n");
+			OT_LOG(LOG_ERR, "verify_rsa_signature: Bad signature\n");
 			return false;
 		}
 
 		break;
 
 	default:
-		syslog(LOG_ERR, "verify_rsa_signature: Alg not supported\n");
+		OT_LOG(LOG_ERR, "verify_rsa_signature: Alg not supported\n");
 		return false;
 	}
 
@@ -1676,13 +1676,13 @@ static TEE_Result rsa_sign(TEE_OperationHandle operation, TEE_Attribute *params,
 		break;
 
 	default:
-		syslog(LOG_ERR, "rsa_sign: Not sup asym sig alg\n");
+		OT_LOG(LOG_ERR, "rsa_sign: Not sup asym sig alg\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 		write_bytes = 0; /* Suppress compiler warning */
 	}
 
 	if (write_bytes == -1) {
-		syslog(LOG_ERR, "rsa_sign: encrypting failed\n");
+		OT_LOG(LOG_ERR, "rsa_sign: encrypting failed\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
@@ -1728,13 +1728,13 @@ static TEE_Result rsa_ver(TEE_OperationHandle operation, TEE_Attribute *params, 
 		break;
 
 	default:
-		syslog(LOG_ERR, "rsa_ver: Not sup asym ver alg\n");
+		OT_LOG(LOG_ERR, "rsa_ver: Not sup asym ver alg\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 		write_bytes = 0; /* Suppress compiler warning */
 	}
 
 	if (write_bytes == -1) {
-		syslog(LOG_ERR, "rsa_ver: decrypting failed\n");
+		OT_LOG(LOG_ERR, "rsa_ver: decrypting failed\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
@@ -1748,7 +1748,7 @@ static TEE_Result rsa_ver(TEE_OperationHandle operation, TEE_Attribute *params, 
 static TEE_Result malloc_and_cpy_dsa_key(TEE_OperationHandle operation, TEE_ObjectHandle key)
 {
 	if (!operation || !key) {
-		syslog(LOG_ERR, "malloc_and_cpy_dsa_key: Operation or key NULL\n");
+		OT_LOG(LOG_ERR, "malloc_and_cpy_dsa_key: Operation or key NULL\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1756,13 +1756,13 @@ static TEE_Result malloc_and_cpy_dsa_key(TEE_OperationHandle operation, TEE_Obje
 	    !cpy_key_comp_to_bn(&DSA_key(operation)->g, TEE_ATTR_DSA_BASE, key) ||
 	    !cpy_key_comp_to_bn(&DSA_key(operation)->pub_key, TEE_ATTR_DSA_PUBLIC_VALUE, key) ||
 	    !cpy_key_comp_to_bn(&DSA_key(operation)->q, TEE_ATTR_DSA_PRIME, key)) {
-		syslog(LOG_ERR, "malloc_and_cpy_dsa_key: Provide all DSA components\n");
+		OT_LOG(LOG_ERR, "malloc_and_cpy_dsa_key: Provide all DSA components\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (key->objectInfo.objectType == TEE_TYPE_DSA_KEYPAIR &&
 	    !cpy_key_comp_to_bn(&DSA_key(operation)->priv_key, TEE_ATTR_DSA_PRIVATE_VALUE, key)) {
-		syslog(LOG_ERR, "malloc_and_cpy_dsa_key: Provide DSA private component\n");
+		OT_LOG(LOG_ERR, "malloc_and_cpy_dsa_key: Provide DSA private component\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1775,17 +1775,17 @@ TEE_Result dsa_sign(TEE_OperationHandle operation, void *digest, uint32_t digest
 	unsigned int sig_len = *signatureLen;
 
 	if (!digest || !signature) {
-		syslog(LOG_ERR, "dsa_sign: Digest or Sig buf NULL\n");
+		OT_LOG(LOG_ERR, "dsa_sign: Digest or Sig buf NULL\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (uint322int(*signatureLen) < DSA_size(DSA_key(operation))) {
-		syslog(LOG_ERR, "dsa_sign: DSA sig buf too small\n");
+		OT_LOG(LOG_ERR, "dsa_sign: DSA sig buf too small\n");
 		return TEE_ERROR_SHORT_BUFFER;
 	}
 
 	if (!DSA_sign(0, digest, digestLen, signature, &sig_len, DSA_key(operation))) {
-		syslog(LOG_ERR, "dsa_sign: DSA signing error\n");
+		OT_LOG(LOG_ERR, "dsa_sign: DSA signing error\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1797,12 +1797,12 @@ TEE_Result dsa_ver(TEE_OperationHandle operation, void *digest, uint32_t digestL
 		   uint32_t signatureLen)
 {
 	if (!digest || !signature) {
-		syslog(LOG_ERR, "dsa_ver: Digest or Sig buf NULL\n");
+		OT_LOG(LOG_ERR, "dsa_ver: Digest or Sig buf NULL\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (1 != DSA_verify(0, digest, digestLen, signature, signatureLen, DSA_key(operation))) {
-		syslog(LOG_ERR, "dsa_ver: DSA verify error\n");
+		OT_LOG(LOG_ERR, "dsa_ver: DSA verify error\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1862,7 +1862,7 @@ static void dup_rsa_key(TEE_OperationHandle dstOperation, TEE_OperationHandle sr
 	return;
 
 err:
-	syslog(LOG_ERR, "dup_rsa_key: out of memory\n");
+	OT_LOG(LOG_ERR, "dup_rsa_key: out of memory\n");
 	TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 }
 
@@ -1901,7 +1901,7 @@ static void dup_dsa_key(TEE_OperationHandle dstOperation, TEE_OperationHandle sr
 	return;
 
 err:
-	syslog(LOG_ERR, "dup_dsa_key: out of memory\n");
+	OT_LOG(LOG_ERR, "dup_dsa_key: out of memory\n");
 	TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 }
 
@@ -1914,7 +1914,7 @@ err:
 static TEE_Result malloc_and_cpy_dh_key(TEE_OperationHandle operation, TEE_ObjectHandle key)
 {
 	if (!operation || !key) {
-		syslog(LOG_ERR, "malloc_and_cpy_dsa_key: Operation or key NULL\n");
+		OT_LOG(LOG_ERR, "malloc_and_cpy_dsa_key: Operation or key NULL\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1922,7 +1922,7 @@ static TEE_Result malloc_and_cpy_dh_key(TEE_OperationHandle operation, TEE_Objec
 	    !cpy_key_comp_to_bn(&DH_key(operation)->g, TEE_ATTR_DH_BASE, key) ||
 	    !cpy_key_comp_to_bn(&DH_key(operation)->pub_key, TEE_ATTR_DH_PUBLIC_VALUE, key) ||
 	    !cpy_key_comp_to_bn(&DH_key(operation)->priv_key, TEE_ATTR_DH_PRIVATE_VALUE, key)) {
-		syslog(LOG_ERR, "malloc_and_cpy_dh_key: Provide all DH components\n");
+		OT_LOG(LOG_ERR, "malloc_and_cpy_dh_key: Provide all DH components\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -1970,7 +1970,7 @@ static void dup_dh_key(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 	return;
 
 err:
-	syslog(LOG_ERR, "dup_dh_key: out of memory\n");
+	OT_LOG(LOG_ERR, "dup_dh_key: out of memory\n");
 	TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 }
 
@@ -1998,7 +1998,7 @@ static const EVP_CIPHER *load_evp_mac_cipher(TEE_OperationHandle operation)
 			return NULL;
 		}
 	default:
-		syslog(LOG_ERR, "load_evp_mac_cipher: Alg not supported\n");
+		OT_LOG(LOG_ERR, "load_evp_mac_cipher: Alg not supported\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
@@ -2034,7 +2034,7 @@ static const EVP_MD *load_evp_mac_hash(TEE_OperationHandle operation)
 		return EVP_sha512();
 
 	default:
-		syslog(LOG_ERR, "load_mac_hash_or_cipher: Alg not supported\n");
+		OT_LOG(LOG_ERR, "load_mac_hash_or_cipher: Alg not supported\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
@@ -2061,7 +2061,7 @@ static int max_mac_len(TEE_OperationHandle operation)
 		if (operation->operation_info.keySize == 256)
 			return EVP_CIPHER_block_size(load_evp_mac_cipher(operation));
 
-		syslog(LOG_ERR, "max_mac_len: No sup CMAC key\n");
+		OT_LOG(LOG_ERR, "max_mac_len: No sup CMAC key\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 
 	case TEE_ALG_HMAC_MD5:
@@ -2073,7 +2073,7 @@ static int max_mac_len(TEE_OperationHandle operation)
 		return EVP_MD_size(load_evp_mac_hash(operation));
 
 	default:
-		syslog(LOG_ERR, "max_mac_len: Alg not supported\n");
+		OT_LOG(LOG_ERR, "max_mac_len: Alg not supported\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
@@ -2099,7 +2099,7 @@ static TEE_Result init_operation_meta_info(TEE_OperationHandle operation, uint32
 	case TEE_ALG_HMAC_SHA512:
 		operation->key.ctx = (HMAC_CTX *)TEE_Malloc(sizeof(HMAC_CTX), 0);
 		if (!HMAC_ctx(operation)) {
-			syslog(LOG_ERR, "TEE_MACInit: Hmac ctx out of memory\n");
+			OT_LOG(LOG_ERR, "TEE_MACInit: Hmac ctx out of memory\n");
 			TEE_Panic(TEE_ERROR_OUT_OF_MEMORY);
 		}
 
@@ -2108,7 +2108,7 @@ static TEE_Result init_operation_meta_info(TEE_OperationHandle operation, uint32
 	case TEE_ALG_AES_CMAC:
 		operation->key.ctx = CMAC_CTX_new();
 		if (!CMAC_ctx(operation)) {
-			syslog(LOG_ERR, "TEE_MACInit: CMAC ctx out of memory\n");
+			OT_LOG(LOG_ERR, "TEE_MACInit: CMAC ctx out of memory\n");
 			TEE_Panic(TEE_ERROR_OUT_OF_MEMORY);
 		}
 
@@ -2136,7 +2136,7 @@ static TEE_Result init_operation_meta_info(TEE_OperationHandle operation, uint32
 	case TEE_ALG_DES3_CBC_NOPAD:
 		operation->key.ctx = (EVP_CIPHER_CTX *)EVP_CIPHER_CTX_new();
 		if (!SYM_ctx(operation)) {
-			syslog(LOG_ERR, "Init key meta: Sym ctx malloc (openssl failure)\n");
+			OT_LOG(LOG_ERR, "Init key meta: Sym ctx malloc (openssl failure)\n");
 			ret = TEE_ERROR_OUT_OF_MEMORY;
 		}
 
@@ -2171,7 +2171,7 @@ static TEE_Result init_operation_meta_info(TEE_OperationHandle operation, uint32
 	case TEE_ALG_RSA_NOPAD:
 		operation->key.key = (RSA *)RSA_new();
 		if (!RSA_key(operation)) {
-			syslog(LOG_ERR, "Init key meta: RSA malloc (openssl failure)\n");
+			OT_LOG(LOG_ERR, "Init key meta: RSA malloc (openssl failure)\n");
 			ret = TEE_ERROR_OUT_OF_MEMORY;
 		}
 		/* Special: Asymmetric function do not have INIT -function */
@@ -2182,7 +2182,7 @@ static TEE_Result init_operation_meta_info(TEE_OperationHandle operation, uint32
 	case TEE_ALG_DSA_SHA1:
 		operation->key.key = (DSA *)DSA_new();
 		if (!DSA_key(operation)) {
-			syslog(LOG_ERR, "Init key meta: DSA malloc (openssl failure)\n");
+			OT_LOG(LOG_ERR, "Init key meta: DSA malloc (openssl failure)\n");
 			ret = TEE_ERROR_OUT_OF_MEMORY;
 		}
 		/* Special: Asymmetric function do not have INIT -function */
@@ -2193,7 +2193,7 @@ static TEE_Result init_operation_meta_info(TEE_OperationHandle operation, uint32
 	case TEE_ALG_DH_DERIVE_SHARED_SECRET:
 		operation->key.key = (DH *)DH_new();
 		if (!DH_key(operation)) {
-			syslog(LOG_ERR, "Init key meta: DH malloc (openssl failure)\n");
+			OT_LOG(LOG_ERR, "Init key meta: DH malloc (openssl failure)\n");
 			ret = TEE_ERROR_OUT_OF_MEMORY;
 		}
 		/* Special: Derive do not have INIT -function */
@@ -2202,7 +2202,7 @@ static TEE_Result init_operation_meta_info(TEE_OperationHandle operation, uint32
 		break;
 
 	default:
-		syslog(LOG_ERR, "Init key meta: Something very wrong\n");
+		OT_LOG(LOG_ERR, "Init key meta: Something very wrong\n");
 		ret = TEE_ERROR_NOT_SUPPORTED;
 	}
 
@@ -2220,7 +2220,7 @@ static void clear_key_from_operation(TEE_OperationHandle operation)
 	/* Init new ctx */
 	if (TEE_SUCCESS !=
 	    init_operation_meta_info(operation, operation->operation_info.algorithm)) {
-		syslog(LOG_ERR, "clear_key_from_operation: Operation meta initiation fail\n");
+		OT_LOG(LOG_ERR, "clear_key_from_operation: Operation meta initiation fail\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 }
@@ -2257,24 +2257,24 @@ TEE_Result TEE_AllocateOperation(TEE_OperationHandle *operation, uint32_t algori
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!valid_mode_and_algorithm(algorithm, mode)) {
-		syslog(LOG_ERR, "TEE_AllocateOperation: Not a valid mode,"
+		OT_LOG(LOG_ERR, "TEE_AllocateOperation: Not a valid mode,"
 				"algorithm or mode for algorithm\n");
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
 
 	if (!valid_key_size_for_algorithm(algorithm, maxKeySize)) {
-		syslog(LOG_ERR, "TEE_AllocateOperation: Not a valid key size for algorithm\n");
+		OT_LOG(LOG_ERR, "TEE_AllocateOperation: Not a valid key size for algorithm\n");
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
 
 	if (!supported_algorithms(algorithm, maxKeySize)) {
-		syslog(LOG_ERR, "TEE_AllocateOperation: Algorithm not (yet) implemented\n");
+		OT_LOG(LOG_ERR, "TEE_AllocateOperation: Algorithm not (yet) implemented\n");
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
 
 	tmp_handle = TEE_Malloc(sizeof(struct __TEE_OperationHandle), 0);
 	if (!tmp_handle) {
-		syslog(LOG_ERR, "TEE_AllocateOperation: Out of memory (operation handler)\n");
+		OT_LOG(LOG_ERR, "TEE_AllocateOperation: Out of memory (operation handler)\n");
 		ret = TEE_ERROR_OUT_OF_MEMORY;
 		goto error;
 	}
@@ -2326,7 +2326,7 @@ void TEE_FreeOperation(TEE_OperationHandle operation)
 void TEE_GetOperationInfo(TEE_OperationHandle operation, TEE_OperationInfo *operationInfo)
 {
 	if (!operation || !operationInfo) {
-		syslog(LOG_ERR, "TEE_GetOperationInfo: Problem with parameters\n");
+		OT_LOG(LOG_ERR, "TEE_GetOperationInfo: Problem with parameters\n");
 		return;
 	}
 
@@ -2338,7 +2338,7 @@ TEE_Result TEE_GetOperationInfoMultiple(TEE_OperationHandle operation,
 					uint32_t *operationSize)
 {
 	if (!operation || !operationInfoMultiple || !operationSize) {
-		syslog(LOG_ERR, "TEE_GetOperationInfoMultiple: Problem with parameters\n");
+		OT_LOG(LOG_ERR, "TEE_GetOperationInfoMultiple: Problem with parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -2376,7 +2376,7 @@ TEE_Result TEE_GetOperationInfoMultiple(TEE_OperationHandle operation,
 void TEE_ResetOperation(TEE_OperationHandle operation)
 {
 	if (!operation || !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR, "TEE_ResetOperation: Operation NULL or key not set\n");
+		OT_LOG(LOG_ERR, "TEE_ResetOperation: Operation NULL or key not set\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
@@ -2392,7 +2392,7 @@ void TEE_ResetOperation(TEE_OperationHandle operation)
 		EVP_CIPHER_CTX_free(operation->key.ctx);
 		operation->key.ctx = (EVP_CIPHER_CTX *)EVP_CIPHER_CTX_new();
 		if (!SYM_ctx(operation)) {
-			syslog(LOG_ERR, "TEE_ResetOperation: Sym ctx malloc (openssl failure)\n");
+			OT_LOG(LOG_ERR, "TEE_ResetOperation: Sym ctx malloc (openssl failure)\n");
 			TEE_Panic(TEE_ERROR_OUT_OF_MEMORY);
 		}
 
@@ -2400,7 +2400,7 @@ void TEE_ResetOperation(TEE_OperationHandle operation)
 
 		EVP_MD_CTX_destroy(DIGEST_CTX(operation)); /* No documented return value */
 		if (TEE_SUCCESS != init_digest_op(operation, operation->operation_info.algorithm)) {
-			syslog(LOG_ERR, "TEE_ResetOperation: Reseting digest op\n");
+			OT_LOG(LOG_ERR, "TEE_ResetOperation: Reseting digest op\n");
 			TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 		}
 
@@ -2433,7 +2433,7 @@ void TEE_ResetOperation(TEE_OperationHandle operation)
 			break;
 
 		default:
-			syslog(LOG_ERR, "TEE_ResetOperation: Mac alg is not sup\n");
+			OT_LOG(LOG_ERR, "TEE_ResetOperation: Mac alg is not sup\n");
 			TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 		}
 
@@ -2450,7 +2450,7 @@ void TEE_ResetOperation(TEE_OperationHandle operation)
 		/* Only for documenting purpose. This is single stage operation */
 
 	} else {
-		syslog(LOG_ERR, "TEE_ResetOperation: Operation not sup\n");
+		OT_LOG(LOG_ERR, "TEE_ResetOperation: Operation not sup\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 }
@@ -2460,7 +2460,7 @@ TEE_Result TEE_SetOperationKey(TEE_OperationHandle operation, TEE_ObjectHandle k
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!operation || operation->op_state == TEE_OP_STATE_ACTIVE) {
-		syslog(LOG_ERR, "TEE_SetOperationKey: Operation NULL or active state\n");
+		OT_LOG(LOG_ERR, "TEE_SetOperationKey: Operation NULL or active state\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto err;
 	}
@@ -2472,7 +2472,7 @@ TEE_Result TEE_SetOperationKey(TEE_OperationHandle operation, TEE_ObjectHandle k
 	}
 
 	if (operation->operation_info.algorithm == TEE_ALG_AES_XTS) {
-		syslog(LOG_ERR, "TEE_SetOperationKey: Operation expecting two keys\n");
+		OT_LOG(LOG_ERR, "TEE_SetOperationKey: Operation expecting two keys\n");
 		ret = TEE_ERROR_BAD_STATE;
 		goto err;
 	}
@@ -2546,7 +2546,7 @@ TEE_Result TEE_SetOperationKey(TEE_OperationHandle operation, TEE_ObjectHandle k
 		break;
 
 	default:
-		syslog(LOG_ERR, "Set op key: Algorithm not supported\n");
+		OT_LOG(LOG_ERR, "Set op key: Algorithm not supported\n");
 		ret = TEE_ERROR_NOT_SUPPORTED;
 		goto err;
 	}
@@ -2559,7 +2559,7 @@ retu:
 	return ret;
 
 err:
-	/* Error has been written to syslog */
+	/* Error has been written to OT_LOG */
 	TEE_Panic(ret);
 	return 0; /* return for compiler */
 }
@@ -2581,13 +2581,13 @@ TEE_Result TEE_SetOperationKey2(TEE_OperationHandle operation, TEE_ObjectHandle 
 	}
 
 	if (!operation || !key1 || !key2) {
-		syslog(LOG_ERR, "Set op key2: Parameters problem\n");
+		OT_LOG(LOG_ERR, "Set op key2: Parameters problem\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto err;
 	}
 
 	if (operation->operation_info.algorithm != TEE_ALG_AES_XTS) {
-		syslog(LOG_ERR, "Set op key2: Operation NOT expecting two keys\n");
+		OT_LOG(LOG_ERR, "Set op key2: Operation NOT expecting two keys\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto err;
 	}
@@ -2604,13 +2604,13 @@ TEE_Result TEE_SetOperationKey2(TEE_OperationHandle operation, TEE_ObjectHandle 
 	 * Next. Retriev keys from key obj */
 	sym_key1 = get_attr_by_ID(key1, TEE_ATTR_SECRET_VALUE);
 	if (!sym_key1) {
-		syslog(LOG_ERR, "Set op key2: Key1 does not contain symmetric key\n");
+		OT_LOG(LOG_ERR, "Set op key2: Key1 does not contain symmetric key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	sym_key2 = get_attr_by_ID(key2, TEE_ATTR_SECRET_VALUE);
 	if (!sym_key2) {
-		syslog(LOG_ERR, "Set op key2: Key2 does not contain symmetric key\n");
+		OT_LOG(LOG_ERR, "Set op key2: Key2 does not contain symmetric key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -2619,7 +2619,7 @@ TEE_Result TEE_SetOperationKey2(TEE_OperationHandle operation, TEE_ObjectHandle 
 
 	operation->key.key = TEE_Malloc(operation->key.key_len, 0);
 	if (!operation->key.key) {
-		syslog(LOG_ERR, "Set op key2: Cannot malloc space for AES XTS symmetric key\n");
+		OT_LOG(LOG_ERR, "Set op key2: Cannot malloc space for AES XTS symmetric key\n");
 		TEE_Panic(TEE_ERROR_OUT_OF_MEMORY);
 	}
 
@@ -2637,7 +2637,7 @@ retu:
 	return ret;
 
 err:
-	/* Error has been written to syslog */
+	/* Error has been written to OT_LOG */
 	TEE_Panic(ret);
 	return 0; /* return for compiler */
 }
@@ -2645,23 +2645,23 @@ err:
 void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle srcOperation)
 {
 	if (!dstOperation || !srcOperation) {
-		syslog(LOG_ERR, "TEE_CopyOperation: bad parameters\n");
+		OT_LOG(LOG_ERR, "TEE_CopyOperation: bad parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (dstOperation->operation_info.mode != srcOperation->operation_info.mode) {
-		syslog(LOG_ERR, "TEE_CopyOperation: modes\n");
+		OT_LOG(LOG_ERR, "TEE_CopyOperation: modes\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	if (dstOperation->operation_info.algorithm != srcOperation->operation_info.algorithm) {
-		syslog(LOG_ERR, "TEE_CopyOperation: algorithms\n");
+		OT_LOG(LOG_ERR, "TEE_CopyOperation: algorithms\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	if (srcOperation->operation_info.operationClass != TEE_OPERATION_DIGEST &&
 	    srcOperation->operation_info.maxKeySize > dstOperation->operation_info.maxKeySize) {
-		syslog(LOG_ERR, "TEE_CopyOperation: key size\n");
+		OT_LOG(LOG_ERR, "TEE_CopyOperation: key size\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -2684,7 +2684,7 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 	} else if (srcOperation->operation_info.operationClass == TEE_OPERATION_DIGEST) {
 
 		if (EVP_MD_CTX_copy_ex(dstOperation->dig_ctx, srcOperation->dig_ctx) != 1) {
-			syslog(LOG_ERR, "TEE_CopyOperation: ctx dup (openssl failure)\n");
+			OT_LOG(LOG_ERR, "TEE_CopyOperation: ctx dup (openssl failure)\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 
@@ -2706,7 +2706,7 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 
 			case TEE_ALG_AES_CMAC:
 				if (!CMAC_CTX_copy(dstOperation->key.ctx, srcOperation->key.ctx)) {
-					syslog(LOG_ERR, "TEE_CopyOperation: CMAC copy error\n");
+					OT_LOG(LOG_ERR, "TEE_CopyOperation: CMAC copy error\n");
 					TEE_Panic(TEE_ERROR_GENERIC);
 				}
 
@@ -2719,14 +2719,14 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 			case TEE_ALG_HMAC_SHA384:
 			case TEE_ALG_HMAC_SHA512:
 				if (!HMAC_CTX_copy(dstOperation->key.ctx, srcOperation->key.ctx)) {
-					syslog(LOG_ERR, "TEE_CopyOperation: HMAC copy error\n");
+					OT_LOG(LOG_ERR, "TEE_CopyOperation: HMAC copy error\n");
 					TEE_Panic(TEE_ERROR_GENERIC);
 				}
 
 				break;
 
 			default:
-				syslog(LOG_ERR, "TEE_CopyOperation: Alg not supported\n");
+				OT_LOG(LOG_ERR, "TEE_CopyOperation: Alg not supported\n");
 				TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 			}
 		}
@@ -2747,7 +2747,7 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 		dup_dh_key(dstOperation, srcOperation);
 
 	} else {
-		syslog(LOG_ERR, "TEE_CopyOperation: Operation not sup\n");
+		OT_LOG(LOG_ERR, "TEE_CopyOperation: Operation not sup\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
@@ -2763,19 +2763,19 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 void TEE_DigestUpdate(TEE_OperationHandle operation, void *chunk, uint32_t chunkSize)
 {
 	if (!operation || !chunk) {
-		syslog(LOG_ERR, "Digest update: Problem with parameters\n");
+		OT_LOG(LOG_ERR, "Digest update: Problem with parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (!DIGEST_CTX(operation) ||
 	    operation->operation_info.operationClass != TEE_OPERATION_DIGEST ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED)) {
-		syslog(LOG_ERR, "Digest update: Operation state\n");
+		OT_LOG(LOG_ERR, "Digest update: Operation state\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	if (EVP_DigestUpdate(DIGEST_CTX(operation), chunk, chunkSize) != 1) {
-		syslog(LOG_ERR, "Digest update: Update problem (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Digest update: Update problem (openssl failure)\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -2788,19 +2788,19 @@ TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void *chunk, uint32_
 	unsigned int int_hashLen;
 
 	if (!operation || !hash || !hashLen) {
-		syslog(LOG_ERR, "Digest final: Problem with parameters\n");
+		OT_LOG(LOG_ERR, "Digest final: Problem with parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (!DIGEST_CTX(operation) ||
 	    operation->operation_info.operationClass != TEE_OPERATION_DIGEST ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED)) {
-		syslog(LOG_ERR, "Digest final: Operation state\n");
+		OT_LOG(LOG_ERR, "Digest final: Operation state\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	if (operation->operation_info.digestLength > *hashLen) {
-		syslog(LOG_ERR, "Digest final: Hash buffer too small\n");
+		OT_LOG(LOG_ERR, "Digest final: Hash buffer too small\n");
 		return TEE_ERROR_SHORT_BUFFER;
 	}
 
@@ -2812,7 +2812,7 @@ TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void *chunk, uint32_
 
 	/* Finalize and return hash */
 	if (EVP_DigestFinal_ex(DIGEST_CTX(operation), hash, &int_hashLen) != 1) {
-		syslog(LOG_ERR, "Digest final: Update problem (openssl failure)\n");
+		OT_LOG(LOG_ERR, "Digest final: Update problem (openssl failure)\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -2829,21 +2829,21 @@ void TEE_CipherInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!operation) {
-		syslog(LOG_ERR, "TEE_CipherInit: Error at parameters\n");
+		OT_LOG(LOG_ERR, "TEE_CipherInit: Error at parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	if (operation->operation_info.operationClass != TEE_OPERATION_CIPHER ||
 	    operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR,
+		OT_LOG(LOG_ERR,
 		       "TEE_CipherInit: Not a cipher operation or initialized or no key\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto err;
 	}
 
 	if (!SYM_ctx(operation)) {
-		syslog(LOG_ERR, "TEE_CipherInit: EVP ctx is NULL\n");
+		OT_LOG(LOG_ERR, "TEE_CipherInit: EVP ctx is NULL\n");
 		ret = TEE_ERROR_OUT_OF_MEMORY;
 		goto err;
 	}
@@ -2855,7 +2855,7 @@ void TEE_CipherInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 
 	cipher = load_evp_sym_cipher(operation);
 	if (!cipher) {
-		syslog(LOG_ERR, "TEE_CipherInit: Algorithm is not supported\n");
+		OT_LOG(LOG_ERR, "TEE_CipherInit: Algorithm is not supported\n");
 		ret = TEE_ERROR_NOT_SUPPORTED;
 		goto err;
 	}
@@ -2864,7 +2864,7 @@ void TEE_CipherInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 	if (operation->operation_info.mode == TEE_MODE_ENCRYPT) {
 
 		if (EVP_EncryptInit_ex(SYM_ctx(operation), cipher, NULL, NULL, NULL) == 0) {
-			syslog(LOG_ERR, "TEE_CipherInit: Enc operation init (openssl failure)\n");
+			OT_LOG(LOG_ERR, "TEE_CipherInit: Enc operation init (openssl failure)\n");
 			ret = TEE_ERROR_GENERIC;
 			goto err;
 		}
@@ -2876,7 +2876,7 @@ void TEE_CipherInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 
 		if (EVP_EncryptInit_ex(SYM_ctx(operation),
 				       NULL, NULL, SYM_key(operation), IV) == 0) {
-			syslog(LOG_ERR, "TEE_CipherInit: Enc operation init (openssl failure)\n");
+			OT_LOG(LOG_ERR, "TEE_CipherInit: Enc operation init (openssl failure)\n");
 			ret = TEE_ERROR_GENERIC;
 			goto err;
 		}
@@ -2884,7 +2884,7 @@ void TEE_CipherInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 	} else if (operation->operation_info.mode == TEE_MODE_DECRYPT) {
 
 		if (EVP_DecryptInit_ex(SYM_ctx(operation), cipher, NULL, NULL, NULL) == 0) {
-			syslog(LOG_ERR, "TEE_CipherInit: Dec operation init (openssl failure)\n");
+			OT_LOG(LOG_ERR, "TEE_CipherInit: Dec operation init (openssl failure)\n");
 			ret = TEE_ERROR_GENERIC;
 			goto err;
 		}
@@ -2896,14 +2896,14 @@ void TEE_CipherInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 
 		if (EVP_DecryptInit_ex(SYM_ctx(operation),
 				       NULL, NULL, SYM_key(operation), IV) == 0) {
-			syslog(LOG_ERR, "TEE_CipherInit: Dec operation init (openssl failure)\n");
+			OT_LOG(LOG_ERR, "TEE_CipherInit: Dec operation init (openssl failure)\n");
 			ret = TEE_ERROR_GENERIC;
 			goto err;
 		}
 
 	} else {
 		/* Should never end up here! */
-		syslog(LOG_ERR, "TEE_CipherInit: Something is wrong with TEE_CipherInit\n");
+		OT_LOG(LOG_ERR, "TEE_CipherInit: Something is wrong with TEE_CipherInit\n");
 		ret = TEE_ERROR_GENERIC;
 		goto err;
 	}
@@ -2925,7 +2925,7 @@ TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void *srcData, uint32
 	int int_destLen;
 
 	if (!operation || !srcData || !destData || !destLen) {
-		syslog(LOG_ERR, "Cipher update: Error with cipher update parameters\n");
+		OT_LOG(LOG_ERR, "Cipher update: Error with cipher update parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -2933,7 +2933,7 @@ TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void *srcData, uint32
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET) ||
 	    operation->op_state != TEE_OP_STATE_ACTIVE) {
-		syslog(LOG_ERR, "Cipher update: Not a cipher op or not initialized or no key\n");
+		OT_LOG(LOG_ERR, "Cipher update: Not a cipher op or not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -2942,32 +2942,32 @@ TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void *srcData, uint32
 	if (operation->operation_info.mode == TEE_MODE_ENCRYPT) {
 
 		if (srcLen > *destLen) {
-			syslog(LOG_ERR, "Cipher update: Cipher buffer too small\n");
+			OT_LOG(LOG_ERR, "Cipher update: Cipher buffer too small\n");
 			return TEE_ERROR_SHORT_BUFFER;
 		}
 
 		if (EVP_EncryptUpdate(SYM_ctx(operation), destData, &int_destLen, srcData,
 				      uint322int(srcLen)) == 0) {
-			syslog(LOG_ERR, "Cipher update: Enc operation failed (openssl failure)\n");
+			OT_LOG(LOG_ERR, "Cipher update: Enc operation failed (openssl failure)\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 
 	} else if (operation->operation_info.mode == TEE_MODE_DECRYPT) {
 
 		if (srcLen > *destLen + EVP_CIPHER_CTX_block_size(operation->key.ctx)) {
-			syslog(LOG_ERR, "Cipher update: Plain buffer too small\n");
+			OT_LOG(LOG_ERR, "Cipher update: Plain buffer too small\n");
 			return TEE_ERROR_SHORT_BUFFER;
 		}
 
 		if (EVP_DecryptUpdate(SYM_ctx(operation), destData, &int_destLen, srcData,
 				      uint322int(srcLen)) == 0) {
-			syslog(LOG_ERR, "Cipher update: Dec operation failed (openssl failure)\n");
+			OT_LOG(LOG_ERR, "Cipher update: Dec operation failed (openssl failure)\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 
 	} else {
 		/* Should never end up here! */
-		syslog(LOG_ERR, "Cipher update: Something is wrong with cipher update\n");
+		OT_LOG(LOG_ERR, "Cipher update: Something is wrong with cipher update\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -2984,7 +2984,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void *srcData, uint3
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!destData || !operation || !destLen) {
-		syslog(LOG_ERR, "Cipher final: Error with parameters\n");
+		OT_LOG(LOG_ERR, "Cipher final: Error with parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -2992,7 +2992,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void *srcData, uint3
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET) ||
 	    operation->op_state != TEE_OP_STATE_ACTIVE) {
-		syslog(LOG_ERR, "Cipher final: Not a cipher op or not initialized or no key\n");
+		OT_LOG(LOG_ERR, "Cipher final: Not a cipher op or not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -3003,7 +3003,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void *srcData, uint3
 
 		ret = TEE_CipherUpdate(operation, srcData, srcLen, destData, destLen);
 		if (ret != TEE_SUCCESS) {
-			syslog(LOG_ERR, "Cipher final: src data problem\n");
+			OT_LOG(LOG_ERR, "Cipher final: src data problem\n");
 			return ret;
 		}
 
@@ -3017,7 +3017,7 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void *srcData, uint3
 		if (EVP_EncryptFinal_ex(SYM_ctx(operation),
 					(unsigned char *)destData + total_int_destLen,
 					&int_destLen) == 0) {
-			syslog(LOG_ERR, "Cipher final: Enc operation failed (openssl failure)\n");
+			OT_LOG(LOG_ERR, "Cipher final: Enc operation failed (openssl failure)\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 
@@ -3026,13 +3026,13 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void *srcData, uint3
 		if (EVP_DecryptFinal_ex(SYM_ctx(operation),
 					(unsigned char *)destData + total_int_destLen,
 					&int_destLen) == 0) {
-			syslog(LOG_ERR, "Cipher final: Dec operation failed (openssl failure)\n");
+			OT_LOG(LOG_ERR, "Cipher final: Dec operation failed (openssl failure)\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 
 	} else {
 		/* Should never end up here! */
-		syslog(LOG_ERR, "Cipher final: Something is wrong with cipher do final\n");
+		OT_LOG(LOG_ERR, "Cipher final: Something is wrong with cipher do final\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -3049,7 +3049,7 @@ void TEE_MACInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 	IVLen = IVLen;
 
 	if (!operation) {
-		syslog(LOG_ERR, "TEE_MACInit: Operation NULL\n");
+		OT_LOG(LOG_ERR, "TEE_MACInit: Operation NULL\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -3057,7 +3057,7 @@ void TEE_MACInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 	    operation->operation_info.mode != TEE_MODE_MAC ||
 	    operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR, "TEE_MACInit: Not a mac operation or initialized or no key\n");
+		OT_LOG(LOG_ERR, "TEE_MACInit: Not a mac operation or initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
@@ -3077,7 +3077,7 @@ void TEE_MACInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 
 		if (!CMAC_Init(CMAC_ctx(operation), SYM_key(operation), SYM_key_len(operation),
 			       load_evp_mac_cipher(operation), NULL)) {
-			syslog(LOG_ERR, "TEE_MACInit: CMAC init fail\n");
+			OT_LOG(LOG_ERR, "TEE_MACInit: CMAC init fail\n");
 			TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 		}
 
@@ -3093,14 +3093,14 @@ void TEE_MACInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 		HMAC_CTX_init(HMAC_ctx(operation));
 		if (!HMAC_Init_ex(HMAC_ctx(operation), SYM_key(operation), SYM_key_len(operation),
 				  load_evp_mac_hash(operation), NULL)) {
-			syslog(LOG_ERR, "TEE_MACInit: HMAC init fail\n");
+			OT_LOG(LOG_ERR, "TEE_MACInit: HMAC init fail\n");
 			TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 		}
 
 		break;
 
 	default:
-		syslog(LOG_ERR, "TEE_MACInit: Alg not supported\n");
+		OT_LOG(LOG_ERR, "TEE_MACInit: Alg not supported\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
@@ -3112,7 +3112,7 @@ void TEE_MACInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen)
 void TEE_MACUpdate(TEE_OperationHandle operation, void *chunk, uint32_t chunkSize)
 {
 	if (!operation || !chunk) {
-		syslog(LOG_ERR, "TEE_MACUpdate: Operation or chunk null\n");
+		OT_LOG(LOG_ERR, "TEE_MACUpdate: Operation or chunk null\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -3121,7 +3121,7 @@ void TEE_MACUpdate(TEE_OperationHandle operation, void *chunk, uint32_t chunkSiz
 	    operation->operation_info.mode != TEE_MODE_MAC ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR, "TEE_MACUpdate: Not a mac operation or "
+		OT_LOG(LOG_ERR, "TEE_MACUpdate: Not a mac operation or "
 				"not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
@@ -3137,7 +3137,7 @@ void TEE_MACUpdate(TEE_OperationHandle operation, void *chunk, uint32_t chunkSiz
 
 	case TEE_ALG_AES_CMAC:
 		if (!CMAC_Update(CMAC_ctx(operation), chunk, chunkSize)) {
-			syslog(LOG_ERR, "TEE_MACUpdate: CMAC update error\n");
+			OT_LOG(LOG_ERR, "TEE_MACUpdate: CMAC update error\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 
@@ -3153,7 +3153,7 @@ void TEE_MACUpdate(TEE_OperationHandle operation, void *chunk, uint32_t chunkSiz
 		break;
 
 	default:
-		syslog(LOG_ERR, "TEE_MACUpdate: Alg not supported\n");
+		OT_LOG(LOG_ERR, "TEE_MACUpdate: Alg not supported\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 }
@@ -3164,7 +3164,7 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uin
 	size_t cmac_len_out;
 
 	if (!operation || !macLen) {
-		syslog(LOG_ERR, "TEE_MACComputeFinal: Operation or MacLen is null\n");
+		OT_LOG(LOG_ERR, "TEE_MACComputeFinal: Operation or MacLen is null\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
@@ -3173,7 +3173,7 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uin
 	    operation->operation_info.mode != TEE_MODE_MAC ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR, "TEE_MACComputeFinal: Not a mac operation or "
+		OT_LOG(LOG_ERR, "TEE_MACComputeFinal: Not a mac operation or "
 				"not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
@@ -3184,7 +3184,7 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uin
 
 	/* Do final and get mac */
 	if (int2uint32(max_mac_len(operation)) > *macLen) {
-		syslog(LOG_ERR, "mac_final: MAC buf too small\n");
+		OT_LOG(LOG_ERR, "mac_final: MAC buf too small\n");
 		return TEE_ERROR_SHORT_BUFFER;
 	}
 
@@ -3200,7 +3200,7 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uin
 	case TEE_ALG_AES_CMAC:
 		cmac_len_out = *macLen;
 		if (!CMAC_Final(CMAC_ctx(operation), mac, &cmac_len_out)) {
-			syslog(LOG_ERR, "mac_final: CMAC final failed\n");
+			OT_LOG(LOG_ERR, "mac_final: CMAC final failed\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
 		*macLen = cmac_len_out;
@@ -3216,7 +3216,7 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uin
 		break;
 
 	default:
-		syslog(LOG_ERR, "TEE_MACComputeFinal: Alg not supported\n");
+		OT_LOG(LOG_ERR, "TEE_MACComputeFinal: Alg not supported\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
@@ -3233,25 +3233,25 @@ TEE_Result TEE_MACCompareFinal(TEE_OperationHandle operation, void *message, uin
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!operation) {
-		syslog(LOG_ERR, "TEE_MACCompareFinal: Operation is null\n");
+		OT_LOG(LOG_ERR, "TEE_MACCompareFinal: Operation is null\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
 	comp_mac_len = max_mac_len(operation);
 	comp_mac = TEE_Malloc(comp_mac_len, 0);
 	if (!comp_mac) {
-		syslog(LOG_ERR, "TEE_MACCompareFinal: Out of memory\n");
+		OT_LOG(LOG_ERR, "TEE_MACCompareFinal: Out of memory\n");
 		TEE_Panic(TEE_ERROR_OUT_OF_MEMORY);
 	}
 
 	ret = TEE_MACComputeFinal(operation, message, messageLen, comp_mac, &comp_mac_len);
 	if (ret != TEE_SUCCESS) {
-		syslog(LOG_ERR, "TEE_MACCompareFinal: Something went wrong\n");
+		OT_LOG(LOG_ERR, "TEE_MACCompareFinal: Something went wrong\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
 	if (CRYPTO_memcmp(mac, comp_mac, *macLen) != 0) {
-		syslog(LOG_ERR, "TEE_MACCompareFinal: MACs do not match\n");
+		OT_LOG(LOG_ERR, "TEE_MACCompareFinal: MACs do not match\n");
 		ret = TEE_ERROR_MAC_INVALID;
 	}
 
@@ -3336,7 +3336,7 @@ TEE_Result TEE_AsymmetricEncrypt(TEE_OperationHandle operation, TEE_Attribute *p
 	uint32_t rsa_mod_len;
 
 	if (!operation || operation->operation_info.mode != TEE_MODE_ENCRYPT) {
-		syslog(LOG_ERR, "TEE_AsymmetricEncrypt: Not a valid operationhandler "
+		OT_LOG(LOG_ERR, "TEE_AsymmetricEncrypt: Not a valid operationhandler "
 				"or wrong operation mode\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -3361,7 +3361,7 @@ TEE_Result TEE_AsymmetricEncrypt(TEE_OperationHandle operation, TEE_Attribute *p
 	}
 
 	if (write_bytes == -1) {
-		syslog(LOG_ERR, "TEE_AsymmetricEncrypt: Encryption failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "TEE_AsymmetricEncrypt: Encryption failed (openssl failure)\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -3381,7 +3381,7 @@ TEE_Result TEE_AsymmetricDecrypt(TEE_OperationHandle operation, TEE_Attribute *p
 	uint32_t rsa_mod_len;
 
 	if (!operation || operation->operation_info.mode != TEE_MODE_DECRYPT) {
-		syslog(LOG_ERR, "TEE_AsymmetricDecrypt: Not a valid operationhandler "
+		OT_LOG(LOG_ERR, "TEE_AsymmetricDecrypt: Not a valid operationhandler "
 				"or wrong operation mode\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -3401,7 +3401,7 @@ TEE_Result TEE_AsymmetricDecrypt(TEE_OperationHandle operation, TEE_Attribute *p
 	}
 
 	if (write_bytes == -1) {
-		syslog(LOG_ERR, "TEE_AsymmetricDecrypt: Decryption failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "TEE_AsymmetricDecrypt: Decryption failed (openssl failure)\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -3422,7 +3422,7 @@ TEE_Result TEE_AsymmetricSignDigest(TEE_OperationHandle operation, TEE_Attribute
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!operation || !signatureLen || operation->operation_info.mode != TEE_MODE_SIGN) {
-		syslog(LOG_ERR, "TEE_AsymmetricSignDigest: Not a valid operationhandler "
+		OT_LOG(LOG_ERR, "TEE_AsymmetricSignDigest: Not a valid operationhandler "
 				"or wrong operation mode or error with parameters\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -3430,7 +3430,7 @@ TEE_Result TEE_AsymmetricSignDigest(TEE_OperationHandle operation, TEE_Attribute
 	if (operation->operation_info.operationClass != TEE_OPERATION_ASYMMETRIC_SIGNATURE ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR, "TEE_AsymmetricSignDigest: Not a asymetric sign op "
+		OT_LOG(LOG_ERR, "TEE_AsymmetricSignDigest: Not a asymetric sign op "
 				"or not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -3451,7 +3451,7 @@ TEE_Result TEE_AsymmetricVerifyDigest(TEE_OperationHandle operation, TEE_Attribu
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!operation || operation->operation_info.mode != TEE_MODE_VERIFY) {
-		syslog(LOG_ERR, "TEE_AsymmetricVerifyDigest: Not a valid operationhandler "
+		OT_LOG(LOG_ERR, "TEE_AsymmetricVerifyDigest: Not a valid operationhandler "
 				"or wrong operation mode\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -3459,7 +3459,7 @@ TEE_Result TEE_AsymmetricVerifyDigest(TEE_OperationHandle operation, TEE_Attribu
 	if (operation->operation_info.operationClass != TEE_OPERATION_ASYMMETRIC_SIGNATURE ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR, "TEE_AsymmetricVerifyDigest: Not a asymetric sign op "
+		OT_LOG(LOG_ERR, "TEE_AsymmetricVerifyDigest: Not a asymetric sign op "
 				"or not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -3483,7 +3483,7 @@ void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute *params, uint32_
 	TEE_Result ret = TEE_SUCCESS;
 
 	if (!operation || !params || !derivedKey) {
-		syslog(LOG_ERR, "TEE_DeriveKey: operation or params or derivekey NULL\n");
+		OT_LOG(LOG_ERR, "TEE_DeriveKey: operation or params or derivekey NULL\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto retu;
 	}
@@ -3492,14 +3492,14 @@ void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute *params, uint32_
 	    operation->operation_info.mode != TEE_MODE_DERIVE ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		syslog(LOG_ERR, "TEE_DeriveKey: Not a derive op or not initialized or no key\n");
+		OT_LOG(LOG_ERR, "TEE_DeriveKey: Not a derive op or not initialized or no key\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto retu;
 	}
 
 	/* Derive key object can hold a shared secret */
 	if (derivedKey->maxObjSizeBytes < int2uint32(DH_size(DH_key(operation)))) {
-		syslog(LOG_ERR, "TEE_DeriveKey: Shared secret does not fit to derivekey obj\n");
+		OT_LOG(LOG_ERR, "TEE_DeriveKey: Shared secret does not fit to derivekey obj\n");
 		ret = TEE_ERROR_SHORT_BUFFER;
 		goto retu;
 	}
@@ -3507,13 +3507,13 @@ void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute *params, uint32_
 	/* Does key object contain generic secret attribute and it is cor len */
 	der_key_gen_sec = get_attr_by_ID(derivedKey, TEE_ATTR_SECRET_VALUE);
 	if (!der_key_gen_sec) {
-		syslog(LOG_ERR, "TEE_DeriveKey: Provide generic object with secret attribute\n");
+		OT_LOG(LOG_ERR, "TEE_DeriveKey: Provide generic object with secret attribute\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto retu;
 	}
 
 	if (der_key_gen_sec->content.ref.length < int2uint32(DH_size(DH_key(operation)))) {
-		syslog(LOG_ERR, "TEE_DeriveKey: Generic secrect obj secret buf too small\n");
+		OT_LOG(LOG_ERR, "TEE_DeriveKey: Generic secrect obj secret buf too small\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto retu;
 	}
@@ -3521,7 +3521,7 @@ void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute *params, uint32_
 	/* Compute secret */
 	dh_pub_val = get_dh_pub_val(params, paramCount);
 	if (!dh_pub_val) {
-		syslog(LOG_ERR, "TEE_DeriveKey: Provide shared public value\n");
+		OT_LOG(LOG_ERR, "TEE_DeriveKey: Provide shared public value\n");
 		ret = TEE_ERROR_BAD_PARAMETERS;
 		goto retu;
 	}
@@ -3529,7 +3529,7 @@ void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute *params, uint32_
 	bn_dh_pub_val = BN_bin2bn(dh_pub_val->content.ref.buffer,
 				  dh_pub_val->content.ref.length, bn_dh_pub_val);
 	if (!bn_dh_pub_val) {
-		syslog(LOG_ERR, "TEE_DeriveKey: bin2bn failed (openssl failure)\n");
+		OT_LOG(LOG_ERR, "TEE_DeriveKey: bin2bn failed (openssl failure)\n");
 		ret = TEE_ERROR_GENERIC;
 		goto retu;
 	}
@@ -3537,7 +3537,7 @@ void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute *params, uint32_
 	shared_secret_size = DH_compute_key(der_key_gen_sec->content.ref.buffer,
 					    bn_dh_pub_val, DH_key(operation));
 	if (shared_secret_size == -1) {
-		syslog(LOG_ERR, "TEE_DeriveKey: Shared secret computation fail\n");
+		OT_LOG(LOG_ERR, "TEE_DeriveKey: Shared secret computation fail\n");
 		ret = TEE_ERROR_GENERIC;
 		goto retu;
 	}
@@ -3556,7 +3556,7 @@ void TEE_GenerateRandom(void *randomBuffer, uint32_t randomBufferLen)
 		return;
 
 	if (!RAND_bytes(randomBuffer, randomBufferLen)) {
-		syslog(LOG_ERR, "TEE_GenerateRandom: Rand data generation failed\n");
+		OT_LOG(LOG_ERR, "TEE_GenerateRandom: Rand data generation failed\n");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 }
