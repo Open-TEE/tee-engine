@@ -14,18 +14,18 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <syslog.h>
 #include <string.h>
 #include <errno.h>
 
 #include "epoll_wrapper.h"
+#include "tee_logging.h"
 
 static int epollfd;
 
 static int wrap_epoll_ctl(int fd, struct epoll_event *event, int op)
 {
 	if (epoll_ctl(epollfd, op, fd, event)) {
-		syslog(LOG_ERR, "Failed on epoll_ctl operation: 0x%x: %s", op, strerror(errno));
+		OT_LOG(LOG_ERR, "Failed on epoll_ctl operation: 0x%x: %s", op, strerror(errno));
 		return -1;
 	}
 
@@ -36,7 +36,7 @@ int init_epoll()
 {
 	epollfd = epoll_create(10);
 	if (epollfd < 0) {
-		syslog(LOG_ERR, "Failed to create epoll fd: %s", strerror(errno));
+		OT_LOG(LOG_ERR, "Failed to create epoll fd: %s", strerror(errno));
 		return -1;
 	}
 
@@ -59,7 +59,7 @@ int epoll_reg_data(int fd, uint32_t events, void *data)
 
 	event.events = events;
 	event.data.ptr = data;
-	syslog(LOG_ERR, "Registering data");
+
 	return wrap_epoll_ctl(fd, &event, EPOLL_CTL_ADD);
 }
 
