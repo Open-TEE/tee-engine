@@ -374,7 +374,7 @@ err:
 void handle_close_sock(struct epoll_event *event)
 {
 	struct sock_to_close *fd_to_close = NULL;
-	struct list_head *pos;
+	struct list_head *pos, *la;
 	uint64_t close_event;
 
 	if (check_event_fd_epoll_status(event))
@@ -394,8 +394,9 @@ void handle_close_sock(struct epoll_event *event)
 
 	if (!list_is_empty(&socks_to_close.list)) {
 
-		LIST_FOR_EACH(pos, &socks_to_close.list) {
+		LIST_FOR_EACH_SAFE(pos, la, &socks_to_close.list) {
 			fd_to_close = LIST_ENTRY(pos, struct sock_to_close, list);
+			list_unlink(&fd_to_close->list);
 			close(fd_to_close->sockfd);
 			free(fd_to_close);
 		}
