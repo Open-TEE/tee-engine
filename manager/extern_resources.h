@@ -90,6 +90,7 @@ enum proc_type {
 enum proc_status {
 	proc_uninitialized,
 	proc_initialized,
+	proc_active,
 	proc_disconnected,
 	proc_panicked,
 	proc_undefined,
