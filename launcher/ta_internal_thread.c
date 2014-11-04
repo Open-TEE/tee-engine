@@ -96,7 +96,7 @@ static void invoke_cmd(struct ta_task *in_task)
 	add_msg_done_queue_and_notify(in_task);
 }
 
-static int close_session(struct ta_task *in_task)
+static void close_session(struct ta_task *in_task)
 {
 	struct com_msg_close_session *close_msg = in_task->msg;
 
@@ -115,7 +115,6 @@ static int close_session(struct ta_task *in_task)
 
 ignore_msg:
 	free_task(in_task);
-	return 0;
 }
 
 static void first_open_session_msg(struct com_msg_open_session *open_msg)

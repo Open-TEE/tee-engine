@@ -221,14 +221,14 @@ int main(int argc, char **argv)
 		close(sockfd[0]);
 		control_params.comm_sock_fd = sockfd[1];
 		lib_to_load = control_params.opentee_conf->subprocess_launcher;
-		strncpy(proc_name, "tee_launcher", MAX_PR_NAME);
+		strncpy(proc_name, "TEE_Launcher", MAX_PR_NAME);
 		prctl(PR_SET_PDEATHSIG, SIGTERM);
 	} else {
 		/* parent process will become the manager */
 		close(sockfd[1]);
 		control_params.comm_sock_fd = sockfd[0];
 		lib_to_load = control_params.opentee_conf->subprocess_manager;
-		strncpy(proc_name, "tee_manager", MAX_PR_NAME);
+		strncpy(proc_name, "TEE_Manager", MAX_PR_NAME);
 	}
 
 	/* set the name of our process it appears that we have to set

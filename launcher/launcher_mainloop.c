@@ -213,6 +213,7 @@ int lib_main_loop(struct core_control *ctl_params)
 				close(ctl_params->comm_sock_fd);
 				close(sockfd[0]);
 				prctl(PR_SET_PDEATHSIG, SIGTERM);
+				closelog();
 				if (ta_process_loop(ctl_params, sockfd[1], recv_open_msg)) {
 					OT_LOG(LOG_ERR, "ta_process has failed");
 					exit(1);
