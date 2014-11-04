@@ -88,7 +88,7 @@ static void free_sess(proc_t del_sess)
 		if (epoll_unreg(del_sess->sockfd) == -1)
 			OT_LOG(LOG_ERR, "Failed to unreg socket");
 
-		/* If functions fails. we will leaking FDs */
+		/* If functions fails. we will l	eaking FDs */
 		add_and_notify_io_sock_to_close(del_sess->sockfd);
 	}
 
@@ -121,7 +121,12 @@ static void free_proc(proc_t del_proc)
 	h_table_free(del_proc->content.process.links);
 
 	/* Client process spesific operations */
-	if (del_proc->p_type == proc_t_CA && pthread_mutex_lock(&CA_table_mutex) == -1) {
+	if (del_proc->p_type == proc_t_CA) {
+
+		if (pthread_mutex_lock(&CA_table_mutex) == -1) {
+			OT_LOG(LOG_ERR, "Failed to lock mutex")
+			goto skip;
+		}
 
 		h_table_remove(clientApps,
 			       (unsigned char *)&del_proc->sockfd, sizeof(del_proc->sockfd));
@@ -129,7 +134,7 @@ static void free_proc(proc_t del_proc)
 		if (pthread_mutex_unlock(&CA_table_mutex))
 			OT_LOG(LOG_ERR, "Failed to unlock the mutex");
 	}
-
+skip:
 	/* Trusted process spesific operations */
 	if (del_proc->p_type == proc_t_TA) {
 		release_ta_file_locks(del_proc);
@@ -139,7 +144,8 @@ static void free_proc(proc_t del_proc)
 
 	/* Unreg socket from epoll and close */
 	if ((del_proc->content.process.status == proc_uninitialized ||
-	     del_proc->content.process.status == proc_initialized) &&
+	     del_proc->content.process.status == proc_initialized ||
+	     del_proc->content.process.status == proc_active) &&
 	    epoll_unreg(del_proc->sockfd) == -1)
 		OT_LOG(LOG_ERR, "Failed to unreg socket");
 
@@ -212,13 +218,14 @@ static void ca_init_context(struct manager_msg *man_msg)
 	}
 
 	/* Message can be received only from client */
-	if (man_msg->proc->p_type != proc_t_CA) {
+	if (man_msg->proc->p_type != proc_t_CA ||
+			man_msg->proc->content.process.status != proc_uninitialized) {
 		OT_LOG(LOG_ERR, "Message can be received only from clientApp");
 		goto discard_msg;
 	}
 
 	/* Valid message. Updated CA proc status to initialized */
-	man_msg->proc->content.process.status = proc_initialized;
+	man_msg->proc->content.process.status = proc_active;
 
 	/* Response to CA */
 	init_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
@@ -249,7 +256,7 @@ static void open_session_response(struct manager_msg *man_msg)
 
 	/* Message can be received only from trusted App! */
 	if (man_msg->proc->p_type != proc_t_TA ||
-	    man_msg->proc->content.process.status != proc_initialized) {
+		man_msg->proc->content.process.status != proc_active) {
 		OT_LOG(LOG_ERR, "Invalid sender");
 		goto ignore_msg;
 	}
@@ -420,19 +427,32 @@ err:
 	return 1;
 }
 
+/*!
+ * \brief connect_to_ta
+ * Function sole purpose is to decide if there is need to connect some existing TA or launch
+ * new TA.
+ * \param man_msg
+ * \param conn_ta If function returns NULL -> Launch new TA or else connect to this proc
+ * \param ta_uuid
+ * \param ta_propertie
+ * \return 0 on success. 1 if can't connect ANY TA. See also explanation about conn_ta param
+ */
 static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID *ta_uuid,
 			 struct trusted_app_propertie *ta_propertie)
 {
 	int ret = 0;
 
 	*conn_ta = get_ta_by_uuid(ta_uuid);
-	if (*conn_ta)
-		return 0; /* Connect to existing, because ta is running/loaded */
+	if (*conn_ta && (*conn_ta)->p_type != proc_t_TA) {
+		OT_LOG(LOG_ERR, "Something is wrong");
+		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+		return 1;
+	}
 
 	if (ta_dir_watch_lock_mutex())
 		return 1; /* Err msg logged */
 
-	/* If trusted application exists at TA folder and get it properties. */
+	/* If trusted application exists at TA folder -> get it properties. */
 	ta_propertie = ta_dir_watch_props(ta_uuid);
 	if (!ta_propertie) {
 		OT_LOG(LOG_ERR, "TA with requested UUID is not found");
@@ -441,20 +461,38 @@ static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID 
 		goto ret;
 	}
 
-	memcpy(&((struct com_msg_open_session *)man_msg->msg)->ta_so_name,
-	       ta_propertie->ta_so_name, TA_MAX_FILE_NAME);
-
-	if (ta_propertie->user_config.singletonInstance) {
-		ret = 0;
-		goto ret; /* Singleton and TA running */
-	}
-
-	if (ta_propertie->user_config.singletonInstance &&
+	if (*conn_ta && ((*conn_ta)->content.process.status == proc_active ||
+			 (*conn_ta)->content.process.status == proc_initialized ||
+			 (*conn_ta)->content.process.status == proc_uninitialized) &&
+	    ta_propertie->user_config.singletonInstance &&
 	    !ta_propertie->user_config.multiSession) {
 		/* Singleton and running and not supporting multi session! */
 		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_ACCESS_CONFLICT);
 		ret = 1;
+		goto ret;
 	}
+
+	memcpy(&((struct com_msg_open_session *)man_msg->msg)->ta_so_name,
+	       ta_propertie->ta_so_name, TA_MAX_FILE_NAME);
+
+	if (*conn_ta && ((*conn_ta)->content.process.status == proc_active ||
+			 (*conn_ta)->content.process.status == proc_initialized ||
+			 (*conn_ta)->content.process.status == proc_uninitialized) &&
+	    ta_propertie->user_config.singletonInstance) {
+		ret = 0;
+		goto ret; /* Singleton and TA running */
+	}
+
+	if (*conn_ta && ((*conn_ta)->content.process.status == proc_active ||
+			 (*conn_ta)->content.process.status == proc_initialized ||
+			 (*conn_ta)->content.process.status == proc_uninitialized) &&
+	    ta_propertie->user_config.instanceKeepAlive) {
+		ret = 0;
+		goto ret; /* Keep alive and TA running */
+	}
+
+	/* If none of them were true, basic action is launch new TA */
+	*conn_ta = NULL;
 
 ret:
 	ta_dir_watch_unlock_mutex();
@@ -468,7 +506,7 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid, pr
 	pid_t new_ta_pid = 0; /* Zero for compiler warning */
 
 	/* Init return values */
-	*new_ta_proc = (proc_t)malloc(sizeof(struct __proc));
+	*new_ta_proc = NULL;
 	*conn_ta = NULL; /* NULL for compiler warning */
 
 	if (connect_to_ta(man_msg, conn_ta, ta_uuid, ta_propertie))
@@ -505,7 +543,7 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid, pr
 	}
 
 	/* TA ready for communication */
-	(*new_ta_proc)->content.process.status = proc_initialized;
+	(*new_ta_proc)->content.process.status = proc_active;
 
 	return 0;
 
@@ -524,7 +562,7 @@ err_1:
 static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner, proc_t to,
 				   uint64_t sess_id)
 {
-	*sesLink = (proc_t)malloc(sizeof(struct __proc));
+	*sesLink = (proc_t)calloc(1, sizeof(struct __proc));
 	if (!*sesLink) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		return 1;
@@ -565,8 +603,10 @@ static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
 	if (add_new_session_to_proc(owner, NULL, sess_id, &new_owner_ses))
 		return 1;
 
-	if (add_new_session_to_proc(to, new_owner_ses, sess_id, &new_to_ses))
+	if (add_new_session_to_proc(to, new_owner_ses, sess_id, &new_to_ses)) {
+		free_sess(new_owner_ses);
 		return 1;
+	}
 
 	new_owner_ses->content.sesLink.to = new_to_ses;
 
@@ -639,7 +679,7 @@ static void open_session_msg(struct manager_msg *man_msg)
 
 	/* Function is only valid for proc FDs */
 	if (man_msg->proc->p_type == proc_t_link ||
-	    man_msg->proc->content.process.status != proc_initialized) {
+		man_msg->proc->content.process.status != proc_active) {
 		OT_LOG(LOG_ERR, "Invalid sender or senders status");
 		goto discard_msg;
 	}
@@ -749,7 +789,7 @@ static void ca_finalize_context(struct manager_msg *man_msg)
 		OT_LOG(LOG_ERR, "Message can be received only from clientApp");
 		goto ignore_msg;
 	}
-
+	OT_LOG_INT(man_msg->proc->sockfd)
 	free_proc(man_msg->proc); /* Del client proc */
 
 ignore_msg:
