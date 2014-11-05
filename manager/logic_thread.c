@@ -256,7 +256,7 @@ static void open_session_response(struct manager_msg *man_msg)
 
 	/* Message can be received only from trusted App! */
 	if (man_msg->proc->p_type != proc_t_TA ||
-		man_msg->proc->content.process.status != proc_active) {
+	    man_msg->proc->content.process.status != proc_active) {
 		OT_LOG(LOG_ERR, "Invalid sender");
 		goto ignore_msg;
 	}
@@ -281,7 +281,7 @@ static void open_session_response(struct manager_msg *man_msg)
 	if (open_resp_msg->return_code_open_session != TEE_SUCCESS) {
 
 		remove_session_between(ta_session->content.sesLink.owner,
-				       ta_session->content.sesLink.to,
+				       ta_session->content.sesLink.to->content.sesLink.owner,
 				       open_resp_msg->msg_hdr.sess_id);
 
 	} else {
@@ -314,7 +314,8 @@ err_2:
 err_1:
 	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
 	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
-	remove_session_between(ta_session->content.sesLink.owner, ta_session->content.sesLink.to,
+	remove_session_between(ta_session->content.sesLink.owner,
+			       ta_session->content.sesLink.to->content.sesLink.owner,
 			       open_resp_msg->msg_hdr.sess_id);
 	/* TODO: should TA killed == KEEP ALIVE */
 	return;
