@@ -122,8 +122,11 @@ static void send_msg(proc_t send_to, void *msg, int msg_len)
 		if (send_fd(send_to->sockfd,
 			    ((struct com_msg_open_session *)msg)->sess_fd_to_caller) == -1) {
 			OT_LOG(LOG_ERR, "Failed to send FD");
+			close(((struct com_msg_open_session *)msg)->sess_fd_to_caller);
 			proc_fd_err(errno, send_to);
 		}
+
+		close(((struct com_msg_open_session *)msg)->sess_fd_to_caller);
 	}
 }
 
