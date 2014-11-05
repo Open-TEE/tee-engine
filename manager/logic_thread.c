@@ -790,7 +790,7 @@ static void ca_finalize_context(struct manager_msg *man_msg)
 		OT_LOG(LOG_ERR, "Message can be received only from clientApp");
 		goto ignore_msg;
 	}
-	OT_LOG_INT(man_msg->proc->sockfd)
+
 	free_proc(man_msg->proc); /* Del client proc */
 
 ignore_msg:
