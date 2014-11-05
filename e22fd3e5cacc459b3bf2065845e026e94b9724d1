@@ -22,6 +22,30 @@
       "revId": "e22fd3e5cacc459b3bf2065845e026e94b9724d1",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_8158bd57",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 537,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-05T09:39:36Z",
+      "side": 1,
+      "message": "It is done in create_unintialized_ta_proc function.",
+      "parentUuid": "7a6b29fe_c14ab582",
+      "range": {
+        "startLine": 537,
+        "startChar": 0,
+        "endLine": 537,
+        "endChar": 1
+      },
+      "revId": "e22fd3e5cacc459b3bf2065845e026e94b9724d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
