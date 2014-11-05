@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a6b29fe_c14ab582",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 537,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-05T09:34:27Z",
+      "side": 1,
+      "message": "should you check that \"*new_ta_proc\" is not NULL here ?",
+      "range": {
+        "startLine": 537,
+        "startChar": 0,
+        "endLine": 537,
+        "endChar": 1
+      },
+      "revId": "e22fd3e5cacc459b3bf2065845e026e94b9724d1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
