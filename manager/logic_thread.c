@@ -80,18 +80,6 @@ static void free_sess(proc_t del_sess)
 	if (!del_sess || del_sess->p_type != proc_t_session)
 		return;
 
-	/* Session in TA is not using socket. All messages from TA will arive to TA process socket.
-	 * And if session is active, function is called from close session function */
-	if (del_sess->content.sesLink.owner->p_type == proc_t_CA &&
-	    del_sess->content.sesLink.status == sess_active) {
-
-		if (epoll_unreg(del_sess->sockfd) == -1)
-			OT_LOG(LOG_ERR, "Failed to unreg socket");
-
-		/* If functions fails. we will l	eaking FDs */
-		add_and_notify_io_sock_to_close(del_sess->sockfd);
-	}
-
 	h_table_remove(del_sess->content.sesLink.owner->content.process.links,
 		       (unsigned char *)&del_sess->content.sesLink.session_id, sizeof(uint64_t));
 
@@ -219,7 +207,7 @@ static void ca_init_context(struct manager_msg *man_msg)
 
 	/* Message can be received only from client */
 	if (man_msg->proc->p_type != proc_t_CA ||
-			man_msg->proc->content.process.status != proc_uninitialized) {
+	    man_msg->proc->content.process.status != proc_uninitialized) {
 		OT_LOG(LOG_ERR, "Message can be received only from clientApp");
 		goto discard_msg;
 	}
@@ -251,7 +239,6 @@ static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
 static void open_session_response(struct manager_msg *man_msg)
 {
 	struct com_msg_open_session *open_resp_msg = man_msg->msg;
-	int sockfd[2];
 	proc_t ta_session;
 
 	/* Message can be received only from trusted App! */
@@ -286,38 +273,16 @@ static void open_session_response(struct manager_msg *man_msg)
 
 	} else {
 
-		/* create a socket pair for CA session and manager communication */
-		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1) {
-			OT_LOG(LOG_ERR, "Failed to create socket pair");
-			goto err_1;
-		}
-
-		/* Reg CA session socket */
-		if (epoll_reg_data(sockfd[0], EPOLLIN, ta_session->content.sesLink.to))
-			goto err_2; /* Err msg logged */
-
-		ta_session->content.sesLink.to->sockfd = sockfd[0];
+		/* Update session status to active */
 		ta_session->content.sesLink.status = sess_active;
 		ta_session->content.sesLink.to->content.sesLink.status = sess_active;
-		open_resp_msg->sess_fd_to_caller = sockfd[1];
 	}
 
 	/* Send message to its initial sender
 	 * man_msg->proc will be used as message "address" */
 	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
 	add_msg_out_queue_and_notify(man_msg);
-	return;
 
-err_2:
-	close(sockfd[0]);
-	close(sockfd[1]);
-err_1:
-	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
-	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
-	remove_session_between(ta_session->content.sesLink.owner,
-			       ta_session->content.sesLink.to->content.sesLink.owner,
-			       open_resp_msg->msg_hdr.sess_id);
-	/* TODO: should TA killed == KEEP ALIVE */
 	return;
 
 ignore_msg:
@@ -426,6 +391,60 @@ err:
 	free(recv_created_msg);
 	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 	return 1;
+}
+
+static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner, proc_t to,
+				   uint64_t sess_id)
+{
+	*sesLink = (proc_t)calloc(1, sizeof(struct __proc));
+	if (!*sesLink) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		return 1;
+	}
+
+	(*sesLink)->p_type = proc_t_session;
+	(*sesLink)->content.sesLink.status = sess_initialized;
+	(*sesLink)->content.sesLink.owner = owner;
+	(*sesLink)->content.sesLink.to = to;
+	(*sesLink)->content.sesLink.session_id = sess_id;
+
+	return 0;
+}
+
+static int add_new_session_to_proc(proc_t owner, proc_t to, uint64_t session_id,
+				   proc_t *new_sesLink)
+{
+	if (alloc_and_init_sessLink(new_sesLink, owner, to, session_id))
+		return 1;
+
+	if (h_table_insert(owner->content.process.links, (unsigned char *)&session_id,
+			   sizeof(uint64_t), *new_sesLink)) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		return 1;
+	}
+
+	return 0;
+}
+
+static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
+{
+	proc_t new_owner_ses = NULL;
+	proc_t new_to_ses = NULL;
+
+	/* Following code will be generating two session link and cross linking sessions to gether
+	 */
+
+	if (add_new_session_to_proc(owner, NULL, sess_id, &new_owner_ses))
+		return 1;
+
+	if (add_new_session_to_proc(to, new_owner_ses, sess_id, &new_to_ses)) {
+		free_sess(new_owner_ses);
+		return 1;
+	}
+
+	new_owner_ses->content.sesLink.to = new_to_ses;
+
+	return 0;
 }
 
 /*!
@@ -551,60 +570,6 @@ err_1:
 	return 1;
 }
 
-static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner, proc_t to,
-				   uint64_t sess_id)
-{
-	*sesLink = (proc_t)calloc(1, sizeof(struct __proc));
-	if (!*sesLink) {
-		OT_LOG(LOG_ERR, "Out of memory");
-		return 1;
-	}
-
-	(*sesLink)->p_type = proc_t_session;
-	(*sesLink)->content.sesLink.status = sess_initialized;
-	(*sesLink)->content.sesLink.owner = owner;
-	(*sesLink)->content.sesLink.to = to;
-	(*sesLink)->content.sesLink.session_id = sess_id;
-
-	return 0;
-}
-
-static int add_new_session_to_proc(proc_t owner, proc_t to, uint64_t session_id,
-				   proc_t *new_sesLink)
-{
-	if (alloc_and_init_sessLink(new_sesLink, owner, to, session_id))
-		return 1;
-
-	if (h_table_insert(owner->content.process.links, (unsigned char *)&session_id,
-			   sizeof(uint64_t), *new_sesLink)) {
-		OT_LOG(LOG_ERR, "Out of memory");
-		return 1;
-	}
-
-	return 0;
-}
-
-static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
-{
-	proc_t new_owner_ses = NULL;
-	proc_t new_to_ses = NULL;
-
-	/* Following code will be generating two session link and cross linking sessions to gether
-	 */
-
-	if (add_new_session_to_proc(owner, NULL, sess_id, &new_owner_ses))
-		return 1;
-
-	if (add_new_session_to_proc(to, new_owner_ses, sess_id, &new_to_ses)) {
-		free_sess(new_owner_ses);
-		return 1;
-	}
-
-	new_owner_ses->content.sesLink.to = new_to_ses;
-
-	return 0;
-}
-
 static void open_session_query(struct manager_msg *man_msg)
 {
 	proc_t new_ta = NULL;
@@ -671,7 +636,7 @@ static void open_session_msg(struct manager_msg *man_msg)
 
 	/* Function is only valid for proc FDs */
 	if (man_msg->proc->p_type == proc_t_session ||
-		man_msg->proc->content.process.status != proc_active) {
+	    man_msg->proc->content.process.status != proc_active) {
 		OT_LOG(LOG_ERR, "Invalid sender or senders status");
 		goto discard_msg;
 	}
@@ -694,74 +659,46 @@ discard_msg:
 	free_manager_msg(man_msg);
 }
 
-static void invoke_cmd_query(struct manager_msg *man_msg)
-{
-	((struct com_msg_invoke_cmd *)man_msg->msg)->session_id =
-	    man_msg->proc->content.sesLink.session_id;
-
-	man_msg->proc = man_msg->proc->content.sesLink.to->content.sesLink.owner;
-	add_msg_out_queue_and_notify(man_msg);
-}
-
-static void invoke_cmd_response(struct manager_msg *man_msg)
-{
-	struct com_msg_invoke_cmd *invoke_resp_msg = man_msg->msg;
-	proc_t session = NULL;
-
-	/* REsponse to invoke to command can be received only from TA */
-	if (man_msg->proc->p_type != proc_t_TA) {
-		OT_LOG(LOG_ERR, "Invalid sender");
-		goto ignore_msg;
-	}
-
-	session = h_table_get(man_msg->proc->content.process.links,
-			      (unsigned char *)(&invoke_resp_msg->session_id), sizeof(uint64_t));
-	if (!session) {
-		OT_LOG(LOG_ERR, "Session is not found");
-		goto ignore_msg;
-	}
-
-	man_msg->proc = session->content.sesLink.to;
-	add_msg_out_queue_and_notify(man_msg);
-
-	return;
-
-ignore_msg:
-	free_manager_msg(man_msg);
-}
-
 static void invoke_cmd(struct manager_msg *man_msg)
 {
 	struct com_msg_invoke_cmd *invoke_msg = man_msg->msg;
-
-	/* Session link can only be sender */
-	if (man_msg->proc->p_type >= proc_t_last) {
-		OT_LOG(LOG_ERR, "Invalid sender");
-		goto ignore_msg;
-	}
+	proc_t session = NULL;
 
 	/* Valid open session message */
 	if (invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_CMD) {
 		OT_LOG(LOG_ERR, "Invalid message");
-		goto ignore_msg;
+		goto discard_msg;
+	}
+
+	/* Function is only valid for proc FDs */
+	if (man_msg->proc->p_type == proc_t_session ||
+	    man_msg->proc->content.process.status != proc_active) {
+		OT_LOG(LOG_ERR, "Invalid sender or senders status");
+		goto discard_msg;
+	}
+
+	/* REsponse to invoke to command can be received only from TA */
+	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE &&
+	    man_msg->proc->p_type != proc_t_TA) {
+		OT_LOG(LOG_ERR, "Invalid sender");
+		goto discard_msg;
+	}
+
+	session = h_table_get(man_msg->proc->content.process.links,
+			      (unsigned char *)(&invoke_msg->msg_hdr.sess_id), sizeof(uint64_t));
+	if (!session || session->p_type != proc_t_session) {
+		OT_LOG(LOG_ERR, "Session is not found");
+		goto discard_msg;
 	}
 
 	/* TODO: Panic handling. Here should be logic, which checks session status! */
 
-	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
-		invoke_cmd_query(man_msg);
-
-	} else if (invoke_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE) {
-		invoke_cmd_response(man_msg);
-
-	} else {
-		OT_LOG(LOG_ERR, "Unkwon msg type");
-		goto ignore_msg;
-	}
+	man_msg->proc = session->content.sesLink.to->content.sesLink.owner;
+	add_msg_out_queue_and_notify(man_msg);
 
 	return;
 
-ignore_msg:
+discard_msg:
 	free_manager_msg(man_msg);
 }
 
@@ -777,8 +714,9 @@ static void ca_finalize_context(struct manager_msg *man_msg)
 	}
 
 	/* Message can be received only from client */
-	if (man_msg->proc->p_type != proc_t_CA) {
-		OT_LOG(LOG_ERR, "Message can be received only from clientApp");
+	if (man_msg->proc->p_type != proc_t_CA ||
+	    man_msg->proc->content.process.status != proc_active) {
+		OT_LOG(LOG_ERR, "Invalid sender process or status");
 		goto ignore_msg;
 	}
 
@@ -848,7 +786,8 @@ unlock:
 static void close_session(struct manager_msg *man_msg)
 {
 	struct com_msg_close_session *close_msg = man_msg->msg;
-	proc_t ta_proc;
+	proc_t close_ta_proc;
+	proc_t session;
 
 	/* Valid open session message */
 	if (close_msg->msg_hdr.msg_name != COM_MSG_NAME_CLOSE_SESSION ||
@@ -857,35 +796,44 @@ static void close_session(struct manager_msg *man_msg)
 		goto ignore_msg;
 	}
 
-	if (man_msg->proc->p_type != proc_t_session) {
-		OT_LOG(LOG_ERR, "Invalid sender");
+	/* Function is only valid for proc FDs */
+	if (man_msg->proc->p_type == proc_t_session ||
+	    man_msg->proc->content.process.status != proc_active) {
+		OT_LOG(LOG_ERR, "Invalid sender or senders status");
+		goto ignore_msg;
+	}
+
+	session = h_table_get(man_msg->proc->content.process.links,
+			      (unsigned char *)(&close_msg->msg_hdr.sess_id), sizeof(uint64_t));
+	if (!session || session->p_type != proc_t_session) {
+		OT_LOG(LOG_ERR, "Session is not found");
 		goto ignore_msg;
 	}
 
 	/* Save session TO proc addr, because session might be removed */
-	ta_proc = man_msg->proc->content.sesLink.to->content.sesLink.owner;
+	close_ta_proc = session->content.sesLink.to->content.sesLink.owner;
 
 	/* Update close message */
 	close_msg->should_ta_destroy =
-	    should_ta_destroy(man_msg->proc->content.sesLink.to->content.sesLink.owner);
+	    should_ta_destroy(session->content.sesLink.to->content.sesLink.owner);
 	if (close_msg->should_ta_destroy == -1) {
 		goto ignore_msg;
 
 	} else if (close_msg->should_ta_destroy == 1) {
 		/* Session is not removed. It will be removed when TA exit */
-		man_msg->proc->content.sesLink.status = sess_closed;
-		man_msg->proc->content.sesLink.to->content.sesLink.status = sess_closed;
+		session->content.sesLink.status = sess_closed;
+		session->content.sesLink.to->content.sesLink.status = sess_closed;
 		/* No new open session message to TA */
-		man_msg->proc->content.sesLink.owner->content.process.status = proc_disconnected;
+		session->content.sesLink.owner->content.process.status = proc_disconnected;
 
 	} else {
 		/* Remove sessions, because TA will be not terminated */
-		remove_session_between(man_msg->proc->content.sesLink.owner,
-				       man_msg->proc->content.sesLink.to->content.sesLink.owner,
-				       man_msg->proc->content.sesLink.session_id);
+		remove_session_between(session->content.sesLink.owner,
+				       session->content.sesLink.to->content.sesLink.owner,
+				       session->content.sesLink.session_id);
 	}
 
-	man_msg->proc = ta_proc;
+	man_msg->proc = close_ta_proc;
 	add_msg_out_queue_and_notify(man_msg);
 
 	return;
