@@ -84,7 +84,7 @@ int lib_main_loop(struct core_control *ctl_params)
 	int sockfd[2];
 	pid_t new_proc_pid;
 	struct com_msg_open_session *recv_open_msg = NULL;
-	struct com_msg_ta_created created_ta;
+	struct com_msg_ta_created new_ta_info;
 	int recv_bytes, ret, event_count, i;
 	sigset_t sig_empty_set, sig_block_set;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
@@ -185,15 +185,15 @@ int lib_main_loop(struct core_control *ctl_params)
 
 			/* Received correct mesage from manager. Prepare response message.
 			 * PID is filled later */
-			created_ta.msg_hdr.msg_name = COM_MSG_NAME_CREATED_TA;
-			created_ta.msg_hdr.msg_type = COM_TYPE_RESPONSE;
-			created_ta.msg_hdr.sender_type = com_sender_launcher;
-			created_ta.msg_hdr.sess_id = recv_open_msg->msg_hdr.sess_id;
+			new_ta_info.msg_hdr.msg_name = COM_MSG_NAME_CREATED_TA;
+			new_ta_info.msg_hdr.msg_type = COM_TYPE_RESPONSE;
+			new_ta_info.msg_hdr.sender_type = com_sender_launcher;
+			new_ta_info.msg_hdr.sess_id = recv_open_msg->msg_hdr.sess_id;
 
 			/* create a socket pair so the manager and TA can communicate */
 			if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1) {
 				OT_LOG(LOG_ERR, "failed to create a socket pair");
-				send_err_msg_to_manager(ctl_params->comm_sock_fd, &created_ta);
+				send_err_msg_to_manager(ctl_params->comm_sock_fd, &new_ta_info);
 				free(recv_open_msg);
 				continue;
 			}
@@ -203,7 +203,7 @@ int lib_main_loop(struct core_control *ctl_params)
 			 */
 			new_proc_pid = syscall(SYS_clone, SIGCHLD | CLONE_PARENT, 0, 0);
 			if (new_proc_pid == -1) {
-				send_err_msg_to_manager(ctl_params->comm_sock_fd, &created_ta);
+				send_err_msg_to_manager(ctl_params->comm_sock_fd, &new_ta_info);
 				free(recv_open_msg);
 				continue;
 
@@ -220,13 +220,13 @@ int lib_main_loop(struct core_control *ctl_params)
 				}
 
 			} else {
-				created_ta.pid = new_proc_pid;
+				new_ta_info.pid = new_proc_pid;
 
 				/* We have to send kill signal to TA, because
 				 * SIGTERM might not be executed if TA is "stuck" in
 				 * create entry or open session function */
 
-				if (com_send_msg(ctl_params->comm_sock_fd, &created_ta,
+				if (com_send_msg(ctl_params->comm_sock_fd, &new_ta_info,
 						 sizeof(struct com_msg_ta_created)) ==
 				    sizeof(struct com_msg_ta_created)) {
 

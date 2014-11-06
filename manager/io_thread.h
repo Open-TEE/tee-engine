@@ -34,7 +34,7 @@ void free_manager_msg(struct manager_msg *released_msg);
  * is meaning that message needs to send out.
  * \param event Epoll event
  */
-void handle_done_queue(struct epoll_event *event);
+void handle_out_queue(struct epoll_event *event);
 
 /*!
  * \brief handle_public_fd

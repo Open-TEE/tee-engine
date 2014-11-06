@@ -66,13 +66,10 @@ pthread_cond_t todo_queue_cond = PTHREAD_COND_INITIALIZER;
 int launcher_fd;
 
 /* Done queue have something in */
-int event_done_queue_fd;
+int event_out_queue_fd;
 
 /* Close queue have something to process */
 int event_close_sock;
-
-/* Next session ID */
-uint64_t next_sess_id;
 
 /*!
  * \brief init_sock
@@ -145,8 +142,8 @@ static int init_extern_res(int launcher_proc_fd)
 	launcher_fd = launcher_proc_fd;
 
 	/* Done queue event is used in semaphore style */
-	event_done_queue_fd = eventfd(0, EFD_SEMAPHORE);
-	if (event_done_queue_fd == -1) {
+	event_out_queue_fd = eventfd(0, EFD_SEMAPHORE);
+	if (event_out_queue_fd == -1) {
 		OT_LOG(LOG_ERR, "Failed to init event_done_queue_fd: %s", strerror(errno));
 		goto err_1;
 	}
@@ -161,7 +158,7 @@ static int init_extern_res(int launcher_proc_fd)
 	return 0;
 
 err_2:
-	close(event_done_queue_fd);
+	close(event_out_queue_fd);
 err_1:
 	h_table_free(clientApps);
 	h_table_free(trustedApps);
@@ -198,7 +195,7 @@ int lib_main_loop(struct core_control *control_params)
 		return -1; /* err msg logged */
 
 	/* Done queue event fd */
-	if (epoll_reg_fd(event_done_queue_fd, EPOLLIN))
+	if (epoll_reg_fd(event_out_queue_fd, EPOLLIN))
 		return -1; /* err msg logged */
 
 	/* Socket(s) need to be closed */
@@ -257,8 +254,8 @@ int lib_main_loop(struct core_control *control_params)
 			if (cur_events[i].data.fd == public_sockfd) {
 				handle_public_fd(&cur_events[i]);
 
-			} else if (cur_events[i].data.fd == event_done_queue_fd) {
-				handle_done_queue(&cur_events[i]);
+			} else if (cur_events[i].data.fd == event_out_queue_fd) {
+				handle_out_queue(&cur_events[i]);
 
 			} else if (cur_events[i].data.fd == control_params->self_pipe_fd) {
 				manager_check_signal(control_params, &cur_events[i]);

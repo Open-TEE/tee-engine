@@ -70,7 +70,7 @@ extern pthread_cond_t todo_queue_cond;
 extern int launcher_fd;
 
 /* Done queue have something in */
-extern int event_done_queue_fd;
+extern int event_out_queue_fd;
 
 /* Close queue have something to process */
 extern int event_close_sock;
@@ -82,7 +82,7 @@ extern int event_close_sock;
 enum proc_type {
 	proc_t_CA,
 	proc_t_TA,
-	proc_t_link,
+	proc_t_session,
 	proc_t_last, /* Used for "looping" through enumerator */
 };
 
@@ -119,7 +119,6 @@ struct __proc {
 		struct {
 			enum session_status status;
 			int session_id;
-			int sockfd;
 			proc_t to;
 			proc_t owner;
 		} sesLink;

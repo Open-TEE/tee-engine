@@ -247,7 +247,7 @@ void free_manager_msg(struct manager_msg *released_msg)
 	free(released_msg);
 }
 
-void handle_done_queue(struct epoll_event *event)
+void handle_out_queue(struct epoll_event *event)
 {
 	struct manager_msg *handled_msg = NULL;
 	uint64_t done_event;
@@ -256,9 +256,9 @@ void handle_done_queue(struct epoll_event *event)
 		return; /* err msg logged */
 
 	/* Reduce eventfd by one */
-	if (read(event_done_queue_fd, &done_event, sizeof(uint64_t)) == -1) {
+	if (read(event_out_queue_fd, &done_event, sizeof(uint64_t)) == -1) {
 		OT_LOG(LOG_ERR, "Failed to reset eventfd");
-		io_fd_err(errno, event_done_queue_fd);
+		io_fd_err(errno, event_out_queue_fd);
 	}
 
 	/* Lock from logic thread */

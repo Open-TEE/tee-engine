@@ -141,7 +141,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 		exit(EXIT_FAILURE);
 	}
 
-	/* Known error: CA can not determ if TA is launched or not, because framework is calling
+	/* limitation: CA can not determ if TA is launched or not, because framework is calling
 	 * create entry point and open session function. Those functions return values is mapped
 	 * into one return value. */
 	if (interface->create() != TEE_SUCCESS) {

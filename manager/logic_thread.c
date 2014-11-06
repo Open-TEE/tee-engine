@@ -77,7 +77,7 @@ static void add_and_notify_io_sock_to_close(int fd)
 
 static void free_sess(proc_t del_sess)
 {
-	if (!del_sess || del_sess->p_type != proc_t_link)
+	if (!del_sess || del_sess->p_type != proc_t_session)
 		return;
 
 	/* Session in TA is not using socket. All messages from TA will arive to TA process socket.
@@ -103,7 +103,7 @@ static void free_proc(proc_t del_proc)
 {
 	proc_t proc_sess = NULL;
 
-	if (!del_proc || del_proc->p_type == proc_t_link)
+	if (!del_proc || del_proc->p_type == proc_t_session)
 		return;
 
 	/* Free process sessions
@@ -155,7 +155,7 @@ skip:
 	del_proc = NULL;
 }
 
-static void add_msg_done_queue_and_notify(struct manager_msg *man_msg)
+static void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 {
 	const uint64_t event = 1;
 
@@ -174,7 +174,7 @@ static void add_msg_done_queue_and_notify(struct manager_msg *man_msg)
 	}
 
 	/* notify the I/O thread that there is something at output queue */
-	if (write(event_done_queue_fd, &event, sizeof(uint64_t)) == -1) {
+	if (write(event_out_queue_fd, &event, sizeof(uint64_t)) == -1) {
 		OT_LOG(LOG_ERR, "Failed to notify the io thread");
 		/* TODO/PLACEHOLDER: notify IO thread */
 	}
@@ -198,7 +198,7 @@ static void gen_err_msg_and_add_to_done(struct manager_msg *man_msg, uint32_t er
 	((struct com_msg_error *)man_msg->msg)->ret_origin = err_origin;
 	((struct com_msg_error *)man_msg->msg)->ret = err_name;
 
-	add_msg_done_queue_and_notify(man_msg);
+	add_msg_out_queue_and_notify(man_msg);
 }
 
 static void ca_init_context(struct manager_msg *man_msg)
@@ -231,7 +231,7 @@ static void ca_init_context(struct manager_msg *man_msg)
 	init_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 	init_msg->ret = TEE_SUCCESS;
 
-	add_msg_done_queue_and_notify(man_msg);
+	add_msg_out_queue_and_notify(man_msg);
 
 	return;
 
@@ -305,7 +305,7 @@ static void open_session_response(struct manager_msg *man_msg)
 	/* Send message to its initial sender
 	 * man_msg->proc will be used as message "address" */
 	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
-	add_msg_done_queue_and_notify(man_msg);
+	add_msg_out_queue_and_notify(man_msg);
 	return;
 
 err_2:
@@ -569,7 +569,7 @@ static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner, proc_t
 		return 1;
 	}
 
-	(*sesLink)->p_type = proc_t_link;
+	(*sesLink)->p_type = proc_t_session;
 	(*sesLink)->content.sesLink.status = sess_initialized;
 	(*sesLink)->content.sesLink.owner = owner;
 	(*sesLink)->content.sesLink.to = to;
@@ -641,11 +641,11 @@ static void open_session_query(struct manager_msg *man_msg)
 		if (create_sesLink(man_msg->proc, conn_ta, new_session_id))
 			goto err; /* Err msg logged */
 
-		/* Pass on open session cmd
-		 * Know error: If this message send fails, CA will be waiting forever, because
+		/* Pass on open session cmd to the TA
+		 * Potential Issue: If this message send fails, CA will be waiting forever, because
 		 * no error message is not send */
 		man_msg->proc = conn_ta;
-		add_msg_done_queue_and_notify(man_msg);
+		add_msg_out_queue_and_notify(man_msg);
 
 	} else if (new_ta) {
 
@@ -679,7 +679,7 @@ static void open_session_msg(struct manager_msg *man_msg)
 	}
 
 	/* Function is only valid for proc FDs */
-	if (man_msg->proc->p_type == proc_t_link ||
+	if (man_msg->proc->p_type == proc_t_session ||
 		man_msg->proc->content.process.status != proc_active) {
 		OT_LOG(LOG_ERR, "Invalid sender or senders status");
 		goto discard_msg;
@@ -709,7 +709,7 @@ static void invoke_cmd_query(struct manager_msg *man_msg)
 	    man_msg->proc->content.sesLink.session_id;
 
 	man_msg->proc = man_msg->proc->content.sesLink.to->content.sesLink.owner;
-	add_msg_done_queue_and_notify(man_msg);
+	add_msg_out_queue_and_notify(man_msg);
 }
 
 static void invoke_cmd_response(struct manager_msg *man_msg)
@@ -731,7 +731,7 @@ static void invoke_cmd_response(struct manager_msg *man_msg)
 	}
 
 	man_msg->proc = session->content.sesLink.to;
-	add_msg_done_queue_and_notify(man_msg);
+	add_msg_out_queue_and_notify(man_msg);
 
 	return;
 
@@ -866,7 +866,7 @@ static void close_session(struct manager_msg *man_msg)
 		goto ignore_msg;
 	}
 
-	if (man_msg->proc->p_type != proc_t_link) {
+	if (man_msg->proc->p_type != proc_t_session) {
 		OT_LOG(LOG_ERR, "Invalid sender");
 		goto ignore_msg;
 	}
@@ -895,7 +895,7 @@ static void close_session(struct manager_msg *man_msg)
 	}
 
 	man_msg->proc = ta_proc;
-	add_msg_done_queue_and_notify(man_msg);
+	add_msg_out_queue_and_notify(man_msg);
 
 	return;
 
