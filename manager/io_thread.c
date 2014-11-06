@@ -98,8 +98,6 @@ static int check_event_fd_epoll_status(struct epoll_event *event)
 
 static void send_msg(proc_t send_to, void *msg, int msg_len)
 {
-	uint8_t msg_name, msg_type;
-
 	if (msg_len == 0)
 		return; /* Not an error */
 
@@ -111,21 +109,6 @@ static void send_msg(proc_t send_to, void *msg, int msg_len)
 	if (com_send_msg(send_to->sockfd, msg, msg_len) != msg_len) {
 		proc_fd_err(errno, send_to);
 		return;
-	}
-
-	/* Special case: Open session message responses. Those should also send FD
-	 * Question: Hide this dirty code from here to com_protocol? */
-	if (com_get_msg_name(msg, &msg_name) || com_get_msg_type(msg, &msg_type))
-		return; /* Err msg logged */
-
-	if (msg_name == COM_MSG_NAME_OPEN_SESSION && msg_type == COM_TYPE_RESPONSE) {
-		if (send_fd(send_to->sockfd,
-			    ((struct com_msg_open_session *)msg)->sess_fd_to_caller) == -1) {
-			OT_LOG(LOG_ERR, "Failed to send FD");
-			proc_fd_err(errno, send_to);
-		}
-
-		close(((struct com_msg_open_session *)msg)->sess_fd_to_caller);
 	}
 }
 
@@ -403,6 +386,7 @@ void handle_close_sock(struct epoll_event *event)
 			free(fd_to_close);
 		}
 	}
+
 	if (pthread_mutex_unlock(&socks_to_close_mutex))
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 }
