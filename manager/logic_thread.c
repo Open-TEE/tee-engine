@@ -180,7 +180,7 @@ static void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 	}
 }
 
-static void gen_err_msg_and_add_to_done(struct manager_msg *man_msg, uint32_t err_origin,
+static void gen_err_msg_and_add_to_out(struct manager_msg *man_msg, uint32_t err_origin,
 					uint32_t err_name)
 {
 	free(man_msg->msg); /* replace old message with error */
@@ -313,7 +313,7 @@ err_2:
 	close(sockfd[1]);
 err_1:
 	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
-	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 	remove_session_between(ta_session->content.sesLink.owner,
 			       ta_session->content.sesLink.to->content.sesLink.owner,
 			       open_resp_msg->msg_hdr.sess_id);
@@ -424,7 +424,7 @@ err:
 		kill(*new_ta_pid, SIGKILL);
 
 	free(recv_created_msg);
-	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 	return 1;
 }
 
@@ -435,18 +435,17 @@ err:
  * \param man_msg
  * \param conn_ta If function returns NULL -> Launch new TA or else connect to this proc
  * \param ta_uuid
- * \param ta_propertie
  * \return 0 on success. 1 if can't connect ANY TA. See also explanation about conn_ta param
  */
-static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID *ta_uuid,
-			 struct trusted_app_propertie *ta_propertie)
+static int ta_exist_and_connectable(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID *ta_uuid)
 {
 	int ret = 0;
+	struct trusted_app_propertie *ta_propertie;
 
 	*conn_ta = get_ta_by_uuid(ta_uuid);
 	if (*conn_ta && (*conn_ta)->p_type != proc_t_TA) {
 		OT_LOG(LOG_ERR, "Something is wrong");
-		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 		return 1;
 	}
 
@@ -457,7 +456,7 @@ static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID 
 	ta_propertie = ta_dir_watch_props(ta_uuid);
 	if (!ta_propertie) {
 		OT_LOG(LOG_ERR, "TA with requested UUID is not found");
-		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_BAD_PARAMETERS);
+		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_BAD_PARAMETERS);
 		ret = 1;
 		goto ret;
 	}
@@ -468,7 +467,7 @@ static int connect_to_ta(struct manager_msg *man_msg, proc_t *conn_ta, TEE_UUID 
 	    ta_propertie->user_config.singletonInstance &&
 	    !ta_propertie->user_config.multiSession) {
 		/* Singleton and running and not supporting multi session! */
-		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_ACCESS_CONFLICT);
+		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_ACCESS_CONFLICT);
 		ret = 1;
 		goto ret;
 	}
@@ -500,26 +499,17 @@ ret:
 	return ret;
 }
 
-static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid, proc_t *new_ta_proc,
-			      proc_t *conn_ta)
+static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid, proc_t *new_ta_proc)
 {
-	struct trusted_app_propertie *ta_propertie = NULL;
 	pid_t new_ta_pid = 0; /* Zero for compiler warning */
 
 	/* Init return values */
 	*new_ta_proc = NULL;
-	*conn_ta = NULL; /* NULL for compiler warning */
-
-	if (connect_to_ta(man_msg, conn_ta, ta_uuid, ta_propertie))
-		return 1; /* Err logged and send */
-
-	if (*conn_ta)
-		return 0; /* Connect to existing TA */
 
 	/* Connection to new TA -> TA will be created */
 	if (create_uninitialized_ta_proc(new_ta_proc, ta_uuid)) {
 		/* Err logged and just send err to sender*/
-		gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 		return 1;
 	}
 
@@ -553,9 +543,8 @@ err_2:
 err_1:
 	kill(new_ta_pid, SIGKILL);
 	free_proc(*new_ta_proc);
-	*conn_ta = NULL;
 	*new_ta_proc = NULL;
-	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 
 	return 1;
 }
@@ -627,9 +616,8 @@ static void open_session_query(struct manager_msg *man_msg)
 	/* SessID is needed when message is sent back from TA */
 	open_msg->msg_hdr.sess_id = new_session_id;
 
-	/* Launch new TA, if needed */
-	if (launch_and_init_ta(man_msg, &open_msg->uuid, &new_ta, &conn_ta))
-		return; /* Err msg logged and send to sender */
+	if (ta_exist_and_connectable(man_msg, &conn_ta, &open_msg->uuid))
+		return; /* Err logged and send */
 
 	/* If new_ta is NULL, should connect existing TA (conn_ta is not NULL)
 	 * If conn_ta is NULL, new ta created and connect to that  (new_ta is not null)
@@ -647,7 +635,12 @@ static void open_session_query(struct manager_msg *man_msg)
 		man_msg->proc = conn_ta;
 		add_msg_out_queue_and_notify(man_msg);
 
-	} else if (new_ta) {
+	} else {
+
+		/* Launch new TA
+		 * NOTE: ta_exist_and_connectable() fill open session ta_so_name-parameter!! */
+		if (launch_and_init_ta(man_msg, &open_msg->uuid, &new_ta))
+			return; /* Err msg logged and send to sender */
 
 		if (create_sesLink(man_msg->proc, new_ta, new_session_id))
 			goto err; /* Err msg logged */
@@ -656,17 +649,13 @@ static void open_session_query(struct manager_msg *man_msg)
 
 		free_manager_msg(man_msg); /* TA will send response message */
 
-	} else {
-		/* Should never end up here ! */
-		OT_LOG(LOG_ERR, "Error");
-		goto err;
 	}
 
 	return;
 
 err:
 	free_proc(new_ta);
-	gen_err_msg_and_add_to_done(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 }
 
 static void open_session_msg(struct manager_msg *man_msg)
