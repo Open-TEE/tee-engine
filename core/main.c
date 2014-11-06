@@ -26,6 +26,7 @@
 #include <pthread.h>
 #include <sys/eventfd.h>
 #include <errno.h>
+#include <linux/limits.h>
 
 #include "subprocess.h"
 #include "conf_parser.h"
@@ -165,7 +166,7 @@ int main(int argc, char **argv)
 	char *lib_to_load = NULL;
 	main_loop_cb main_loop;
 	char proc_name[MAX_PR_NAME];
-	int cmd_name_len = strnlen(argv[0], MAX_PR_NAME);
+	int cmd_name_len = strnlen(argv[0], PATH_MAX);
 	argc = argc;
 	sigset_t sig_block_set;
 
@@ -221,20 +222,21 @@ int main(int argc, char **argv)
 		close(sockfd[0]);
 		control_params.comm_sock_fd = sockfd[1];
 		lib_to_load = control_params.opentee_conf->subprocess_launcher;
-		strncpy(proc_name, "TEE_Launcher", MAX_PR_NAME);
+		strncpy(proc_name, "tee_launcher", MAX_PR_NAME);
 		prctl(PR_SET_PDEATHSIG, SIGTERM);
 	} else {
 		/* parent process will become the manager */
 		close(sockfd[1]);
 		control_params.comm_sock_fd = sockfd[0];
 		lib_to_load = control_params.opentee_conf->subprocess_manager;
-		strncpy(proc_name, "TEE_Manager", MAX_PR_NAME);
+		strncpy(proc_name, "tee_manager", MAX_PR_NAME);
 	}
 
 	/* set the name of our process it appears that we have to set
 	 * both process and cmdline names
 	 */
 	prctl(PR_SET_NAME, (unsigned long)proc_name);
+	memset(argv[0], 0, cmd_name_len);
 	strncpy(argv[0], proc_name, cmd_name_len);
 
 	/* open syslog for writing */
