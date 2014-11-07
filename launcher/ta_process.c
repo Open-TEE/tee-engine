@@ -63,12 +63,12 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	pthread_attr_t attr;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
 	int event_count, i;
-	char proc_name[MAX_PR_NAME]; /* For now */
+	char proc_name[MAX_PR_NAME] = {0}; /* For now */
 	sigset_t sig_empty_set;
 	char *path = NULL;
 
 	/* Set new ta process name */
-	strncpy(proc_name, open_msg->ta_so_name, MAX_PR_NAME);
+	strncpy(proc_name, open_msg->ta_so_name, control_params->argv0_len);
 	prctl(PR_SET_NAME, (unsigned long)proc_name);
 	strncpy(control_params->argv0, proc_name, control_params->argv0_len);
 

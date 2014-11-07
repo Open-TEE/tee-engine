@@ -99,15 +99,19 @@ static int init_sock(int *pub_sockfd)
 
 	if (bind(*pub_sockfd, (struct sockaddr *)&sock_addr, sizeof(struct sockaddr_un)) == -1) {
 		OT_LOG(LOG_ERR, "Error %s", strerror(errno));
-		return -1;
+		goto err_out;
 	}
 
 	if (listen(*pub_sockfd, SOMAXCONN) == -1) {
 		OT_LOG(LOG_ERR, "Listen socket %s", strerror(errno));
-		return -1;
+		goto err_out;
 	}
 
 	return 0;
+
+err_out:
+	close(*pub_sockfd);
+	return -1;
 }
 
 static void manager_check_signal(struct core_control *control_params, struct epoll_event *event)

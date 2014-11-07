@@ -107,7 +107,7 @@ static void add_new_ta(char *name)
 	if (ta_dir_watch_lock_mutex()) {
 		/* Lets hope that errot clear it shelf..
 		 * Know error: Might end up dublicate entries */
-		return;
+		goto err;
 	}
 
 	/* Not optimatez */
@@ -241,7 +241,7 @@ static int re_init_ta_properties()
 
 void ta_dir_watch_event(struct epoll_event *e_event, int *man_ta_dir_watch_fd)
 {
-	char buf[BUF_LEN], *i;
+	uint8_t buf[BUF_LEN], *i;
 	int num_read;
 	struct inotify_event *i_event;
 
