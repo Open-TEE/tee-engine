@@ -70,7 +70,6 @@ static void open_session(struct ta_task *in_task)
 
 	open_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 	open_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
-	open_msg->msg_hdr.sender_type = com_sender_TA;
 
 	add_msg_done_queue_and_notify(in_task);
 }
@@ -91,7 +90,6 @@ static void invoke_cmd(struct ta_task *in_task)
 
 	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 	invoke_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
-	invoke_msg->msg_hdr.sender_type = com_sender_TA;
 
 	add_msg_done_queue_and_notify(in_task);
 }
