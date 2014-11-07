@@ -207,8 +207,8 @@ void *h_table_remove(HASHTABLE table, unsigned char *key, size_t key_len)
 
 	del_buck_data = del_buck->data;
 	free(del_buck->key);
-	free(del_buck);
 	del_buck->key = NULL;
+	free(del_buck);
 	del_buck = NULL;
 	table->buckets_in_table -= 1;
 
