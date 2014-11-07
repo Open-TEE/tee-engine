@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a6b29fe_50b02d8b",
+        "filename": "manager/io_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 261,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-07T09:39:46Z",
+      "side": 1,
+      "message": "you should probably check this before you de-reference it about in the list_unlink()",
+      "range": {
+        "startLine": 261,
+        "startChar": 8,
+        "endLine": 261,
+        "endChar": 19
+      },
+      "revId": "5aea97c5fb6896a0ac22f956aced02deb6f66170",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
