@@ -187,7 +187,6 @@ int lib_main_loop(struct core_control *ctl_params)
 			 * PID is filled later */
 			new_ta_info.msg_hdr.msg_name = COM_MSG_NAME_CREATED_TA;
 			new_ta_info.msg_hdr.msg_type = COM_TYPE_RESPONSE;
-			new_ta_info.msg_hdr.sender_type = com_sender_launcher;
 			new_ta_info.msg_hdr.sess_id = recv_open_msg->msg_hdr.sess_id;
 
 			/* create a socket pair so the manager and TA can communicate */
