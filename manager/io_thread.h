@@ -17,6 +17,7 @@
 #ifndef __IO_THREAD__
 #define __IO_THREAD__
 
+#include "core_control_resources.h"
 #include "epoll_wrapper.h"
 #include "extern_resources.h"
 
@@ -56,5 +57,13 @@ void read_fd_and_add_todo_queue(struct epoll_event *event);
  * \param event
  */
 void handle_close_sock(struct epoll_event *event);
+
+/*!
+ * \brief manager_check_signal
+ * Reset self pipe FD and generates message to logic thread.
+ * \param control_params
+ * \param event
+ */
+void manager_check_signal(struct core_control *control_params, struct epoll_event *event);
 
 #endif /* __IO_THREAD__ */

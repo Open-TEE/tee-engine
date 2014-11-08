@@ -22,6 +22,7 @@
 
 #include "com_protocol.h"
 #include "epoll_wrapper.h"
+#include "ta_exit_states.h"
 #include "ta_io_thread.h"
 #include "tee_logging.h"
 
@@ -29,7 +30,7 @@ static void terminate_ta_gracefully()
 {
 	/* Placeholder */
 
-	exit(EXIT_FAILURE);
+	exit(TA_EXIT_PANICKED);
 }
 
 static void fd_error(int fd_errno)

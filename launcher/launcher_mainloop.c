@@ -208,7 +208,6 @@ int lib_main_loop(struct core_control *ctl_params)
 
 			} else if (new_proc_pid == 0) {
 				/* child process will become the TA*/
-				epoll_unreg(ctl_params->comm_sock_fd);
 				close(ctl_params->comm_sock_fd);
 				close(sockfd[0]);
 				prctl(PR_SET_PDEATHSIG, SIGTERM);

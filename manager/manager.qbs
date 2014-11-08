@@ -19,6 +19,7 @@ DynamicLibrary {
 
     files: [
         "../include/core_control_resources.h",
+        "../include/ta_exit_states.h",
         "extern_resources.h",
         "io_thread.h",
         "io_thread.c",
