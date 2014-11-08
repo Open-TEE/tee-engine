@@ -1,0 +1,73 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a6b29fe_68a0dd43",
+        "filename": "launcher/launcher_mainloop.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 211,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-08T17:13:38Z",
+      "side": 1,
+      "message": "accident, leaving this commented out ?",
+      "range": {
+        "startLine": 211,
+        "startChar": 6,
+        "endLine": 211,
+        "endChar": 17
+      },
+      "revId": "932026c0a357d52359b895fcad9bcca2b2d28af0",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_48a52152",
+        "filename": "launcher/ta_io_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 33,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-08T17:13:38Z",
+      "side": 1,
+      "message": "panic gracefully, seems a bit of a contradiction :)",
+      "range": {
+        "startLine": 33,
+        "startChar": 6,
+        "endLine": 33,
+        "endChar": 22
+      },
+      "revId": "932026c0a357d52359b895fcad9bcca2b2d28af0",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_a88955cc",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 151,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-08T17:13:38Z",
+      "side": 1,
+      "message": "this creates inverted logic.  why not have a bool function, with false and true?",
+      "range": {
+        "startLine": 151,
+        "startChar": 8,
+        "endLine": 151,
+        "endChar": 9
+      },
+      "revId": "932026c0a357d52359b895fcad9bcca2b2d28af0",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
