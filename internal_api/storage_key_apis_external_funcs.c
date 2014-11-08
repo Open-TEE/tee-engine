@@ -105,7 +105,7 @@ void ext_delete_file(FILE *object_file, void *objectID, size_t objectIDLen)
 	char *name_with_dir_path;
 	char *dir_path;
 	size_t i;
-	char hex_ID[TEE_OBJ_ID_LEN_HEX];
+	char hex_ID[TEE_OBJ_ID_LEN_HEX] = {0};
 	char UUID[TEE_UUID_LEN_HEX];
 
 	if (objectIDLen > TEE_OBJECT_ID_MAX_LEN || objectID == NULL || !get_uuid(UUID))
@@ -113,8 +113,6 @@ void ext_delete_file(FILE *object_file, void *objectID, size_t objectIDLen)
 
 	for (i = 0; i < objectIDLen; ++i)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
-
-	hex_ID[ADD_NULL_CHAR_END_TO_HEX(objectIDLen)] = '\0';
 
 	if (asprintf(&dir_path, "%s%s/", SECURE_STORAGE_PATH, UUID) == -1) {
 		return; // TEE_ERROR_OUT_OF_MEMORY;
@@ -188,7 +186,7 @@ FILE *ext_request_for_open(void *objectID, size_t objectIDLen, size_t request_ac
 	char *name_with_dir_path;
 	char *dir_path;
 	size_t i;
-	char hex_ID[TEE_OBJ_ID_LEN_HEX];
+	char hex_ID[TEE_OBJ_ID_LEN_HEX] = {0};
 	char UUID[TEE_UUID_LEN_HEX];
 
 	if (objectIDLen > TEE_OBJECT_ID_MAX_LEN || objectID == NULL || !get_uuid(UUID))
@@ -196,8 +194,6 @@ FILE *ext_request_for_open(void *objectID, size_t objectIDLen, size_t request_ac
 
 	for (i = 0; i < objectIDLen; ++i)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
-
-	hex_ID[ADD_NULL_CHAR_END_TO_HEX(objectIDLen)] = '\0';
 
 	if (asprintf(&dir_path, "%s%s/", SECURE_STORAGE_PATH, UUID) == -1) {
 		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
@@ -227,7 +223,7 @@ FILE *ext_request_for_create(void *objectID, size_t objectIDLen, size_t request_
 	char *name_with_dir_path;
 	char *dir_path;
 	size_t i;
-	char hex_ID[TEE_OBJ_ID_LEN_HEX];
+	char hex_ID[TEE_OBJ_ID_LEN_HEX] = {0};
 	char UUID[TEE_UUID_LEN_HEX];
 	int ret_mkdir;
 
@@ -236,8 +232,6 @@ FILE *ext_request_for_create(void *objectID, size_t objectIDLen, size_t request_
 
 	for (i = 0; i < objectIDLen; ++i)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
-
-	hex_ID[ADD_NULL_CHAR_END_TO_HEX(objectIDLen)] = '\0';
 
 	if (asprintf(&dir_path, "%s%s/", SECURE_STORAGE_PATH, UUID) == -1) {
 		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
@@ -279,8 +273,8 @@ bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID
 {
 	char *name_with_dir_path;
 	char *new_name_with_dir_path;
-	char hex_ID[TEE_OBJ_ID_LEN_HEX];
-	char new_hex_ID[TEE_OBJ_ID_LEN_HEX];
+	char hex_ID[TEE_OBJ_ID_LEN_HEX] = {0};
+	char new_hex_ID[TEE_OBJ_ID_LEN_HEX] = {0};
 	char UUID[TEE_UUID_LEN_HEX];
 	size_t i;
 
@@ -291,12 +285,8 @@ bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID
 	for (i = 0; i < objectIDLen; ++i)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
-	hex_ID[ADD_NULL_CHAR_END_TO_HEX(objectIDLen)] = '\0';
-
 	for (i = 0; i < new_objectIDLen; ++i)
 		sprintf(new_hex_ID + i * 2, "%02x", *((unsigned char *)new_objectID + i));
-
-	new_hex_ID[ADD_NULL_CHAR_END_TO_HEX(new_objectIDLen)] = '\0';
 
 	if (asprintf(&name_with_dir_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, hex_ID) == -1) {
 		return false; // TEE_ERROR_OUT_OF_MEMORY;
@@ -364,6 +354,7 @@ void ext_free_enumerator(uint32_t free_enum_ID)
 	}
 
 	del_enum = enumerators_head;
+	prev_enum = del_enum;
 
 	if (enumerators_head->ID == free_enum_ID) {
 		del_enum = enumerators_head;
@@ -548,6 +539,8 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 
 	} while (next_object == NULL);
 
-	fclose(next_object);
+	if (next_object != NULL)
+		fclose(next_object);
+
 	return true;
 }
