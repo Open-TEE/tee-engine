@@ -21,6 +21,7 @@
 
 #include "com_protocol.h"
 #include "dynamic_loader.h"
+#include "ta_exit_states.h"
 #include "ta_extern_resources.h"
 #include "ta_internal_thread.h"
 #include "tee_data_types.h"
@@ -108,7 +109,7 @@ static void close_session(struct ta_task *in_task)
 
 	if (close_msg->should_ta_destroy) {
 		interface->destroy();
-		exit(EXIT_SUCCESS);
+		exit(TA_EXIT_DESTROY_ENTRY_EXEC);
 	}
 
 ignore_msg:
@@ -122,7 +123,7 @@ static void first_open_session_msg(struct com_msg_open_session *open_msg)
 	open_ta_task = calloc(1, sizeof(struct ta_task));
 	if (!open_ta_task) {
 		OT_LOG(LOG_ERR, "Out of memory");
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_FIRST_OPEN_SESS_FAILED);
 	}
 
 	open_ta_task->msg = open_msg;
@@ -192,6 +193,6 @@ void *ta_internal_thread(void *arg)
 	}
 
 	/* should never reach here */
-	exit(EXIT_FAILURE);
+	exit(TA_EXIT_PANICKED);
 	return NULL;
 }

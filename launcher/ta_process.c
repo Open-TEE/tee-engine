@@ -29,6 +29,7 @@
 #include "core_control_resources.h"
 #include "dynamic_loader.h"
 #include "epoll_wrapper.h"
+#include "ta_exit_states.h"
 #include "ta_extern_resources.h"
 #include "ta_internal_thread.h"
 #include "ta_io_thread.h"
@@ -77,14 +78,14 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	if (asprintf(&path, "%s/%s", control_params->opentee_conf->ta_dir_path,
 		     open_msg->ta_so_name) == -1) {
 		OT_LOG(LOG_ERR, "out of memory");
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
 	/* Load TA to this process */
 	ret = load_ta(path, &interface);
 	if (ret != TEE_SUCCESS || interface == NULL) {
 		OT_LOG(LOG_ERR, "Failed to load the TA");
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
 	/* Finished with the library path name so clean it up */
@@ -93,7 +94,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	/* Note: All signal are blocked. Prepare allow set when we can accept signals */
 	if (sigemptyset(&sig_empty_set)) {
 		OT_LOG(LOG_ERR, "Sigempty set failed: %s", strerror(errno))
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
 	/* create an eventfd, that will allow the writer to increment the count by 1
@@ -103,7 +104,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	event_fd = eventfd(0, EFD_SEMAPHORE);
 	if (event_fd == -1) {
 		OT_LOG(LOG_ERR, "Failed to initialize eventfd");
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
 	/* Initializations of TODO and DONE queues*/
@@ -112,25 +113,25 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 
 	/* Init epoll and register FD/data */
 	if (init_epoll())
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 
 	/* listen to inbound connections from the manager */
 	if (epoll_reg_fd(man_sockfd, EPOLLIN))
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 
 	/* listen for communications from the TA thread process */
 	if (epoll_reg_fd(event_fd, EPOLLIN))
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 
 	/* Signal handling */
 	if (epoll_reg_fd(control_params->self_pipe_fd, EPOLLIN))
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 
 	/* Init worker thread */
 	ret = pthread_attr_init(&attr);
 	if (ret) {
 		OT_LOG(LOG_ERR, "Failed to create attr for thread: %s", strerror(errno))
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
 	/* TODO: Should we reserver space for thread stack? */
@@ -138,7 +139,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 	if (ret) {
 		OT_LOG(LOG_ERR, "Failed set DETACHED: %s", strerror(errno))
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
 	/* limitation: CA can not determ if TA is launched or not, because framework is calling
@@ -146,7 +147,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	 * into one return value. */
 	if (interface->create() != TEE_SUCCESS) {
 		OT_LOG(LOG_ERR, "TA create entry point failed");
-		exit(EXIT_SUCCESS);
+		exit(TA_EXIT_CREATE_ENTRY_FAILED);
 	}
 
 	/* Launch worker thread and pass open session message as a parameter */
@@ -154,7 +155,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	if (ret) {
 		OT_LOG(LOG_ERR, "Failed launch thread: %s", strerror(errno))
 		interface->destroy();
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_FIRST_OPEN_SESS_FAILED);
 	}
 
 	pthread_attr_destroy(&attr); /* Not needed any more */
@@ -162,7 +163,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	/* Allow signal delivery */
 	if (pthread_sigmask(SIG_SETMASK, &sig_empty_set, NULL)) {
 		OT_LOG(LOG_ERR, "failed to allow signals: %s", strerror(errno))
-		exit(EXIT_FAILURE);
+		exit(TA_EXIT_FIRST_OPEN_SESS_FAILED);
 	}
 
 	/* Enter into the main part of this io_thread */
@@ -196,5 +197,5 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	}
 
 	/* Should never reach here */
-	exit(EXIT_FAILURE);
+	exit(TA_EXIT_PANICKED);
 }
