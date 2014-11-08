@@ -45,7 +45,13 @@ struct __TEE_ObjectEnumHandle {
 	uint32_t ID;
 };
 
-#define KEY_IN_BYTES(key_in_bits) ((key_in_bits + 7) / 8)
+static inline int keysize_in_bits(uint32_t key_in_bits)
+{
+	if (key_in_bits <= UINT_MAX - 7)
+		key_in_bits += 7;
+
+	return key_in_bits / 8;
+}
 
 static void release_file(TEE_ObjectHandle object, FILE *obj_file, void *objectID,
 			 size_t objectIDLen)
@@ -395,13 +401,13 @@ static TEE_Result gen_des_key(TEE_ObjectHandle object, uint32_t keySize)
 
 static TEE_Result gen_symmetric_key(TEE_ObjectHandle object, uint32_t keySize)
 {
-	if (!RAND_bytes(object->attrs->content.ref.buffer, KEY_IN_BYTES(keySize))) {
+	if (!RAND_bytes(object->attrs->content.ref.buffer, keysize_in_bits(keySize))) {
 		OT_LOG(LOG_ERR, "Cannot create random bytes (openssl failure)\n");
 		return TEE_ERROR_GENERIC;
 	}
 
 	object->attrs->attributeID = TEE_ATTR_SECRET_VALUE;
-	object->attrs->content.ref.length = KEY_IN_BYTES(keySize);
+	object->attrs->content.ref.length = keysize_in_bits(keySize);
 
 	return TEE_SUCCESS;
 }
@@ -924,14 +930,14 @@ static uint32_t key_raw_size(uint32_t objectType, uint32_t key)
 	case TEE_TYPE_AES:
 	case TEE_TYPE_DES:
 		/* Always 56 bit 8 parity bit = 64bit */
-		return KEY_IN_BYTES(key) + 1;
+		return keysize_in_bits(key) + 1;
 
 	case TEE_TYPE_DES3:
 		if (key == 112)
-			return KEY_IN_BYTES(key) + 2;
+			return keysize_in_bits(key) + 2;
 
 		if (key == 168)
-			return KEY_IN_BYTES(key) + 3;
+			return keysize_in_bits(key) + 3;
 
 	case TEE_TYPE_HMAC_MD5:
 	case TEE_TYPE_HMAC_SHA1:
@@ -946,7 +952,7 @@ static uint32_t key_raw_size(uint32_t objectType, uint32_t key)
 	case TEE_TYPE_DSA_KEYPAIR:
 	case TEE_TYPE_DH_KEYPAIR:
 	default:
-		return KEY_IN_BYTES(key);
+		return keysize_in_bits(key);
 	}
 }
 
@@ -1535,7 +1541,7 @@ TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t o
 	/* Reproduct/fill rest of object parameters */
 	new_object->per_object.object_file = per_storage_file;
 	per_storage_file = NULL;
-	new_object->maxObjSizeBytes = KEY_IN_BYTES(new_object->objectInfo.maxObjectSize);
+	new_object->maxObjSizeBytes = keysize_in_bits(new_object->objectInfo.maxObjectSize);
 
 	/* Load object attributes */
 	ret_val = load_attributes(new_object);
