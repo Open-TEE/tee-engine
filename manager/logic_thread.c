@@ -19,6 +19,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "com_protocol.h"
@@ -26,6 +27,7 @@
 #include "h_table.h"
 #include "io_thread.h"
 #include "socket_help.h"
+#include "ta_exit_states.h"
 #include "ta_dir_watch.h"
 #include "tee_list.h"
 #include "tee_logging.h"
@@ -100,7 +102,10 @@ static void free_proc(proc_t del_proc)
 	while (1) {
 		proc_sess = h_table_step(del_proc->content.process.links);
 		if (proc_sess)
-			free_sess(proc_sess);
+			free(h_table_remove(del_proc->content.process.links,
+					    (unsigned char *)
+					    (&proc_sess->content.sesLink.session_id),
+					    sizeof(uint64_t)));
 		else
 			break;
 	}
@@ -130,27 +135,20 @@ skip:
 			       (unsigned char *)&del_proc->content.process.pid, sizeof(pid_t));
 	}
 
-	/* Unreg socket from epoll and close */
-	if ((del_proc->content.process.status == proc_uninitialized ||
-	     del_proc->content.process.status == proc_initialized ||
-	     del_proc->content.process.status == proc_active) &&
-	    epoll_unreg(del_proc->sockfd) == -1)
-		OT_LOG(LOG_ERR, "Failed to unreg socket");
-
 	add_and_notify_io_sock_to_close(del_proc->sockfd);
 
 	free(del_proc);
 	del_proc = NULL;
 }
 
-static void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
+static bool add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 {
 	const uint64_t event = 1;
 
 	/* Lock task queue from logic thread */
 	if (pthread_mutex_lock(&done_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
-		return;
+		return false;
 	}
 
 	/* enqueue the task manager queue */
@@ -166,6 +164,8 @@ static void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 		OT_LOG(LOG_ERR, "Failed to notify the io thread");
 		/* TODO/PLACEHOLDER: notify IO thread */
 	}
+
+	return true;
 }
 
 static void gen_err_msg_and_add_to_out(struct manager_msg *man_msg, uint32_t err_origin,
@@ -621,6 +621,7 @@ static void open_session_query(struct manager_msg *man_msg)
 	return;
 
 err:
+	epoll_unreg(new_ta->sockfd);
 	free_proc(new_ta);
 	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 }
@@ -719,6 +720,12 @@ static void ca_finalize_context(struct manager_msg *man_msg)
 		OT_LOG(LOG_ERR, "Invalid sender process or status");
 		goto ignore_msg;
 	}
+
+	man_msg->proc->content.process.status = proc_disconnected;
+
+	/* No more messages from this CA */
+	if (epoll_unreg(man_msg->proc->sockfd))
+		OT_LOG(LOG_ERR, "Failed to unreg socket");
 
 	free_proc(man_msg->proc); /* Del client proc */
 
@@ -824,7 +831,12 @@ static void close_session(struct manager_msg *man_msg)
 		session->content.sesLink.status = sess_closed;
 		session->content.sesLink.to->content.sesLink.status = sess_closed;
 		/* No new open session message to TA */
-		session->content.sesLink.owner->content.process.status = proc_disconnected;
+		session->content.sesLink.to->content.sesLink.owner->content.process.status
+				= proc_disconnected;
+
+		/* No more messages from this TA */
+		if (epoll_unreg(session->content.sesLink.to->content.sesLink.owner->sockfd))
+			OT_LOG(LOG_ERR, "Failed to unreg socket");
 
 	} else {
 		/* Remove sessions, because TA will be not terminated */
@@ -840,6 +852,151 @@ static void close_session(struct manager_msg *man_msg)
 
 ignore_msg:
 	free_manager_msg(man_msg);
+}
+
+static void set_all_ta_sess_status(proc_t ta, enum session_status new_status)
+{
+	proc_t proc_sess;
+
+	h_table_init_stepper(ta->content.process.links);
+	while (1) {
+		proc_sess = h_table_step(ta->content.process.links);
+		if (proc_sess)
+			proc_sess->content.sesLink.to->content.sesLink.status = new_status;
+		 else
+			break;
+	}
+}
+
+static void send_err_to_initialized_sess(proc_t ta)
+{
+	struct manager_msg *man_msg = NULL;
+	proc_t proc_sess;
+
+	h_table_init_stepper(ta->content.process.links);
+	while (1) {
+
+		proc_sess = h_table_step(ta->content.process.links);
+		if (!proc_sess)
+			break;
+
+		if (proc_sess->content.sesLink.status != sess_initialized)
+			continue;
+
+		man_msg = calloc(1, sizeof(struct manager_msg));
+		if (!man_msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			continue;
+		}
+
+		man_msg->msg = calloc(1, sizeof(struct com_msg_error));
+		if (!man_msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			free(man_msg);
+			continue;
+		}
+
+		man_msg->msg_len = sizeof(struct com_msg_error);
+		man_msg->proc = proc_sess->content.sesLink.to->content.sesLink.owner;
+
+		((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
+
+		if (!add_msg_out_queue_and_notify(man_msg)) {
+			OT_LOG(LOG_ERR, "Failed to add out queue")
+			free(man_msg);
+		}
+
+	}
+}
+
+static void ta_status_change(pid_t ta_pid, int status)
+{
+	proc_t ta = NULL;
+
+	ta = h_table_get(trustedApps, (unsigned char *)&ta_pid, sizeof(pid_t));
+	if (!ta || ta->p_type != proc_t_TA) {
+		OT_LOG(LOG_ERR, "TA is not found or Something else has changed status");
+		return;
+	}
+
+	/* Signal caused termination */
+	if (WIFSIGNALED(status)) {
+		set_all_ta_sess_status(ta, sess_panicked);
+		free_proc(ta);
+	}
+
+	if (WIFEXITED(status)) {
+
+		if (WEXITSTATUS(status) == TA_EXIT_CREATE_ENTRY_FAILED) {
+			set_all_ta_sess_status(ta, sess_closed);
+			send_err_to_initialized_sess(ta);
+			if (should_ta_destroy(ta) == 1)
+				free_proc(ta);
+
+		} else if (WEXITSTATUS(status) == TA_EXIT_DESTROY_ENTRY_EXEC) {
+			set_all_ta_sess_status(ta, sess_closed);
+			free_proc(ta);
+
+		} else if (WEXITSTATUS(status) == TA_EXIT_PANICKED) {
+			set_all_ta_sess_status(ta, sess_panicked);
+			free_proc(ta);
+
+		} else if (WEXITSTATUS(status) == TA_EXIT_LAUNCH_FAILED) {
+			set_all_ta_sess_status(ta, sess_panicked);
+			send_err_to_initialized_sess(ta);
+			free_proc(ta);
+
+		} else if (WEXITSTATUS(status) == TA_EXIT_FIRST_OPEN_SESS_FAILED) {
+			set_all_ta_sess_status(ta, sess_panicked);
+			send_err_to_initialized_sess(ta);
+			if (should_ta_destroy(ta) == 1)
+				free_proc(ta);
+		} else {
+			OT_LOG(LOG_ERR, "Unknow exit status, handeled as panic!");
+			set_all_ta_sess_status(ta, sess_panicked);
+			if (should_ta_destroy(ta) == 1)
+				free_proc(ta);
+		}
+	}
+}
+
+static void proc_changed_state(struct manager_msg *man_msg)
+{
+	pid_t changed_proc_pid;
+	int status;
+
+	free_manager_msg(man_msg); /* No information */
+
+	/* wait for children, to reap the zombies */
+	while (1) {
+
+		changed_proc_pid = waitpid(-1, &status, WNOHANG);
+		if (!changed_proc_pid)
+			break;
+
+		/*
+		if (changed_proc_pid == launcher_pid) {
+			launcher_status_change(status);
+			continue;
+		}
+		*/
+
+		if (WIFCONTINUED(status)) {
+			OT_LOG(LOG_ERR, "Recv continue sig"); /* No action needed */
+			continue;
+		}
+
+		/* Signal caused stop. Note. No action, just logging */
+		if (WIFSTOPPED(status)) {
+			OT_LOG(LOG_ERR, "recvstop signal");
+			continue;
+		}
+
+		/* Note: If proc status is not continued or stopped, it is terminated. So no
+		 * more socket communication to that process. Close sockets and change status */
+
+		ta_status_change(changed_proc_pid, status);
+	}
 }
 
 void *logic_thread_mainloop(void *arg)
@@ -880,16 +1037,16 @@ void *logic_thread_mainloop(void *arg)
 			free_manager_msg(handled_msg);
 			continue;
 		}
-
+/*
 		if (!handled_msg->proc) {
 			OT_LOG(LOG_ERR, "Error with sender details");
 			free_manager_msg(handled_msg);
 			continue;
 		}
-
+*/
 		switch (com_msg_name) {
 		case COM_MSG_NAME_PROC_STATUS_CHANGE:
-
+			proc_changed_state(handled_msg);
 			break;
 
 		case COM_MSG_NAME_FD_ERR:

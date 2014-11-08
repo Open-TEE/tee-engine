@@ -114,16 +114,6 @@ err_out:
 	return -1;
 }
 
-static void manager_check_signal(struct core_control *control_params, struct epoll_event *event)
-{
-	/* Placeholder */
-	sig_atomic_t cpy_sig_vec = control_params->sig_vector;
-	control_params->reset_signal_self_pipe();
-	event = event;
-
-	cpy_sig_vec = cpy_sig_vec; /* Suppress compiler warning */
-}
-
 static int init_extern_res(int launcher_proc_fd)
 {
 	trustedApps = NULL;

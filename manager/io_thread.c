@@ -15,10 +15,12 @@
 *****************************************************************************/
 
 #include <errno.h>
+#include <signal.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "com_protocol.h"
+#include "core_control_resources.h"
 #include "io_thread.h"
 #include "extern_resources.h"
 #include "socket_help.h"
@@ -393,4 +395,44 @@ void handle_close_sock(struct epoll_event *event)
 
 	if (pthread_mutex_unlock(&socks_to_close_mutex))
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+}
+
+void manager_check_signal(struct core_control *control_params, struct epoll_event *event)
+{
+	struct manager_msg *new_man_msg = NULL;
+
+	if (check_event_fd_epoll_status(event))
+		return; /* err msg logged */
+
+	/* Copy signal vector and reset self pipe so we do not miss any events */
+	sig_atomic_t cpy_sig_vec = control_params->sig_vector;
+	control_params->reset_signal_self_pipe();
+
+	if (cpy_sig_vec & TEE_SIG_CHILD) {
+
+		/* Possible defect: If we can not signal to logic thread about SIGCHLD,
+		 * process is not reapet. It might get reapet when TA proc causes FD event */
+		new_man_msg = calloc(1, sizeof(struct manager_msg));
+		if (!new_man_msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			return;
+		}
+
+		new_man_msg->msg = calloc(1, sizeof(struct com_msg_proc_status_change));
+		if (!new_man_msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			free(new_man_msg);
+			return;
+		}
+
+		/* Note: No message len needed, because this is not send out */
+
+		((struct com_msg_proc_status_change *)new_man_msg->msg)->msg_hdr.msg_name =
+				COM_MSG_NAME_PROC_STATUS_CHANGE;
+
+		if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
+			OT_LOG(LOG_ERR, "Failed to add out queue")
+			free(new_man_msg);
+		}
+	}
 }
