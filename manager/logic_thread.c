@@ -229,11 +229,11 @@ discard_msg:
 
 static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
 {
-	free_sess(h_table_get(owner->content.process.links, (unsigned char *)(&sess_id),
-			      sizeof(uint64_t)));
+	free(h_table_remove(owner->content.process.links, (unsigned char *)(&sess_id),
+			    sizeof(uint64_t)));
 
-	free_sess(h_table_get(to->content.process.links, (unsigned char *)(&sess_id),
-			      sizeof(uint64_t)));
+	free(h_table_remove(to->content.process.links, (unsigned char *)(&sess_id),
+			    sizeof(uint64_t)));
 }
 
 static void open_session_response(struct manager_msg *man_msg)
