@@ -243,7 +243,7 @@ void ta_dir_watch_event(struct epoll_event *e_event, int *man_ta_dir_watch_fd)
 {
 	uint8_t buf[BUF_LEN], *i;
 	int num_read;
-	struct inotify_event *i_event;
+	struct inotify_event *i_event = NULL;
 
 	if (!(e_event->events & EPOLLIN)) {
 		OT_LOG(LOG_ERR, "Inotify fd EPOLLERR");

@@ -134,7 +134,7 @@ static void first_open_session_msg(struct com_msg_open_session *open_msg)
 void *ta_internal_thread(void *arg)
 {
 	int ret;
-	struct ta_task *task;
+	struct ta_task *task = NULL;
 	uint8_t com_msg_name;
 
 	first_open_session_msg(arg);
@@ -156,7 +156,8 @@ void *ta_internal_thread(void *arg)
 		}
 
 		task = LIST_ENTRY(tasks_todo.list.next, struct ta_task, list);
-		list_unlink(&task->list);
+		if (task)
+			list_unlink(&task->list);
 
 		/* free the lock so more tasks can be added */
 		ret = pthread_mutex_unlock(&todo_list_mutex);

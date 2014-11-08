@@ -226,8 +226,11 @@ static int add_man_msg_todo_queue_and_notify(struct manager_msg *msg)
 
 void free_manager_msg(struct manager_msg *released_msg)
 {
-	free(released_msg->msg);
-	free(released_msg);
+	/* must check NULL as we are dereferencing it to access the msg part */
+	if (released_msg != NULL) {
+		free(released_msg->msg);
+		free(released_msg);
+	}
 }
 
 void handle_out_queue(struct epoll_event *event)

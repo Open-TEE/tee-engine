@@ -268,8 +268,7 @@ void *h_table_step(HASHTABLE table)
 	if (table->h_table_size > table->x_index)
 		table->x_index++;
 
-	for (table->x_index = table->x_index; table->x_index < table->h_table_size;
-	     ++table->x_index) {
+	for (; table->x_index < table->h_table_size; ++table->x_index) {
 
 		if (table->buckets[table->x_index]) {
 			table->y_index = table->buckets[table->x_index]->next;

@@ -148,7 +148,7 @@ int load_lib(char *path, main_loop_cb *callback)
 
 	*(void **)(callback) = dlsym(lib, "lib_main_loop");
 	err = dlerror();
-	if (err != NULL || !callback) {
+	if (err != NULL || !*callback) {
 		OT_LOG(LOG_DEBUG, "Failed to find lib_main_loop");
 		ret = -1;
 	}

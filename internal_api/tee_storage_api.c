@@ -594,8 +594,8 @@ static TEE_Result gen_dh_keypair(TEE_ObjectHandle object, TEE_Attribute *params,
 		goto ret;
 	}
 
-	if (!bn_to_obj_ref_attr(dh_key->pub_key, TEE_ATTR_DH_PUBLIC_VALUE, object, i++) == -1 ||
-	    !bn_to_obj_ref_attr(dh_key->priv_key, TEE_ATTR_DH_PRIVATE_VALUE, object, i++) == -1) {
+	if (!bn_to_obj_ref_attr(dh_key->pub_key, TEE_ATTR_DH_PUBLIC_VALUE, object, i++) ||
+	    !bn_to_obj_ref_attr(dh_key->priv_key, TEE_ATTR_DH_PRIVATE_VALUE, object, i++)) {
 		ret_val = TEE_ERROR_GENERIC;
 		goto ret;
 	}
@@ -1476,10 +1476,10 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
 				    uint32_t flags, TEE_ObjectHandle *object)
 {
-	TEE_ObjectHandle new_object;
+	TEE_ObjectHandle new_object = NULL;
 	struct storage_obj_meta_data meta_info_from_storage;
 	TEE_Result ret_val = TEE_SUCCESS;
-	FILE *per_storage_file;
+	FILE *per_storage_file = NULL;
 
 	if (object == NULL)
 		return TEE_ERROR_GENERIC;
@@ -1518,6 +1518,11 @@ TEE_Result TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t o
 		  per_storage_file) != 1) {
 		OT_LOG(LOG_ERR, "Cannot read object meta data\n");
 		ret_val = TEE_ERROR_GENERIC;
+		goto err;
+	}
+
+	if (meta_info_from_storage.obj_id_len > TEE_OBJECT_ID_MAX_LEN) {
+		OT_LOG(LOG_ERR, "meta_info_from_storage.obj_id_len length too big\n");
 		goto err;
 	}
 

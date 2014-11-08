@@ -849,53 +849,52 @@ static bool object_type_compatible_to_op(uint32_t obj_type, uint32_t op_mode)
 static TEE_Result valid_key_and_operation(TEE_ObjectHandle key, TEE_OperationHandle operation)
 {
 	if (!(key->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED)) {
-		OT_LOG(LOG_ERR, "valid_key_and_operation: Key is not initialized\n");
+		OT_LOG(LOG_ERR, "Key is not initialized\n");
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
 	if (operation->op_state == TEE_OP_STATE_ACTIVE) {
-		OT_LOG(LOG_ERR, "valid_key_and_operation: Operation in active state\n");
+		OT_LOG(LOG_ERR, "Operation in active state\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
 	if ((operation->operation_info.operationClass == TEE_OPERATION_CIPHER ||
 	     operation->operation_info.operationClass == TEE_OPERATION_MAC) &&
 	    operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) {
-		OT_LOG(LOG_ERR, "valid_key_and_operation: Operation is initialized\n");
+		OT_LOG(LOG_ERR, "Operation is initialized\n");
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
 	if (operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET) {
-		OT_LOG(LOG_ERR, "valid_key_and_operation: Operation key is set");
+		OT_LOG(LOG_ERR, "Operation key is set");
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
-	if ((operation->operation_info.mode == TEE_MODE_DIGEST) && key) {
-		OT_LOG(LOG_ERR, "valid_key_and_operation: Not expected a key\n");
+	if (operation->operation_info.mode == TEE_MODE_DIGEST) {
+		OT_LOG(LOG_ERR, "Not expected a key\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
 	if (key->objectInfo.maxObjectSize > operation->operation_info.maxKeySize) {
-		OT_LOG(LOG_ERR, "valid_key_and_operation: Key does not fit to operation\n");
+		OT_LOG(LOG_ERR, "Key does not fit to operation\n");
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
 	if (!object_type_compatible_to_op(key->objectInfo.objectType,
 					  operation->operation_info.mode)) {
-		OT_LOG(LOG_ERR, "valid_key_and_operation: Not compatible operation mode for key\n");
+		OT_LOG(LOG_ERR, "Not compatible operation mode for key\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
 	if (!valid_key_type_for_operation_algorithm(key->objectInfo.objectType,
 						    operation->operation_info.algorithm)) {
-		OT_LOG(LOG_ERR,
-		       "valid_key_and_operation: Key does not match operation algorithm\n");
+		OT_LOG(LOG_ERR, "Key does not match operation algorithm\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
 	if (!key_usage_allow_operation(key->objectInfo.objectUsage, operation->operation_info.mode,
 				       operation->operation_info.algorithm)) {
-		OT_LOG(LOG_ERR, "valid_key_and_operation: Key does not allow operation\n");
+		OT_LOG(LOG_ERR, "Key does not allow operation\n");
 		return TEE_ERROR_BAD_STATE;
 	}
 
@@ -1463,14 +1462,8 @@ static int get_rsa_salt(TEE_Attribute *params, uint32_t paramCount)
 
 	if (params) {
 		for (i = 0; i < paramCount; ++i) {
-			if (params[i].attributeID == TEE_ATTR_RSA_PSS_SALT_LENGTH) {
-				if (params[i].content.value.a > UINT_MAX) {
-					OT_LOG(LOG_ERR, "get_rsa_salt: Salt is too big\n");
-					TEE_Panic(TEE_ERROR_OVERFLOW);
-				}
-
+			if (params[i].attributeID == TEE_ATTR_RSA_PSS_SALT_LENGTH)
 				return params[i].content.value.a;
-			}
 		}
 	}
 	return -1;
