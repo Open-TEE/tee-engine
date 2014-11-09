@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <gelf.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -73,6 +74,41 @@ static void remove_all_tas()
 	ta_dir_watch_unlock_mutex();
 }
 
+static bool does_name_and_uuid_in_table(struct trusted_app_propertie *new_ta)
+{
+	struct trusted_app_propertie *ta_in_table;
+	bool ret = false;
+
+	if (ta_dir_watch_lock_mutex())
+		return true;
+
+	h_table_init_stepper(ta_dir_table);
+
+	while (1) {
+		ta_in_table = h_table_step(ta_dir_table);
+		if (!ta_in_table)
+			break;
+
+		if (!strncasecmp(ta_in_table->ta_so_name, new_ta->ta_so_name,
+				 strlen(ta_in_table->ta_so_name))) {
+			OT_LOG(LOG_ERR, "TA .so name is already in use");
+			ret = true;
+			goto end;
+		}
+
+		if (!bcmp(&ta_in_table->user_config.appID, &new_ta->user_config.appID,
+			  sizeof(TEE_UUID))) {
+			OT_LOG(LOG_ERR, "TA uuid is already in use");
+			ret = true;
+			goto end;
+		}
+	}
+
+end:
+	ta_dir_watch_unlock_mutex();
+	return ret;
+}
+
 static void add_new_ta(char *name)
 {
 	char *ta_with_path = NULL;
@@ -103,6 +139,9 @@ static void add_new_ta(char *name)
 	}
 
 	memcpy(&new_ta_propertie->ta_so_name, name, strlen(name));
+
+	if (does_name_and_uuid_in_table(new_ta_propertie))
+		goto err;
 
 	if (ta_dir_watch_lock_mutex()) {
 		/* Lets hope that errot clear it shelf..
