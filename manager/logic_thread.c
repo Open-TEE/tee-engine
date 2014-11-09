@@ -242,9 +242,15 @@ static void open_session_response(struct manager_msg *man_msg)
 	proc_t ta_session;
 
 	/* Message can be received only from trusted App! */
-	if (man_msg->proc->p_type != proc_t_TA ||
-	    man_msg->proc->content.process.status != proc_active) {
+	if (man_msg->proc->p_type != proc_t_TA) {
 		OT_LOG(LOG_ERR, "Invalid sender");
+		goto ignore_msg;
+
+	}
+
+	if (!(man_msg->proc->content.process.status == proc_active ||
+	      man_msg->proc->content.process.status == proc_initialized)) {
+		OT_LOG(LOG_ERR, "Invalid sender status");
 		goto ignore_msg;
 	}
 
@@ -259,7 +265,7 @@ static void open_session_response(struct manager_msg *man_msg)
 
 	if (ta_session->content.sesLink.status != sess_initialized ||
 	    ta_session->content.sesLink.to->content.sesLink.status != sess_initialized) {
-		OT_LOG(LOG_ERR, "Invalid TA or TA session TO status");
+		OT_LOG(LOG_ERR, "Invalid session status");
 		goto ignore_msg;
 	}
 
@@ -276,6 +282,9 @@ static void open_session_response(struct manager_msg *man_msg)
 		/* Update session status to active */
 		ta_session->content.sesLink.status = sess_active;
 		ta_session->content.sesLink.to->content.sesLink.status = sess_active;
+
+		/* Proc can be set active if TA create entry point func is executed */
+		ta_session->content.sesLink.owner->content.process.status = proc_active;
 	}
 
 	/* Send message to its initial sender
@@ -496,20 +505,42 @@ static bool does_ta_exist_and_connectable(struct manager_msg *man_msg,
 	memcpy(&((struct com_msg_open_session *)man_msg->msg)->ta_so_name,
 	       ta_propertie->ta_so_name, TA_MAX_FILE_NAME);
 
-	if (*conn_ta && ((*conn_ta)->content.process.status == proc_active ||
-			 (*conn_ta)->content.process.status == proc_initialized ||
-			 (*conn_ta)->content.process.status == proc_uninitialized) &&
-	    ta_propertie->user_config.singletonInstance) {
-		ret = true;
-		goto ret; /* Singleton and TA running */
+	if (*conn_ta && ta_propertie->user_config.singletonInstance) {
+
+		if ((*conn_ta)->content.process.status == proc_active) {
+			ret = true;
+			goto ret; /* Singleton and TA running */
+		}
+
+		/* TA is being to initialized and we can not predict if initialization will
+		 * success --> do not accept new open session msg */
+		if ((*conn_ta)->content.process.status == proc_initialized ||
+		    (*conn_ta)->content.process.status == proc_uninitialized) {
+			gen_err_msg_and_add_to_out(man_msg,
+						   TEE_ORIGIN_TEE, TEE_ERROR_ACCESS_CONFLICT);
+			ret = false;
+			goto ret;
+		}
+
+		/* End up here: TA is disconnected -> new TA will be launched */
 	}
 
-	if (*conn_ta && ((*conn_ta)->content.process.status == proc_active ||
-			 (*conn_ta)->content.process.status == proc_initialized ||
-			 (*conn_ta)->content.process.status == proc_uninitialized) &&
-	    ta_propertie->user_config.instanceKeepAlive) {
-		ret = true;
-		goto ret; /* Keep alive and TA running */
+	if (*conn_ta && ta_propertie->user_config.instanceKeepAlive) {
+
+		if ((*conn_ta)->content.process.status == proc_active) {
+			ret = true;
+			goto ret; /* Keep alive and TA running */
+		}
+
+		if ((*conn_ta)->content.process.status == proc_initialized ||
+		    (*conn_ta)->content.process.status == proc_uninitialized) {
+			gen_err_msg_and_add_to_out(man_msg,
+						   TEE_ORIGIN_TEE, TEE_ERROR_ACCESS_CONFLICT);
+			ret = false;
+			goto ret;
+		}
+
+		/* End up here: TA is disconnected -> new TA will be launched */
 	}
 
 	/* If none of them were true, basic action is launch new TA */
@@ -554,8 +585,8 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid, pr
 		goto err_2;
 	}
 
-	/* TA ready for communication */
-	(*new_ta_proc)->content.process.status = proc_active;
+	/* TA initialization is going on */
+	(*new_ta_proc)->content.process.status = proc_initialized;
 
 	return 0;
 
@@ -582,6 +613,8 @@ static void open_session_query(struct manager_msg *man_msg)
 
 	/* SessID is needed when message is sent back from TA */
 	open_msg->msg_hdr.sess_id = new_session_id;
+
+	/* TODO: Check TA state (may have panicked)! */
 
 	/* Note: Function will return TRUE/FALSE, but this boolean is not about should we
 	 * connect to existing TA. If function return FALSE, TA might not be availible in TA
@@ -636,9 +669,8 @@ static void open_session_msg(struct manager_msg *man_msg)
 	}
 
 	/* Function is only valid for proc FDs */
-	if (man_msg->proc->p_type == proc_t_session ||
-	    man_msg->proc->content.process.status != proc_active) {
-		OT_LOG(LOG_ERR, "Invalid sender or senders status");
+	if (man_msg->proc->p_type == proc_t_session) {
+		OT_LOG(LOG_ERR, "Invalid sender");
 		goto discard_msg;
 	}
 
@@ -1037,13 +1069,13 @@ void *logic_thread_mainloop(void *arg)
 			free_manager_msg(handled_msg);
 			continue;
 		}
-/*
-		if (!handled_msg->proc) {
+
+		if (com_msg_name != COM_MSG_NAME_PROC_STATUS_CHANGE && !handled_msg->proc) {
 			OT_LOG(LOG_ERR, "Error with sender details");
 			free_manager_msg(handled_msg);
 			continue;
 		}
-*/
+
 		switch (com_msg_name) {
 		case COM_MSG_NAME_PROC_STATUS_CHANGE:
 			proc_changed_state(handled_msg);
