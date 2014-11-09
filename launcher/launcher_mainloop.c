@@ -85,7 +85,7 @@ int lib_main_loop(struct core_control *ctl_params)
 	pid_t new_proc_pid;
 	struct com_msg_open_session *recv_open_msg = NULL;
 	struct com_msg_ta_created new_ta_info;
-	int recv_bytes, ret, event_count, i;
+	int ret, event_count, i;
 	sigset_t sig_empty_set, sig_block_set;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
 
@@ -161,8 +161,7 @@ int lib_main_loop(struct core_control *ctl_params)
 				exit(EXIT_FAILURE);
 			}
 
-			ret = com_recv_msg(ctl_params->comm_sock_fd, (void **)&recv_open_msg,
-					   &recv_bytes);
+			ret = com_recv_msg(ctl_params->comm_sock_fd, (void **)&recv_open_msg, NULL);
 			if (ret == -1) {
 				free(recv_open_msg);
 				/* TODO: Figur out why -1, but for now lets
@@ -218,15 +217,14 @@ int lib_main_loop(struct core_control *ctl_params)
 				}
 
 			} else {
+				/* Launcher process */
+
 				new_ta_info.pid = new_proc_pid;
 
-				/* We have to send kill signal to TA, because
-				 * SIGTERM might not be executed if TA is "stuck" in
-				 * create entry or open session function */
+				ret = com_send_msg(ctl_params->comm_sock_fd, &new_ta_info,
+						   sizeof(struct com_msg_ta_created);
 
-				if (com_send_msg(ctl_params->comm_sock_fd, &new_ta_info,
-						 sizeof(struct com_msg_ta_created)) ==
-				    sizeof(struct com_msg_ta_created)) {
+				if (ret == sizeof(struct com_msg_ta_created)) {
 
 					if (send_fd(ctl_params->comm_sock_fd, sockfd[0]) == -1) {
 						OT_LOG(LOG_ERR, "Failed to send TA sock");
