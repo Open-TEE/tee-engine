@@ -893,10 +893,37 @@ static void set_all_ta_sess_status(proc_t ta, enum session_status new_status)
 	h_table_init_stepper(ta->content.process.links);
 	while (1) {
 		proc_sess = h_table_step(ta->content.process.links);
-		if (proc_sess)
+		if (proc_sess) {
 			proc_sess->content.sesLink.to->content.sesLink.status = new_status;
-		 else
+			proc_sess->content.sesLink.status = new_status;
+		} else {
 			break;
+		}
+	}
+}
+
+static void rm_all_ta_sessions(proc_t ta)
+{
+	proc_t proc_sess;
+
+	h_table_init_stepper(ta->content.process.links);
+	while (1) {
+		proc_sess = h_table_step(ta->content.process.links);
+		if (proc_sess) {
+
+			/* Remove session from CA */
+			free(h_table_remove(proc_sess->content.sesLink.to->
+					    content.sesLink.owner->content.process.links,
+					    (unsigned char *)&proc_sess->content.sesLink.session_id,
+					    sizeof(uint64_t)));
+
+			/* Remove session from TA */
+			free(h_table_remove(proc_sess->content.sesLink.owner->content.process.links,
+					    (unsigned char *)&proc_sess->content.sesLink.session_id,
+					    sizeof(uint64_t)));
+		} else {
+			break;
+		}
 	}
 }
 
@@ -960,13 +987,12 @@ static void ta_status_change(pid_t ta_pid, int status)
 	if (WIFEXITED(status)) {
 
 		if (WEXITSTATUS(status) == TA_EXIT_CREATE_ENTRY_FAILED) {
-			set_all_ta_sess_status(ta, sess_closed);
 			send_err_to_initialized_sess(ta);
+			rm_all_ta_sessions(ta);
 			if (should_ta_destroy(ta) == 1)
 				free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_DESTROY_ENTRY_EXEC) {
-			set_all_ta_sess_status(ta, sess_closed);
 			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_PANICKED) {
@@ -974,15 +1000,16 @@ static void ta_status_change(pid_t ta_pid, int status)
 			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_LAUNCH_FAILED) {
-			set_all_ta_sess_status(ta, sess_panicked);
 			send_err_to_initialized_sess(ta);
+			rm_all_ta_sessions(ta);
 			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_FIRST_OPEN_SESS_FAILED) {
-			set_all_ta_sess_status(ta, sess_panicked);
 			send_err_to_initialized_sess(ta);
+			rm_all_ta_sessions(ta);
 			if (should_ta_destroy(ta) == 1)
 				free_proc(ta);
+
 		} else {
 			OT_LOG(LOG_ERR, "Unknow exit status, handeled as panic!");
 			set_all_ta_sess_status(ta, sess_panicked);
