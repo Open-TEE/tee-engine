@@ -222,7 +222,7 @@ int lib_main_loop(struct core_control *ctl_params)
 				new_ta_info.pid = new_proc_pid;
 
 				ret = com_send_msg(ctl_params->comm_sock_fd, &new_ta_info,
-						   sizeof(struct com_msg_ta_created);
+						   sizeof(struct com_msg_ta_created));
 
 				if (ret == sizeof(struct com_msg_ta_created)) {
 
