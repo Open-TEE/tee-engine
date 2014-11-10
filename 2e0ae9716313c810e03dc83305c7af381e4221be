@@ -1,0 +1,119 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a6b29fe_f76328af",
+        "filename": "manager/io_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 56,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-10T20:15:45Z",
+      "side": 1,
+      "message": "guarantee :)",
+      "range": {
+        "startLine": 56,
+        "startChar": 39,
+        "endLine": 56,
+        "endChar": 45
+      },
+      "revId": "2e0ae9716313c810e03dc83305c7af381e4221be",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_375e40e7",
+        "filename": "manager/io_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 75,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-10T20:15:45Z",
+      "side": 1,
+      "message": "should be checking new_man_msg-\u003emsg",
+      "range": {
+        "startLine": 75,
+        "startChar": 6,
+        "endLine": 75,
+        "endChar": 17
+      },
+      "revId": "2e0ae9716313c810e03dc83305c7af381e4221be",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_1706a4ce",
+        "filename": "manager/io_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 89,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-10T20:15:45Z",
+      "side": 1,
+      "message": "memory leak, you also need to free new_man_msg-\u003emsg",
+      "range": {
+        "startLine": 89,
+        "startChar": 7,
+        "endLine": 89,
+        "endChar": 18
+      },
+      "revId": "2e0ae9716313c810e03dc83305c7af381e4221be",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_57101c01",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 1090,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-10T20:15:45Z",
+      "side": 1,
+      "message": "man_msg-\u003emsg",
+      "range": {
+        "startLine": 1090,
+        "startChar": 7,
+        "endLine": 1090,
+        "endChar": 14
+      },
+      "revId": "2e0ae9716313c810e03dc83305c7af381e4221be",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_77f6f8d8",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 1107,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-10T20:15:45Z",
+      "side": 1,
+      "message": "memory leak (man_msg-\u003emsg)",
+      "range": {
+        "startLine": 1107,
+        "startChar": 8,
+        "endLine": 1107,
+        "endChar": 15
+      },
+      "revId": "2e0ae9716313c810e03dc83305c7af381e4221be",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
