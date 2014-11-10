@@ -14,6 +14,7 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
+#include <errno.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -169,7 +170,7 @@ static bool add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 }
 
 static void gen_err_msg_and_add_to_out(struct manager_msg *man_msg, uint32_t err_origin,
-					uint32_t err_name)
+				       uint32_t err_name)
 {
 	free(man_msg->msg); /* replace old message with error */
 
@@ -1067,6 +1068,98 @@ static void proc_changed_state(struct manager_msg *man_msg)
 	}
 }
 
+static void send_close_msg_to_all_sessions(proc_t ca_proc)
+{
+	struct manager_msg *man_msg = NULL;
+	proc_t ca_sess;
+
+	h_table_init_stepper(ca_proc->content.process.links);
+	while (1) {
+
+		ca_sess = h_table_step(ca_proc->content.process.links);
+		if (!ca_sess)
+			break;
+
+		man_msg = calloc(1, sizeof(struct manager_msg));
+		if (!man_msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			continue;
+		}
+
+		man_msg->msg = calloc(1, sizeof(struct com_msg_close_session));
+		if (!man_msg->msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			free(man_msg);
+			continue;
+		}
+
+		man_msg->msg_len = sizeof(struct com_msg_close_session);
+		man_msg->proc = ca_sess->content.sesLink.to->content.sesLink.owner;
+
+		((struct com_msg_close_session *)man_msg->msg)->msg_hdr.msg_name =
+				COM_MSG_NAME_ERROR;
+		((struct com_msg_close_session *)man_msg->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
+		((struct com_msg_close_session *)man_msg->msg)->sess_ctx =
+				ca_sess->content.sesLink.sess_ctx;
+
+		((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy =
+		    should_ta_destroy(ca_sess->content.sesLink.to->content.sesLink.owner);
+		if (((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy == -1) {
+			free_manager_msg(man_msg);
+			continue;
+		}
+
+		if (!add_msg_out_queue_and_notify(man_msg)) {
+			OT_LOG(LOG_ERR, "Failed to add out queue");
+			free_manager_msg(man_msg);
+		}
+	}
+}
+
+static void term_proc_by_fd_err(proc_t proc)
+{
+	if (proc->p_type == proc_t_CA) {
+		send_close_msg_to_all_sessions(proc);
+		free_proc(proc);
+
+	} else if (proc->p_type == proc_t_TA) {
+		set_all_ta_sess_status(proc, sess_panicked);
+		free_proc(proc);
+	}
+}
+
+static void fd_error(struct manager_msg *man_msg)
+{
+	struct com_msg_fd_err *fd_err_msg = man_msg->msg;
+
+	free_manager_msg(man_msg); /* No information */
+
+	/* TODO: We can send an error message in following error case: EDQUOT ENOSPC EFBIG EFAULT */
+
+	switch (fd_err_msg->err_no) {
+	case EINVAL:
+	case EPIPE:
+	case EBADF:
+	case EIO:
+	case EDQUOT:
+	case ENOSPC:
+	case EFBIG:
+	case EFAULT:
+		term_proc_by_fd_err(fd_err_msg->proc_ptr);
+		break;
+
+	case EAGAIN: /* EWOULDBLOCK */
+	case EINTR:
+	case EDESTADDRREQ:
+	case EISDIR:
+		OT_LOG(LOG_DEBUG, "Logging fd error. No action: %d", fd_err_msg->err_no)
+		break;
+	default:
+		OT_LOG(LOG_DEBUG, "Logging fd error: Unknown errno")
+
+	}
+}
+
 void *logic_thread_mainloop(void *arg)
 {
 	arg = arg; /* ignored */
@@ -1118,7 +1211,7 @@ void *logic_thread_mainloop(void *arg)
 			break;
 
 		case COM_MSG_NAME_FD_ERR:
-
+			fd_error(handled_msg);
 			break;
 
 		case COM_MSG_NAME_CA_INIT_CONTEXT:

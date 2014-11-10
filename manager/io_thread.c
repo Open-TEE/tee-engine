@@ -30,6 +30,66 @@
 /* Used for hashtable init */
 #define CA_SES_APPROX_COUNT 20
 
+static int add_man_msg_todo_queue_and_notify(struct manager_msg *msg)
+{
+	int ret = 0;
+
+	/* Lock task queue from logic thread */
+	if (pthread_mutex_lock(&todo_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return 1;
+	}
+
+	/* enqueue the task manager queue */
+	list_add_before(&msg->list, &todo_queue.list);
+
+	if (pthread_mutex_unlock(&todo_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+		ret = 1;
+	}
+
+	/* Signal to logic thread */
+	if (pthread_cond_signal(&todo_queue_cond)) {
+		OT_LOG(LOG_ERR, "Manager msg queue signal fail");
+		/* Function only should fail if todo_queue_cond is not initialized
+		 * Therefore, this function call *should* not fails */
+		ret = 1; /* error return, because no granti if message get handeled! */
+	}
+
+	return ret;
+}
+
+static void notify_logic_fd_err(int err_nro, proc_t proc)
+{
+	struct manager_msg *new_man_msg = NULL;
+
+	/* Possible defect: If we can not signal to logic thread about FD err, process is
+	 * not been removed from manager. */
+	new_man_msg = calloc(1, sizeof(struct manager_msg));
+	if (!new_man_msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		return;
+	}
+
+	new_man_msg->msg = calloc(1, sizeof(struct com_msg_fd_err));
+	if (!new_man_msg->msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		free(new_man_msg);
+		return;
+	}
+
+	/* Note: No message len needed, because this is not send out */
+
+	((struct com_msg_fd_err *)new_man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_FD_ERR;
+	((struct com_msg_fd_err *)new_man_msg->msg)->err_no = err_nro;
+	((struct com_msg_fd_err *)new_man_msg->msg)->proc_ptr = proc;
+
+	if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
+		OT_LOG(LOG_ERR, "Failed to add out queue")
+		free_manager_msg(new_man_msg);
+	}
+}
+
 /*!
  * \brief proc_fd_err
  * Process fd is erring
@@ -41,10 +101,13 @@ static void proc_fd_err(int err_nro, proc_t proc)
 {
 	/* Placeholder */
 
-	if (proc)
-		epoll_unreg(proc->sockfd);
+	if (!proc) {
+		OT_LOG(LOG_DEBUG, "Proc NULL");
+		return;
+	}
 
-	err_nro = err_nro;
+	epoll_unreg(proc->sockfd);
+	notify_logic_fd_err(err_nro, proc);
 }
 
 /*!
@@ -55,10 +118,15 @@ static void proc_fd_err(int err_nro, proc_t proc)
  */
 static int check_proc_fd_epoll_status(struct epoll_event *event)
 {
-	/* Placeholder */
+	if (!(proc_t)event->data.ptr) {
+		OT_LOG(LOG_DEBUG, "Event data ptr NULL");
+		return 1;
+	}
 
-	if (event->events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
+	if (event->events & (EPOLLERR | EPOLLHUP)) {
+		OT_LOG(LOG_DEBUG, "EPOLLERR or EPOLLHUP event bit set");
 		epoll_unreg(((proc_t)event->data.ptr)->sockfd);
+		notify_logic_fd_err(0, event->data.ptr);
 		return 1;
 	}
 
@@ -195,35 +263,6 @@ static void remove_client_from_ca_table(proc_t rm_client)
 
 	if (pthread_mutex_unlock(&CA_table_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
-}
-
-static int add_man_msg_todo_queue_and_notify(struct manager_msg *msg)
-{
-	int ret = 0;
-
-	/* Lock task queue from logic thread */
-	if (pthread_mutex_lock(&todo_queue_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to lock the mutex");
-		return 1;
-	}
-
-	/* enqueue the task manager queue */
-	list_add_before(&msg->list, &todo_queue.list);
-
-	if (pthread_mutex_unlock(&todo_queue_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
-		ret = 1;
-	}
-
-	/* Signal to logic thread */
-	if (pthread_cond_signal(&todo_queue_cond)) {
-		OT_LOG(LOG_ERR, "Manager msg queue signal fail");
-		/* Function only should fail if todo_queue_cond is not initialized
-		 * Therefore, this function call *should* not fails */
-		ret = 1; /* error return, because no granti if message get handeled! */
-	}
-
-	return ret;
 }
 
 void free_manager_msg(struct manager_msg *released_msg)
