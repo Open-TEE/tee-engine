@@ -285,6 +285,9 @@ static void open_session_response(struct manager_msg *man_msg)
 
 		/* Proc can be set active if TA create entry point func is executed */
 		ta_session->content.sesLink.owner->content.process.status = proc_active;
+
+		/* Take session ctx pointer */
+		ta_session->content.sesLink.sess_ctx = open_resp_msg->sess_ctx;
 	}
 
 	/* Send message to its initial sender
@@ -724,6 +727,9 @@ static void invoke_cmd(struct manager_msg *man_msg)
 		goto discard_msg;
 	}
 
+	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY)
+		invoke_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
+
 	/* TODO: Panic handling. Here should be logic, which checks session status! */
 
 	man_msg->proc = session->content.sesLink.to->content.sesLink.owner;
@@ -848,6 +854,9 @@ static void close_session(struct manager_msg *man_msg)
 		OT_LOG(LOG_ERR, "Session is not found");
 		goto ignore_msg;
 	}
+
+	/* Fill in session ctx before session gets removed */
+	close_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
 
 	/* Save session TO proc addr, because session might be removed */
 	close_ta_proc = session->content.sesLink.to->content.sesLink.owner;

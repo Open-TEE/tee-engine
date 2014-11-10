@@ -67,7 +67,8 @@ static void open_session(struct ta_task *in_task)
 	}
 
 	/* Do the task */
-	open_msg->return_code_open_session = interface->open_session(0, 0, NULL);
+	open_msg->return_code_open_session =
+			interface->open_session(0, 0, (void **)&open_msg->sess_ctx);
 
 	open_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 	open_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
@@ -87,7 +88,8 @@ static void invoke_cmd(struct ta_task *in_task)
 	}
 
 	/* Do the task */
-	invoke_msg->return_code = interface->invoke_cmd(NULL, invoke_msg->cmd_id, 0, 0);
+	invoke_msg->return_code = interface->invoke_cmd((void *)invoke_msg->sess_ctx,
+							invoke_msg->cmd_id, 0, 0);
 
 	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 	invoke_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
@@ -105,7 +107,7 @@ static void close_session(struct ta_task *in_task)
 		goto ignore_msg;
 	}
 
-	interface->close_session(NULL);
+	interface->close_session((void *)close_msg->sess_ctx);
 
 	if (close_msg->should_ta_destroy) {
 		interface->destroy();

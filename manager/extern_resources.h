@@ -18,6 +18,7 @@
 #define __EXTERN_RESOURCES_H__
 
 #include <pthread.h>
+#include <stdint.h>
 
 #include "h_table.h"
 #include "tee_list.h"
@@ -112,22 +113,23 @@ enum session_status {
  * Sessionlink: Links CA or TA session to another session.
  * Point: Sessionlink is representing opened session between applicatons */
 struct __proc {
-	enum proc_type p_type;
 	int sockfd;
+	enum proc_type p_type;
 
 	union {
 		struct {
-			enum session_status status;
-			int session_id;
-			proc_t to;
 			proc_t owner;
+			proc_t to;
+			uintptr_t sess_ctx;
+			int session_id;
+			enum session_status status;
 		} sesLink;
 
 		struct {
-			enum proc_status status;
-			pid_t pid;
 			TEE_UUID ta_uuid;
 			HASHTABLE links; /* Hashtable */
+			pid_t pid;
+			enum proc_status status;
 		} process;
 
 	} content;
