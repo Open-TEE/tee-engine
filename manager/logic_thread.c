@@ -922,8 +922,7 @@ static void rm_all_ta_sessions(proc_t ta)
 		if (proc_sess) {
 
 			/* Remove session from CA */
-			free(h_table_remove(proc_sess->content.sesLink.to->
-					    content.sesLink.owner->content.process.links,
+			free(h_table_remove(proc_sess->content.sesLink.to->content.process.links,
 					    (unsigned char *)&proc_sess->content.sesLink.session_id,
 					    sizeof(uint64_t)));
 
@@ -959,7 +958,7 @@ static void send_err_to_initialized_sess(proc_t ta)
 		}
 
 		man_msg->msg = calloc(1, sizeof(struct com_msg_error));
-		if (!man_msg) {
+		if (!man_msg->msg) {
 			OT_LOG(LOG_ERR, "Out of memory\n");
 			free(man_msg);
 			continue;
@@ -972,9 +971,8 @@ static void send_err_to_initialized_sess(proc_t ta)
 
 		if (!add_msg_out_queue_and_notify(man_msg)) {
 			OT_LOG(LOG_ERR, "Failed to add out queue")
-			free(man_msg);
+			free_manager_msg(man_msg);
 		}
-
 	}
 }
 
@@ -1123,16 +1121,19 @@ static void term_proc_by_fd_err(proc_t proc)
 		free_proc(proc);
 
 	} else if (proc->p_type == proc_t_TA) {
-		set_all_ta_sess_status(proc, sess_panicked);
-		free_proc(proc);
+
+		/* TA socket dead. Kill TA and then it will generate SIGCHLD */
+		if (kill(proc->content.process.pid, SIGKILL)) {
+
+			if (errno != ESRCH)
+				OT_LOG(LOG_ERR, "Failed to send signal")
+		}
 	}
 }
 
 static void fd_error(struct manager_msg *man_msg)
 {
 	struct com_msg_fd_err *fd_err_msg = man_msg->msg;
-
-	free_manager_msg(man_msg); /* No information */
 
 	/* TODO: We can send an error message in following error case: EDQUOT ENOSPC EFBIG EFAULT */
 
@@ -1155,9 +1156,11 @@ static void fd_error(struct manager_msg *man_msg)
 		OT_LOG(LOG_DEBUG, "Logging fd error. No action: %d", fd_err_msg->err_no)
 		break;
 	default:
-		OT_LOG(LOG_DEBUG, "Logging fd error: Unknown errno")
-
+		/* EPOLLERR or EPOLLHUP bit set */
+		term_proc_by_fd_err(fd_err_msg->proc_ptr);
 	}
+
+	free_manager_msg(man_msg); /* No information */
 }
 
 void *logic_thread_mainloop(void *arg)
@@ -1199,10 +1202,18 @@ void *logic_thread_mainloop(void *arg)
 			continue;
 		}
 
-		if (com_msg_name != COM_MSG_NAME_PROC_STATUS_CHANGE && !handled_msg->proc) {
+		if (com_msg_name == COM_MSG_NAME_PROC_STATUS_CHANGE ||
+		    com_msg_name == COM_MSG_NAME_FD_ERR) {
+
+			/* Empty: No need sender details */
+
+		} else {
+
+		    if (!handled_msg->proc) {
 			OT_LOG(LOG_ERR, "Error with sender details");
 			free_manager_msg(handled_msg);
 			continue;
+		    }
 		}
 
 		switch (com_msg_name) {
