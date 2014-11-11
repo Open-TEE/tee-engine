@@ -248,14 +248,13 @@ static void open_session(struct ta_task *in_task)
 	/* Do the task */
 	open_msg->return_code_open_session = interface->open_session(paramTypes, params,
 								     (void **)&open_msg->sess_ctx);
-
 	open_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
-	open_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 
 	/* Copy the data back from the TA to the client */
 	copy_params_to_com_msg_op(&open_msg->operation, params, paramTypes);
 
 out:
+	open_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 	add_msg_done_queue_and_notify(in_task);
 }
 
@@ -286,12 +285,12 @@ static void invoke_cmd(struct ta_task *in_task)
 							invoke_msg->cmd_id, 0, 0);
 
 	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
-	invoke_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 
 	/* Copy the data back from the TA to the client */
 	copy_params_to_com_msg_op(&invoke_msg->operation, params, paramTypes);
 
 out:
+	invoke_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 	add_msg_done_queue_and_notify(in_task);
 }
 
