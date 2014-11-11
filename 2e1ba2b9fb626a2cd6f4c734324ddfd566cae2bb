@@ -89,6 +89,24 @@
     },
     {
       "key": {
+        "uuid": "7a6b29fe_dd49edd1",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 148,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-11T09:40:52Z",
+      "side": 1,
+      "message": "Just to be sure, params[i].value will cpy whole struct?",
+      "parentUuid": "7a6b29fe_bdd8711e",
+      "revId": "2e1ba2b9fb626a2cd6f4c734324ddfd566cae2bb",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "7a6b29fe_dd9f2d5e",
         "filename": "launcher/ta_internal_thread.c",
         "patchSetId": 3
@@ -118,6 +136,24 @@
       "side": 1,
       "message": "the buffer will be NULL and the size will be 0, in the params that we pass to the TA",
       "parentUuid": "7a6b29fe_dd9f2d5e",
+      "revId": "2e1ba2b9fb626a2cd6f4c734324ddfd566cae2bb",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_bd46b1bd",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 235,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-11T09:40:52Z",
+      "side": 1,
+      "message": "This is not an error? We are not required to send an error message? TA is out of memory?",
+      "parentUuid": "7a6b29fe_3d04617a",
       "revId": "2e1ba2b9fb626a2cd6f4c734324ddfd566cae2bb",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
