@@ -13,10 +13,7 @@ DynamicLibrary {
 
     destinationDirectory: '.'
 
-    cpp.dynamicLibraries: [
-        "dl",
-        "pthread"
-    ]
+    cpp.dynamicLibraries: ["dl", "pthread", "rt"]
 
     cpp.includePaths: [
         "../core",
