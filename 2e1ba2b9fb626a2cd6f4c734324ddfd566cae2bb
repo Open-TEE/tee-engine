@@ -1,0 +1,72 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a6b29fe_5d9afd63",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 48,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-11T09:21:02Z",
+      "side": 1,
+      "message": "They have to be here, because now we might change these to places.",
+      "revId": "2e1ba2b9fb626a2cd6f4c734324ddfd566cae2bb",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_7dcb7972",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 84,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-11T09:21:02Z",
+      "side": 1,
+      "message": "errorExit? As in line 95.",
+      "revId": "2e1ba2b9fb626a2cd6f4c734324ddfd566cae2bb",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_fda669c0",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 148,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-11T09:21:02Z",
+      "side": 1,
+      "message": "memcpy(\u0026params[i].value, \u0026operation-\u003eparams[i].value, sizeof(TEEC_Value)); ?",
+      "revId": "2e1ba2b9fb626a2cd6f4c734324ddfd566cae2bb",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a6b29fe_dd9f2d5e",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 235,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-11T09:21:02Z",
+      "side": 1,
+      "message": "What happen if this function fails? function Int open_shared_mem() is called and that may fail. Same comment for line 264.",
+      "revId": "2e1ba2b9fb626a2cd6f4c734324ddfd566cae2bb",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
