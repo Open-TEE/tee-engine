@@ -15,8 +15,12 @@
 *****************************************************************************/
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "com_protocol.h"
@@ -28,6 +32,19 @@
 #include "ta_io_thread.h"
 #include "tee_list.h"
 #include "tee_logging.h"
+
+/* The client names for the params */
+#define TEEC_NONE			0x00000000
+#define TEEC_VALUE_INPUT		0x00000001
+#define TEEC_VALUE_OUTPUT		0x00000002
+#define TEEC_VALUE_INOUT		0x00000003
+#define TEEC_MEMREF_TEMP_INPUT		0x00000005
+#define TEEC_MEMREF_TEMP_OUTPUT		0x00000006
+#define TEEC_MEMREF_TEMP_INOUT		0x00000007
+#define TEEC_MEMREF_WHOLE		0x0000000C
+#define TEEC_MEMREF_PARTIAL_INPUT	0x0000000D
+#define TEEC_MEMREF_PARTIAL_OUTPUT	0x0000000E
+#define TEEC_MEMREF_PARTIAL_INOUT	0x0000000F
 
 static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 {
@@ -55,9 +72,164 @@ static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 	}
 }
 
+static int open_shared_mem(const char *name, void **buffer, int size, bool isOutput)
+{
+	int flag = 0;
+	int fd;
+	void *address = NULL;
+	struct stat file_stat;
+
+	if (!name || !buffer) {
+		OT_LOG(LOG_ERR, "Invalid pointer");
+		goto errorExit;
+	}
+
+	if (isOutput)
+		flag |= O_RDONLY; /* It is an outbuffer only so we just need read access */
+	else
+		flag |= O_RDWR;
+
+	fd = shm_open(name, flag, 0);
+	if (fd == -1) {
+		OT_LOG(LOG_ERR, "Failed to open the shared memory area");
+		goto errorExit;
+	}
+
+	if (fstat(fd, &file_stat) == -1) {
+		OT_LOG(LOG_ERR, "Failed to stat the shared memory region");
+		goto unlinkExit;
+	}
+
+	if (file_stat.st_size != size) {
+		OT_LOG(LOG_ERR, "Size mis-match");
+		goto unlinkExit;
+	}
+
+	/* mmap does not allow for the size to be zero, however the TEEC API allows it, so map a
+	 * size of 1 byte, though it will probably be mapped to a page
+	 */
+	address = mmap(NULL, size != 0 ? size : 1,
+		       ((flag == O_RDONLY) ? PROT_READ : (PROT_WRITE | PROT_READ)),
+		       MAP_SHARED, fd, 0);
+	if (address == MAP_FAILED) {
+		OT_LOG(LOG_ERR, "Failed to mmap the area");
+		goto unlinkExit;
+	}
+
+	/* We have finished with the file handle as it has been mapped so don't leak it */
+	close(fd);
+
+	*buffer = address;
+
+	return 0;
+
+unlinkExit:
+	close(fd);
+errorExit:
+	return -1;
+}
+
+static void copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_Param *params,
+				      int32_t tee_param_types)
+{
+	int i;
+
+	for (i = 0; i < 4; i++) {
+		if (TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_VALUE_OUTPUT ||
+		    TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_VALUE_INOUT) {
+
+			/* We only have to copy back the output values, because the memory
+			 * types point to shared memory so they are updated directly in place.
+			 */
+			memcpy(&operation->params[i].value,
+			       &params[i].value,
+			       sizeof(params[i].value));
+
+		} else if (TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_MEMREF_INPUT ||
+			   TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_MEMREF_OUTPUT ||
+			   TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_MEMREF_INOUT) {
+
+			/* unmap the shared memory regions as they are no longer valid for the TA
+			 */
+			if (params[i].memref.buffer)
+				munmap(params[i].memref.buffer, params[i].memref.size);
+		}
+	}
+}
+
+static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Param *params,
+				    uint32_t *tee_param_types)
+{
+	int i;
+	int types[4] = {0};
+	bool isOutput;
+	uint32_t param_types = operation->paramTypes;
+	int ret = 0;
+
+	memset(params, 0, 4 * sizeof(TEE_Param));
+
+	for (i = 0; i < 4; i++) {
+		if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_NONE) {
+			continue;
+		} else if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_VALUE_INPUT ||
+			   TEE_PARAM_TYPE_GET(param_types, i) == TEEC_VALUE_INOUT) {
+
+			memcpy(&params[i].value,
+			       &operation->params[i].value, sizeof(params[i].value));
+
+		} else {
+
+			/* determine if this is a readonly memory area */
+			if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_TEMP_OUTPUT ||
+			    TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_PARTIAL_OUTPUT) {
+				isOutput = true;
+			} else {
+				isOutput = false;
+			}
+
+			/* if there is some failure opening the shared memory just
+			 * fail graefully */
+			if (open_shared_mem(operation->params[i].memref.shm_area,
+					    &params[i].memref.buffer,
+					    operation->params[i].memref.size,
+					    isOutput) == -1) {
+				ret = -1;
+			}
+		}
+
+		/* convert the TEEC types to the TEE internal types */
+		if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_WHOLE ||
+		    TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_PARTIAL_INOUT) {
+
+			types[i] = TEE_PARAM_TYPE_MEMREF_INOUT;
+
+		} else if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_PARTIAL_INPUT) {
+
+			types[i] = TEE_PARAM_TYPE_MEMREF_INPUT;
+
+		} else if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_PARTIAL_OUTPUT) {
+
+			types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
+
+		} else {
+
+			types[i] = TEE_PARAM_TYPE_GET(param_types, i);
+		}
+	}
+
+	*tee_param_types = TEE_PARAM_TYPES(types[0], types[1], types[2], types[3]);
+
+	if (ret == -1) /* clean up all memory that has been mmaped because of the error */
+		copy_params_to_com_msg_op(operation, params, *tee_param_types);
+
+	return ret;
+}
+
 static void open_session(struct ta_task *in_task)
 {
 	struct com_msg_open_session *open_msg = in_task->msg;
+	uint32_t paramTypes;
+	TEE_Param params[4];
 
 	if (open_msg->msg_hdr.msg_name != COM_MSG_NAME_OPEN_SESSION ||
 	    open_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
@@ -66,19 +238,32 @@ static void open_session(struct ta_task *in_task)
 		return;
 	}
 
+	/* convert the paramaters from the message into TA format params */
+	if (copy_com_msg_op_to_param(&open_msg->operation, params, &paramTypes) == -1) {
+		open_msg->return_code_open_session = TEE_ERROR_NO_DATA;
+		open_msg->return_origin = TEE_ORIGIN_TEE;
+		goto out;
+	}
+
 	/* Do the task */
-	open_msg->return_code_open_session =
-			interface->open_session(0, 0, (void **)&open_msg->sess_ctx);
+	open_msg->return_code_open_session = interface->open_session(paramTypes, params,
+								     (void **)&open_msg->sess_ctx);
 
 	open_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 	open_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 
+	/* Copy the data back from the TA to the client */
+	copy_params_to_com_msg_op(&open_msg->operation, params, paramTypes);
+
+out:
 	add_msg_done_queue_and_notify(in_task);
 }
 
 static void invoke_cmd(struct ta_task *in_task)
 {
 	struct com_msg_invoke_cmd *invoke_msg = in_task->msg;
+	uint32_t paramTypes;
+	TEE_Param params[4];
 
 	if (invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_CMD ||
 	    invoke_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
@@ -87,6 +272,15 @@ static void invoke_cmd(struct ta_task *in_task)
 		return;
 	}
 
+	/* convert the paramaters from the message into TA format params */
+	if (copy_com_msg_op_to_param(&invoke_msg->operation, params, &paramTypes)) {
+		invoke_msg->return_code = TEE_ERROR_NO_DATA;
+		invoke_msg->return_origin = TEE_ORIGIN_TEE;
+		goto out;
+	}
+
+
+
 	/* Do the task */
 	invoke_msg->return_code = interface->invoke_cmd((void *)invoke_msg->sess_ctx,
 							invoke_msg->cmd_id, 0, 0);
@@ -94,6 +288,10 @@ static void invoke_cmd(struct ta_task *in_task)
 	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 	invoke_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 
+	/* Copy the data back from the TA to the client */
+	copy_params_to_com_msg_op(&invoke_msg->operation, params, paramTypes);
+
+out:
 	add_msg_done_queue_and_notify(in_task);
 }
 
