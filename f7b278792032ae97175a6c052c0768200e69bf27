@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "3a65312a_b77602d7",
+        "filename": "launcher/ta_process.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 214,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-12T06:52:49Z",
+      "side": 1,
+      "message": "you cant have 2 exits :)",
+      "range": {
+        "startLine": 214,
+        "startChar": 2,
+        "endLine": 214,
+        "endChar": 6
+      },
+      "revId": "f7b278792032ae97175a6c052c0768200e69bf27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
