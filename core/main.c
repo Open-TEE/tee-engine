@@ -54,6 +54,11 @@ static void sig_handler(int sig)
 		control_params.sig_vector |= TEE_SIG_TERM;
 		break;
 
+	case SIGINT:
+		/* terminate the app, so clean up */
+		control_params.sig_vector |= TEE_SIG_INT;
+		break;
+
 	case SIGPIPE:
 		/* Catch. Handled locally */
 		break;
@@ -189,6 +194,8 @@ int main(int argc, char **argv)
 		exit(1);
 	if (sigaction(SIGPIPE, &sig_act, NULL) == -1)
 		exit(1);
+	if (sigaction(SIGINT, &sig_act, NULL) == -1)
+		exit(1);
 
 	/*
 	 * TODO: we should probably implement some file locks to ensure only one instance of the
@@ -202,10 +209,6 @@ int main(int argc, char **argv)
 		exit(1);
 
 	if (config_parser_get_config(&control_params.opentee_conf) == -1)
-		exit(1);
-
-	control_params.self_pipe_fd = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
-	if (control_params.self_pipe_fd == -1)
 		exit(1);
 
 	control_params.argv0 = argv[0];
@@ -241,6 +244,10 @@ int main(int argc, char **argv)
 
 	/* open syslog for writing */
 	openlog(proc_name, 0, LOG_USER);
+
+	control_params.self_pipe_fd = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
+	if (control_params.self_pipe_fd == -1)
+		exit(1);
 
 	if (load_lib(lib_to_load, &main_loop) == -1)
 		exit(1);
