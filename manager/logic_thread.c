@@ -936,7 +936,71 @@ static void rm_all_ta_sessions(proc_t ta)
 	}
 }
 
-static void send_err_to_initialized_sess(proc_t ta)
+
+static TEE_Result unmap_create_entry_exit_value(uint8_t ret)
+{
+	switch (ret) {
+	case 10:
+		return TEE_ERROR_GENERIC;
+	case 11:
+		return TEE_ERROR_ACCESS_DENIED;
+	case 12:
+		return TEE_ERROR_CANCEL;
+	case 13:
+		return TEE_ERROR_ACCESS_CONFLICT;
+	case 14:
+		return TEE_ERROR_EXCESS_DATA;
+	case 15:
+		return TEE_ERROR_BAD_FORMAT;
+	case 16:
+		return TEE_ERROR_BAD_PARAMETERS;
+	case 17:
+		return TEE_ERROR_BAD_STATE;
+	case 18:
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	case 19:
+		return TEE_ERROR_NOT_IMPLEMENTED;
+	case 20:
+		return TEE_ERROR_NOT_SUPPORTED;
+	case 21:
+		return TEE_ERROR_NO_DATA;
+	case 22:
+		return TEE_ERROR_OUT_OF_MEMORY;
+	case 23:
+		return TEE_ERROR_BUSY;
+	case 24:
+		return TEE_ERROR_COMMUNICATION;
+	case 25:
+		return TEE_ERROR_SECURITY;
+	case 26:
+		return TEE_ERROR_SHORT_BUFFER;
+	case 27:
+		return TEE_PENDING;
+	case 28:
+		return TEE_ERROR_TIMEOUT;
+	case 29:
+		return TEE_ERROR_OVERFLOW;
+	case 30:
+		return TEE_ERROR_TARGET_DEAD;
+	case 31:
+		return TEE_ERROR_STORAGE_NO_SPACE;
+	case 32:
+		return TEE_ERROR_MAC_INVALID;
+	case 33:
+		return TEE_ERROR_SIGNATURE_INVALID;
+	case 34:
+		return TEE_ERROR_TIME_NOT_SET;
+	case 35:
+		return TEE_ERROR_TIME_NEEDS_RESET;
+	default:
+		OT_LOG(LOG_ERR, "Unknow exit state")
+		break;
+	}
+
+	return TEE_ERROR_GENERIC; /* Should not end up here */
+}
+
+static void send_err_to_initialized_sess(proc_t ta, uint8_t exit_status)
 {
 	struct manager_msg *man_msg = NULL;
 	proc_t proc_sess;
@@ -969,12 +1033,22 @@ static void send_err_to_initialized_sess(proc_t ta)
 
 		((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
 
+		if (exit_status) {
+			((struct com_msg_error *)man_msg->msg)->ret =
+					unmap_create_entry_exit_value(exit_status);
+			((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TRUSTED_APP;
+		} else {
+			((struct com_msg_error *)man_msg->msg)->ret = TEE_ERROR_GENERIC;
+			((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TEE;
+		}
+
 		if (!add_msg_out_queue_and_notify(man_msg)) {
 			OT_LOG(LOG_ERR, "Failed to add out queue")
 			free_manager_msg(man_msg);
 		}
 	}
 }
+
 
 static void ta_status_change(pid_t ta_pid, int status)
 {
@@ -994,8 +1068,8 @@ static void ta_status_change(pid_t ta_pid, int status)
 
 	if (WIFEXITED(status)) {
 
-		if (WEXITSTATUS(status) == TA_EXIT_CREATE_ENTRY_FAILED) {
-			send_err_to_initialized_sess(ta);
+		if (WEXITSTATUS(status) >= 10 && WEXITSTATUS(status) <= 35) {
+			send_err_to_initialized_sess(ta, WEXITSTATUS(status));
 			rm_all_ta_sessions(ta);
 			if (should_ta_destroy(ta) == 1)
 				free_proc(ta);
@@ -1008,12 +1082,12 @@ static void ta_status_change(pid_t ta_pid, int status)
 			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_LAUNCH_FAILED) {
-			send_err_to_initialized_sess(ta);
+			send_err_to_initialized_sess(ta, 0);
 			rm_all_ta_sessions(ta);
 			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_FIRST_OPEN_SESS_FAILED) {
-			send_err_to_initialized_sess(ta);
+			send_err_to_initialized_sess(ta, 0);
 			rm_all_ta_sessions(ta);
 			if (should_ta_destroy(ta) == 1)
 				free_proc(ta);
@@ -1138,6 +1212,7 @@ static void fd_error(struct manager_msg *man_msg)
 	/* TODO: We can send an error message in following error case: EDQUOT ENOSPC EFBIG EFAULT */
 
 	switch (fd_err_msg->err_no) {
+	case 0: /* If err_no is zero, EPOLLERR or EPOLLHUP generated this message! */
 	case EINVAL:
 	case EPIPE:
 	case EBADF:
@@ -1156,8 +1231,8 @@ static void fd_error(struct manager_msg *man_msg)
 		OT_LOG(LOG_DEBUG, "Logging fd error. No action: %d", fd_err_msg->err_no)
 		break;
 	default:
-		/* EPOLLERR or EPOLLHUP bit set */
-		term_proc_by_fd_err(fd_err_msg->proc_ptr);
+		OT_LOG(LOG_DEBUG, "Logging fd error: Unknown errno")
+		break;
 	}
 
 	free_manager_msg(man_msg); /* No information */
