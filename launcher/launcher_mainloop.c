@@ -41,6 +41,7 @@
 #include "subprocess.h"
 #include "socket_help.h"
 #include "ta_process.h"
+#include "ta_exit_states.h"
 #include "core_control_resources.h"
 #include "com_protocol.h"
 #include "epoll_wrapper.h"
@@ -58,14 +59,15 @@ static void check_signal_status(struct core_control *control_params)
 	 * transfer ownership to manager process and all child-status-change signals are
 	 * delivered to manger process */
 
-	if (cpy_sig_vec & TEE_SIG_TERM) {
-		closelog();
+	if (cpy_sig_vec & TEE_SIG_TERM)
 		exit(EXIT_SUCCESS);
-	}
 
 	if (cpy_sig_vec & TEE_SIG_HUP) {
 		/* At the moment, do nothing */
 	}
+
+	if (cpy_sig_vec & TEE_SIG_INT)
+		exit(EXIT_SUCCESS);
 }
 
 static void send_err_msg_to_manager(int man_fd, struct com_msg_ta_created *msg)
@@ -213,7 +215,7 @@ int lib_main_loop(struct core_control *ctl_params)
 				closelog();
 				if (ta_process_loop(ctl_params, sockfd[1], recv_open_msg)) {
 					OT_LOG(LOG_ERR, "ta_process has failed");
-					exit(1);
+					exit(TA_EXIT_PANICKED);
 				}
 
 			} else {

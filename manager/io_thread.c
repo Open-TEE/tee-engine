@@ -124,7 +124,6 @@ static int check_proc_fd_epoll_status(struct epoll_event *event)
 	}
 
 	if (event->events & (EPOLLERR | EPOLLHUP)) {
-		OT_LOG(LOG_DEBUG, "EPOLLERR or EPOLLHUP event bit set");
 		epoll_unreg(((proc_t)event->data.ptr)->sockfd);
 		notify_logic_fd_err(0, event->data.ptr);
 		return 1;

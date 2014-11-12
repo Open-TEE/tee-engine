@@ -26,6 +26,7 @@
 #define TEE_SIG_CHILD		0x00000001
 #define TEE_SIG_TERM		0x00000002
 #define TEE_SIG_HUP		0x00000004
+#define TEE_SIG_INT		0x00000008
 
 /* clang-format on */
 
