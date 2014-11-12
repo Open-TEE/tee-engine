@@ -1071,8 +1071,7 @@ static void ta_status_change(pid_t ta_pid, int status)
 		if (WEXITSTATUS(status) >= 10 && WEXITSTATUS(status) <= 35) {
 			send_err_to_initialized_sess(ta, WEXITSTATUS(status));
 			rm_all_ta_sessions(ta);
-			if (should_ta_destroy(ta) == 1)
-				free_proc(ta);
+			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_DESTROY_ENTRY_EXEC) {
 			free_proc(ta);
