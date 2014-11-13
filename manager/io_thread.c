@@ -390,8 +390,10 @@ void read_fd_and_add_todo_queue(struct epoll_event *event)
 	}
 
 	/* Add task to manager message queue */
-	if (add_man_msg_todo_queue_and_notify(new_man_msg))
+	if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
+		OT_LOG(LOG_ERR, "Failed to add inbound queue")
 		goto err;
+	}
 
 	return; /* Msg recv OK */
 
@@ -457,7 +459,7 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 		}
 
 		new_man_msg->msg = calloc(1, sizeof(struct com_msg_proc_status_change));
-		if (!new_man_msg) {
+		if (!new_man_msg->msg) {
 			OT_LOG(LOG_ERR, "Out of memory\n");
 			free(new_man_msg);
 			return;
@@ -469,8 +471,8 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 				COM_MSG_NAME_PROC_STATUS_CHANGE;
 
 		if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
-			OT_LOG(LOG_ERR, "Failed to add out queue")
-			free(new_man_msg);
+			OT_LOG(LOG_ERR, "Failed to add inbound queue")
+			free_manager_msg(new_man_msg);
 		}
 	}
 }
