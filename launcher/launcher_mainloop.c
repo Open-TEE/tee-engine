@@ -37,6 +37,7 @@
 #include <sys/prctl.h>
 #include <sched.h>
 #include <syscall.h>
+#include <sys/wait.h>
 
 #include "subprocess.h"
 #include "socket_help.h"
@@ -49,8 +50,11 @@
 
 #define MAX_CURR_EVENTS 5
 
-static void check_signal_status(struct core_control *control_params)
+static void check_signal_status(struct core_control *control_params, int man_fd)
 {
+	struct com_msg_proc_status_change proc_change_stat;
+	pid_t changed_proc_pid;
+	int changed_proc_status;
 	sig_atomic_t cpy_sig_vec = control_params->sig_vector;
 	control_params->reset_signal_self_pipe();
 
@@ -68,6 +72,26 @@ static void check_signal_status(struct core_control *control_params)
 
 	if (cpy_sig_vec & TEE_SIG_INT)
 		exit(EXIT_SUCCESS);
+
+	if (cpy_sig_vec & TEE_SIG_CHILD) {
+
+		while (1) {
+
+			changed_proc_pid = waitpid(-1, &changed_proc_status, WNOHANG);
+			if (!changed_proc_pid)
+				break;
+
+			proc_change_stat.msg_hdr.msg_name = COM_MSG_NAME_PROC_STATUS_CHANGE;
+			proc_change_stat.pid = changed_proc_pid;
+			proc_change_stat.status = changed_proc_status;
+			proc_change_stat.sender = COM_SENDER_LAUNCHER;
+
+			if (com_send_msg(man_fd, &proc_change_stat,
+					 sizeof(struct com_msg_proc_status_change)) !=
+			    sizeof(struct com_msg_proc_status_change))
+				OT_LOG(LOG_ERR, "Failed report fail");
+		}
+	}
 }
 
 static void send_err_msg_to_manager(int man_fd, struct com_msg_ta_created *msg)
@@ -128,7 +152,7 @@ int lib_main_loop(struct core_control *ctl_params)
 		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);
 		if (event_count == -1) {
 			if (errno == EINTR) {
-				check_signal_status(ctl_params);
+				check_signal_status(ctl_params, ctl_params->comm_sock_fd);
 				continue;
 			}
 
@@ -153,7 +177,7 @@ int lib_main_loop(struct core_control *ctl_params)
 					exit(EXIT_FAILURE);
 				}
 
-				check_signal_status(ctl_params);
+				check_signal_status(ctl_params, ctl_params->comm_sock_fd);
 				continue;
 			}
 
@@ -201,7 +225,7 @@ int lib_main_loop(struct core_control *ctl_params)
 			/*
 			 * Clone now to create the TA subprocess
 			 */
-			new_proc_pid = syscall(SYS_clone, SIGCHLD | CLONE_PARENT, 0, 0);
+			new_proc_pid = fork(); //syscall(SYS_clone, SIGCHLD | CLONE_PARENT, 0, 0);
 			if (new_proc_pid == -1) {
 				send_err_msg_to_manager(ctl_params->comm_sock_fd, &new_ta_info);
 				free(recv_open_msg);

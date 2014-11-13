@@ -1102,41 +1102,36 @@ static void ta_status_change(pid_t ta_pid, int status)
 
 static void proc_changed_state(struct manager_msg *man_msg)
 {
-	pid_t changed_proc_pid;
-	int status;
+	struct com_msg_proc_status_change *proc_stat_change = man_msg->msg;
+
+	if (proc_stat_change->msg_hdr.msg_name != COM_MSG_NAME_PROC_STATUS_CHANGE) {
+		OT_LOG(LOG_ERR, "Invalid message");
+		return;
+
+	}
+
+	if (proc_stat_change->sender == COM_SENDER_MANAGER) {
+		/* Reap launcher */
+		return;
+	}
+
+	if (WIFCONTINUED(proc_stat_change->status)) {
+		OT_LOG(LOG_ERR, "Recv continue sig"); /* No action needed */
+		return;
+	}
+
+	/* Signal caused stop. Note. No action, just logging */
+	if (WIFSTOPPED(proc_stat_change->status)) {
+		OT_LOG(LOG_ERR, "recvstop signal");
+		return;
+	}
+
+	/* Note: If proc status is not continued or stopped, it is terminated. So no
+	 * more socket communication to that process. Close sockets and change status */
+
+	ta_status_change(proc_stat_change->pid, proc_stat_change->status);
 
 	free_manager_msg(man_msg); /* No information */
-
-	/* wait for children, to reap the zombies */
-	while (1) {
-
-		changed_proc_pid = waitpid(-1, &status, WNOHANG);
-		if (!changed_proc_pid)
-			break;
-
-		/*
-		if (changed_proc_pid == launcher_pid) {
-			launcher_status_change(status);
-			continue;
-		}
-		*/
-
-		if (WIFCONTINUED(status)) {
-			OT_LOG(LOG_ERR, "Recv continue sig"); /* No action needed */
-			continue;
-		}
-
-		/* Signal caused stop. Note. No action, just logging */
-		if (WIFSTOPPED(status)) {
-			OT_LOG(LOG_ERR, "recvstop signal");
-			continue;
-		}
-
-		/* Note: If proc status is not continued or stopped, it is terminated. So no
-		 * more socket communication to that process. Close sockets and change status */
-
-		ta_status_change(changed_proc_pid, status);
-	}
 }
 
 static void send_close_msg_to_all_sessions(proc_t ca_proc)

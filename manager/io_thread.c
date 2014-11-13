@@ -468,9 +468,48 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 		((struct com_msg_proc_status_change *)new_man_msg->msg)->msg_hdr.msg_name =
 				COM_MSG_NAME_PROC_STATUS_CHANGE;
 
+		((struct com_msg_proc_status_change *)new_man_msg->msg)->sender =
+				COM_SENDER_MANAGER;
+
 		if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
 			OT_LOG(LOG_ERR, "Failed to add out queue")
 			free(new_man_msg);
 		}
+
+	}
+}
+
+void launcher_comm(struct epoll_event *event)
+{
+	struct manager_msg *new_man_msg = NULL;
+	int ret;
+
+	if (check_proc_fd_epoll_status(event))
+		return; /* err msg logged */
+
+	new_man_msg = calloc(1, sizeof(struct manager_msg));
+	if (!new_man_msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		return;
+	}
+
+	/* Add message */
+	ret = com_recv_msg(launcher_fd, &new_man_msg->msg, &new_man_msg->msg_len);
+	if (ret == -1) {
+		OT_LOG(LOG_ERR, "Socket error");
+		io_fd_err(errno, launcher_fd);
+		free(new_man_msg);
+		return; /* No error message to CA, because socket status is unknown! */
+
+	} else if (ret > 0) {
+		OT_LOG(LOG_ERR, "Received corrupted/partial message, discarding");
+		free_manager_msg(new_man_msg);
+		return;
+	}
+
+	/* Add task to manager message queue */
+	if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
+		OT_LOG(LOG_ERR, "Failed to add out queue")
+		free_manager_msg(new_man_msg);
 	}
 }

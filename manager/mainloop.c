@@ -200,6 +200,10 @@ int lib_main_loop(struct core_control *control_params)
 	if (epoll_reg_fd(control_params->self_pipe_fd, EPOLLIN))
 		return -1; /* err msg logged */
 
+	/* Launcher communication*/
+	if (epoll_reg_fd(control_params->comm_sock_fd, EPOLLIN))
+		return -1; /* err msg logged */
+
 	/* Init logic thread */
 	if (pthread_attr_init(&attr)) {
 		OT_LOG(LOG_ERR, "Failed to create attr for thread in : %s\n", strerror(errno));
@@ -259,6 +263,9 @@ int lib_main_loop(struct core_control *control_params)
 
 			} else if(cur_events[i].data.fd == event_ta_dir_watch_fd) {
 				ta_dir_watch_event(&cur_events[i], &event_ta_dir_watch_fd);
+
+			} else if (cur_events[i].data.fd == control_params->comm_sock_fd) {
+				launcher_comm(&cur_events[i]);
 
 			} else {
 				read_fd_and_add_todo_queue(&cur_events[i]);

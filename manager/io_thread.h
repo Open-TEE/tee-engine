@@ -66,4 +66,11 @@ void handle_close_sock(struct epoll_event *event);
  */
 void manager_check_signal(struct core_control *control_params, struct epoll_event *event);
 
+/*!
+ * \brief launcher_comm
+ * Launcher is sending a message
+ * \param event
+ */
+void launcher_comm(struct epoll_event *event);
+
 #endif /* __IO_THREAD__ */
