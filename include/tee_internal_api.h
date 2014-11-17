@@ -24,6 +24,7 @@
 #include "../internal_api/tee_storage_api.h"
 #include "../internal_api/tee_panic.h"
 #include "../internal_api/tee_crypto_api.h"
+#include "../internal_api/tee_bigint.h"
 #include "../internal_api/tee_internal_client_api.h"
 
 #endif

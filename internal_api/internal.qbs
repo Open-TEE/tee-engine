@@ -24,6 +24,8 @@ DynamicLibrary {
         "openssl_1_0_2_beta_rsa_oaep.c",
         "storage_key_apis_external_funcs.h",
         "storage_key_apis_external_funcs.c",
+        "tee_bigint.h",
+        "tee_bigint.c",
         "tee_crypto_api.h",
         "tee_crypto_api.c",
         "tee_data_types.h",
