@@ -137,6 +137,30 @@
       "revId": "b67c3fdc519a0618ccf112d7e642eb71d2f7d0e4",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_23b9152f",
+        "filename": "internal_api/tee_bigint.h",
+        "patchSetId": 1
+      },
+      "lineNbr": 28,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-11-18T20:27:14Z",
+      "side": 1,
+      "message": "the only reason is that it is being used by the macro below",
+      "parentUuid": "fafc7978_c8f4a889",
+      "range": {
+        "startLine": 28,
+        "startChar": 7,
+        "endLine": 28,
+        "endChar": 32
+      },
+      "revId": "b67c3fdc519a0618ccf112d7e642eb71d2f7d0e4",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
