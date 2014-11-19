@@ -21,14 +21,24 @@
 #include "core_control_resources.h"
 
 /*!
+ * \brief The ta_loop_arg struct
+ * Clone is accepting one function parameter.
+ */
+struct ta_loop_arg {
+	/*! The control paramters that are used to manage the core processes */
+	struct core_control *ctl_params;
+	/*! The socket on which to communicate with the manager */
+	int com_sock;
+	/*! session message from CA or TA */
+	void *recv_open_msg;
+};
+
+/*!
  * \brief ta_process_loop
  * The main loop of the TA process. Ta_process_loop function is TA execution entry function
- * \param control_params The control paramters that are used to manage the core processes
- * \param man_sockfd The socket on which to communicate with the manager
- * \param open_msg Open session message from CA or TA
+ * \param arg \sa struct ta_loop_arg
  * \return should never return
  */
-int ta_process_loop(struct core_control *control_params, int man_sockfd,
-		    struct com_msg_open_session *open_msg);
+int ta_process_loop(void *arg);
 
 #endif

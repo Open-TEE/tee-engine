@@ -48,6 +48,7 @@
 #include "tee_logging.h"
 
 #define MAX_CURR_EVENTS 5
+#define CHILD_STACK_SIZE 8192
 
 static void check_signal_status(struct core_control *control_params)
 {
@@ -90,6 +91,14 @@ int lib_main_loop(struct core_control *ctl_params)
 	int ret, event_count, i;
 	sigset_t sig_empty_set, sig_block_set;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
+	char *child_stack = NULL;
+	struct ta_loop_arg ta_loop_args;
+
+	child_stack = calloc(1, CHILD_STACK_SIZE);
+	if (!child_stack) {
+		OT_LOG(LOG_ERR, "Sigempty set failed");
+		exit(EXIT_FAILURE);
+	}
 
 	if (sigemptyset(&sig_empty_set)) {
 		OT_LOG(LOG_ERR, "Sigempty set failed");
@@ -201,52 +210,47 @@ int lib_main_loop(struct core_control *ctl_params)
 			/*
 			 * Clone now to create the TA subprocess
 			 */
-			new_proc_pid = syscall(SYS_clone, SIGCHLD | CLONE_PARENT, 0, 0);
+
+			/* Fill ta loop arguments */
+			ta_loop_args.com_sock = sockfd[1];
+			ta_loop_args.ctl_params = ctl_params;
+			ta_loop_args.recv_open_msg = recv_open_msg;
+
+			new_proc_pid = clone(ta_process_loop, child_stack + CHILD_STACK_SIZE,
+					     SIGCHLD | CLONE_PARENT, &ta_loop_args);
 			if (new_proc_pid == -1) {
 				send_err_msg_to_manager(ctl_params->comm_sock_fd, &new_ta_info);
 				free(recv_open_msg);
 				continue;
 
-			} else if (new_proc_pid == 0) {
-				/* child process will become the TA*/
-				close(ctl_params->comm_sock_fd);
-				close(sockfd[0]);
-				prctl(PR_SET_PDEATHSIG, SIGTERM);
-				closelog();
-				if (ta_process_loop(ctl_params, sockfd[1], recv_open_msg)) {
-					OT_LOG(LOG_ERR, "ta_process has failed");
-					exit(TA_EXIT_PANICKED);
+			}
+
+			new_ta_info.pid = new_proc_pid;
+
+			ret = com_send_msg(ctl_params->comm_sock_fd, &new_ta_info,
+					   sizeof(struct com_msg_ta_created));
+
+			if (ret == sizeof(struct com_msg_ta_created)) {
+
+				if (send_fd(ctl_params->comm_sock_fd, sockfd[0]) == -1) {
+					OT_LOG(LOG_ERR, "Failed to send TA sock");
+					kill(new_proc_pid, SIGKILL);
+					/* TODO: Check what is causing error, but for now
+						 * lets hope the error clears itself*/
 				}
 
 			} else {
-				/* Launcher process */
-
-				new_ta_info.pid = new_proc_pid;
-
-				ret = com_send_msg(ctl_params->comm_sock_fd, &new_ta_info,
-						   sizeof(struct com_msg_ta_created));
-
-				if (ret == sizeof(struct com_msg_ta_created)) {
-
-					if (send_fd(ctl_params->comm_sock_fd, sockfd[0]) == -1) {
-						OT_LOG(LOG_ERR, "Failed to send TA sock");
-						kill(new_proc_pid, SIGKILL);
-						/* TODO: Check what is causing error, but for now
-						 * lets hope the error clears itself*/
-					}
-
-				} else {
-					OT_LOG(LOG_ERR, "Failed to send response msg");
-					kill(new_proc_pid, SIGKILL);
-					/* TODO: Check what is causing error, but for now lets
+				OT_LOG(LOG_ERR, "Failed to send response msg");
+				kill(new_proc_pid, SIGKILL);
+				/* TODO: Check what is causing error, but for now lets
 					 *  hope the error clears itself*/
-				}
-
-				/* parent process will stay as the launcher */
-				close(sockfd[0]);
-				close(sockfd[1]);
-				free(recv_open_msg);
 			}
+
+			/* parent process will stay as the launcher */
+			close(sockfd[0]);
+			close(sockfd[1]);
+			free(recv_open_msg);
+
 		}
 	}
 }

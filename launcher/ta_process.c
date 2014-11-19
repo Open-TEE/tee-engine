@@ -120,8 +120,7 @@ static int map_create_entry_exit_value(TEE_Result ret)
 	exit(TA_EXIT_PANICKED);
 }
 
-int ta_process_loop(struct core_control *control_params, int man_sockfd,
-		    struct com_msg_open_session *open_msg)
+int ta_process_loop(void *arg)
 {
 	int ret;
 	pthread_t ta_logic_thread;
@@ -132,15 +131,23 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 	sigset_t sig_empty_set;
 	char *path = NULL;
 	TEE_Result TEE_ret;
+	struct core_control *ctl_params = ((struct ta_loop_arg *)arg)->ctl_params;
+	struct com_msg_open_session *open_msg = ((struct ta_loop_arg *)arg)->recv_open_msg;
+	int man_sockfd = ((struct ta_loop_arg *)arg)->com_sock;
+
+	/* Launchers manger socket is not needed in TA */
+	close(ctl_params->comm_sock_fd);
+	prctl(PR_SET_PDEATHSIG, SIGTERM);
+	closelog();
 
 	/* Set new ta process name */
-	strncpy(proc_name, open_msg->ta_so_name, control_params->argv0_len);
+	strncpy(proc_name, open_msg->ta_so_name, ctl_params->argv0_len);
 	prctl(PR_SET_NAME, (unsigned long)proc_name);
-	strncpy(control_params->argv0, proc_name, control_params->argv0_len);
+	strncpy(ctl_params->argv0, proc_name, ctl_params->argv0_len);
 
 	openlog(proc_name, 0, LOG_USER);
 
-	if (asprintf(&path, "%s/%s", control_params->opentee_conf->ta_dir_path,
+	if (asprintf(&path, "%s/%s", ctl_params->opentee_conf->ta_dir_path,
 		     open_msg->ta_so_name) == -1) {
 		OT_LOG(LOG_ERR, "out of memory");
 		exit(TA_EXIT_LAUNCH_FAILED);
@@ -189,7 +196,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 		exit(TA_EXIT_LAUNCH_FAILED);
 
 	/* Signal handling */
-	if (epoll_reg_fd(control_params->self_pipe_fd, EPOLLIN))
+	if (epoll_reg_fd(ctl_params->self_pipe_fd, EPOLLIN))
 		exit(TA_EXIT_LAUNCH_FAILED);
 
 	/* Init worker thread */
@@ -255,7 +262,7 @@ int ta_process_loop(struct core_control *control_params, int man_sockfd,
 			} else if (cur_events[i].data.fd == event_fd) {
 				reply_to_manager(&cur_events[i], man_sockfd);
 
-			} else if (cur_events[i].data.fd == control_params->self_pipe_fd) {
+			} else if (cur_events[i].data.fd == ctl_params->self_pipe_fd) {
 
 			} else {
 				OT_LOG(LOG_ERR, "unknown event source");
