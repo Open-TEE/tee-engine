@@ -137,7 +137,7 @@ int ta_process_loop(void *arg)
 
 	/* Launchers manger socket is not needed in TA */
 	close(ctl_params->comm_sock_fd);
-	prctl(PR_SET_PDEATHSIG, SIGTERM);
+	prctl(PR_SET_PDEATHSIG, SIGKILL);
 	closelog();
 
 	/* Set new ta process name */
