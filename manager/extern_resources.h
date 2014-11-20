@@ -81,7 +81,7 @@ extern int event_close_sock;
 
 /* Different proc type will be handeled in different way */
 enum proc_type {
-	proc_t_CA,
+	proc_t_CA = 1,
 	proc_t_TA,
 	proc_t_session,
 	proc_t_last, /* Used for "looping" through enumerator */
@@ -89,7 +89,7 @@ enum proc_type {
 
 /* Note: Might not be complite */
 enum proc_status {
-	proc_uninitialized,
+	proc_uninitialized = 1,
 	proc_initialized,
 	proc_active,
 	proc_disconnected,
@@ -100,7 +100,7 @@ enum proc_status {
 
 /* Note: Might not be complite */
 enum session_status {
-	sess_initialized,
+	sess_initialized = 1,
 	sess_active,
 	sess_closed,
 	sess_panicked,
@@ -122,6 +122,7 @@ struct __proc {
 			proc_t to;
 			uintptr_t sess_ctx;
 			int session_id;
+			int waiting_response_msg;
 			enum session_status status;
 		} sesLink;
 

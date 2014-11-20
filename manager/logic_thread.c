@@ -696,6 +696,22 @@ discard_msg:
 	free_manager_msg(man_msg);
 }
 
+static bool dest_sess_active(struct manager_msg *man_msg, proc_t to_sess)
+{
+	if (to_sess->content.sesLink.status == sess_panicked) {
+		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_TARGET_DEAD);
+		return false;
+	}
+
+	if (to_sess->content.sesLink.status == sess_closed) {
+		OT_LOG(LOG_ERR, "Session closed, send error message")
+		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
+		return false;
+	}
+
+	return true;
+}
+
 static void invoke_cmd(struct manager_msg *man_msg)
 {
 	struct com_msg_invoke_cmd *invoke_msg = man_msg->msg;
@@ -728,10 +744,15 @@ static void invoke_cmd(struct manager_msg *man_msg)
 		goto discard_msg;
 	}
 
-	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY)
-		invoke_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
+	if (!dest_sess_active(man_msg, session->content.sesLink.to))
+		return; /* Error message send */
 
-	/* TODO: Panic handling. Here should be logic, which checks session status! */
+	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
+		invoke_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
+		session->content.sesLink.waiting_response_msg = 1;
+	} else {
+		session->content.sesLink.waiting_response_msg = 0;
+	}
 
 	man_msg->proc = session->content.sesLink.to->content.sesLink.owner;
 	add_msg_out_queue_and_notify(man_msg);
@@ -1049,6 +1070,48 @@ static void send_err_to_initialized_sess(proc_t ta, uint8_t exit_status)
 	}
 }
 
+static void send_err_msg_to_waiting_sess(proc_t ta)
+{
+	struct manager_msg *man_msg = NULL;
+	proc_t proc_sess;
+
+	h_table_init_stepper(ta->content.process.links);
+	while (1) {
+
+		proc_sess = h_table_step(ta->content.process.links);
+		if (!proc_sess)
+			break;
+
+		if (!proc_sess->content.sesLink.to->content.sesLink.waiting_response_msg)
+			continue;
+
+		man_msg = calloc(1, sizeof(struct manager_msg));
+		if (!man_msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			continue;
+		}
+
+		man_msg->msg = calloc(1, sizeof(struct com_msg_error));
+		if (!man_msg->msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			free(man_msg);
+			continue;
+		}
+
+		man_msg->msg_len = sizeof(struct com_msg_error);
+		man_msg->proc = proc_sess->content.sesLink.to->content.sesLink.owner;
+
+		((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
+
+		((struct com_msg_error *)man_msg->msg)->ret = TEE_ERROR_GENERIC;
+		((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TEE;
+
+		if (!add_msg_out_queue_and_notify(man_msg)) {
+			OT_LOG(LOG_ERR, "Failed to add out queue")
+			free_manager_msg(man_msg);
+		}
+	}
+}
 
 static void ta_status_change(pid_t ta_pid, int status)
 {
@@ -1062,6 +1125,7 @@ static void ta_status_change(pid_t ta_pid, int status)
 
 	/* Signal caused termination */
 	if (WIFSIGNALED(status)) {
+		send_err_msg_to_waiting_sess(ta);
 		set_all_ta_sess_status(ta, sess_panicked);
 		free_proc(ta);
 	}
@@ -1074,9 +1138,11 @@ static void ta_status_change(pid_t ta_pid, int status)
 			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_DESTROY_ENTRY_EXEC) {
+			send_err_msg_to_waiting_sess(ta);
 			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_PANICKED) {
+			send_err_msg_to_waiting_sess(ta);
 			set_all_ta_sess_status(ta, sess_panicked);
 			free_proc(ta);
 
@@ -1093,6 +1159,7 @@ static void ta_status_change(pid_t ta_pid, int status)
 
 		} else {
 			OT_LOG(LOG_ERR, "Unknow exit status, handeled as panic!");
+			send_err_msg_to_waiting_sess(ta);
 			set_all_ta_sess_status(ta, sess_panicked);
 			if (should_ta_destroy(ta) == 1)
 				free_proc(ta);
@@ -1189,11 +1256,12 @@ static void send_close_msg_to_all_sessions(proc_t ca_proc)
 
 static void term_proc_by_fd_err(proc_t proc)
 {
-	if (proc->p_type == proc_t_CA) {
+	if (proc->p_type == proc_t_CA && proc->content.process.status != proc_disconnected) {
 		send_close_msg_to_all_sessions(proc);
 		free_proc(proc);
 
-	} else if (proc->p_type == proc_t_TA) {
+	} else if (proc->p_type == proc_t_TA &&
+		   proc->content.process.status != proc_disconnected) {
 
 		/* TA socket dead. Kill TA and then it will generate SIGCHLD */
 		if (kill(proc->content.process.pid, SIGKILL)) {
@@ -1234,7 +1302,7 @@ static void fd_error(struct manager_msg *man_msg)
 		break;
 	}
 
-	free_manager_msg(man_msg); /* No information */
+	free_manager_msg(man_msg);
 }
 
 void *logic_thread_mainloop(void *arg)
