@@ -195,6 +195,8 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 					    isOutput) == -1) {
 				ret = -1;
 			}
+
+			params[i].memref.size = operation->params[i].memref.size;
 		}
 
 		/* convert the TEEC types to the TEE internal types */
@@ -240,6 +242,7 @@ static void open_session(struct ta_task *in_task)
 
 	/* convert the paramaters from the message into TA format params */
 	if (copy_com_msg_op_to_param(&open_msg->operation, params, &paramTypes) == -1) {
+		OT_LOG(LOG_ERR, "Failed to copy operation");
 		open_msg->return_code_open_session = TEE_ERROR_NO_DATA;
 		open_msg->return_origin = TEE_ORIGIN_TEE;
 		goto out;
@@ -273,16 +276,15 @@ static void invoke_cmd(struct ta_task *in_task)
 
 	/* convert the paramaters from the message into TA format params */
 	if (copy_com_msg_op_to_param(&invoke_msg->operation, params, &paramTypes)) {
+		OT_LOG(LOG_ERR, "Failed to copy operation");
 		invoke_msg->return_code = TEE_ERROR_NO_DATA;
 		invoke_msg->return_origin = TEE_ORIGIN_TEE;
 		goto out;
 	}
 
-
-
 	/* Do the task */
 	invoke_msg->return_code = interface->invoke_cmd((void *)invoke_msg->sess_ctx,
-							invoke_msg->cmd_id, 0, 0);
+							invoke_msg->cmd_id, paramTypes, params);
 
 	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 
