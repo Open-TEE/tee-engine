@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,16 +14,19 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_INTERNAL_API_EMU_H__
-#define __TEE_INTERNAL_API_EMU_H__
+#ifndef __TEE_INTERNAL_CLIENT_API_H__
+#define __TEE_INTERNAL_CLIENT_API_H__
 
-#include "../internal_api/tee_data_types.h"
-#include "../internal_api/tee_memory.h"
-#include "../internal_api/tee_ta_interface.h"
-#include "../internal_api/tee_time_api.h"
-#include "../internal_api/tee_storage_api.h"
-#include "../internal_api/tee_panic.h"
-#include "../internal_api/tee_crypto_api.h"
-#include "../internal_api/tee_internal_client_api.h"
+#include "tee_data_types.h"
 
-#endif
+TEE_Result TEE_OpenTASession(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
+			     uint32_t paramTypes, TEE_Param params[4],
+			     TEE_TASessionHandle *session, uint32_t *returnOrigin);
+
+void TEE_CloseTASession(TEE_TASessionHandle session);
+
+TEE_Result TEE_InvokeTACommand(TEE_TASessionHandle session, uint32_t cancellationRequestTimeout,
+			       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
+			       uint32_t *returnOrigin);
+
+#endif /* __TEE_INTERNAL_CLIENT_API_H__ */

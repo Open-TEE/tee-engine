@@ -27,6 +27,8 @@ DynamicLibrary {
         "tee_crypto_api.h",
         "tee_crypto_api.c",
         "tee_data_types.h",
+        "tee_internal_client_api.h",
+        "tee_internal_client_api.c",
         "tee_memory.h",
         "tee_memory.c",
         "tee_object_handle.h",
