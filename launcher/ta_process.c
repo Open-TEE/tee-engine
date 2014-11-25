@@ -41,6 +41,14 @@ pthread_mutex_t todo_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t done_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
 
+/* Blocking internal thread while waiting response message */
+pthread_mutex_t block_internal_thread_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t block_condition = PTHREAD_COND_INITIALIZER;
+
+/* Not creating own message queue for response messages, because only one message can be
+ * at time. So only one response message can be received */
+void *response_msg;
+
 /* Interface TA funcitons */
 struct ta_interface *interface;
 

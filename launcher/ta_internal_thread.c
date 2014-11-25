@@ -46,45 +46,12 @@
 #define TEEC_MEMREF_PARTIAL_OUTPUT	0x0000000E
 #define TEEC_MEMREF_PARTIAL_INOUT	0x0000000F
 
-TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
-				     uint32_t paramTypes, TEE_Param params[4],
-				     TEE_TASessionHandle *session, uint32_t *returnOrigin)
-{
-	OT_LOG_STR("ta_open_ta_session")
+#define SESSION_STATE_ACTIVE		0x000000F0
 
-	destination = destination;
-	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
-	session = session;
-	returnOrigin = returnOrigin;
-
-	return TEE_ERROR_NOT_IMPLEMENTED;
-}
-
-void ta_close_ta_session(TEE_TASessionHandle session)
-{
-	OT_LOG_STR("ta_close_ta_session")
-
-	session = session;
-}
-
-TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
-				       uint32_t cancellationRequestTimeout,
-				       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
-				       uint32_t *returnOrigin)
-{
-	OT_LOG_STR("ta_invoke_ta_command")
-
-	commandID = commandID;
-	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
-	session = session;
-	returnOrigin = returnOrigin;
-
-	return TEE_ERROR_NOT_IMPLEMENTED;
-}
+struct __TEE_TASessionHandle {
+	uint64_t sess_id;
+	uint8_t session_state;
+};
 
 static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 {
@@ -110,6 +77,98 @@ static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 		OT_LOG(LOG_ERR, "Failed to notify the io thread: %s", strerror(errno))
 		/* TODO: See what is causing it! */
 	}
+}
+
+static bool wait_response_msg()
+{
+	if (pthread_mutex_lock(&block_internal_thread_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return false;
+	}
+
+	while (!response_msg) {
+		if (pthread_cond_wait(&block_condition, &block_internal_thread_mutex)) {
+			OT_LOG(LOG_ERR, "Failed to wait for condition");
+			continue;
+		}
+	}
+
+	if (pthread_mutex_unlock(&block_internal_thread_mutex))
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+
+	return true;
+}
+
+static bool get_vals_from_err_msg(void *msg, TEE_Result *ret_code, uint32_t *msg_origin)
+{
+	uint8_t msg_name;
+
+	if (com_get_msg_name(msg, &msg_name)) {
+		OT_LOG(LOG_ERR, "Failed to read msg name")
+		return false;
+	}
+
+	if (msg_name != COM_MSG_NAME_ERROR)
+		return false;
+
+	if (msg_origin)
+		*msg_origin = ((struct com_msg_error *)msg)->ret_origin;
+	*ret_code = ((struct com_msg_error *)msg)->ret;
+
+	return true;
+}
+
+static TEE_Result wait_and_handle_open_sess_resp(uint32_t paramTypes, TEE_Param params[4],
+						 TEE_TASessionHandle *session,
+						 uint32_t *returnOrigin)
+{
+	struct com_msg_open_session *resp_open_msg = NULL;
+	TEE_Result ret;
+
+	paramTypes = paramTypes;
+	params = params;
+
+	if (!wait_response_msg())
+		goto err_com;
+
+	resp_open_msg = response_msg;
+
+	if (resp_open_msg->msg_hdr.msg_name != COM_MSG_NAME_OPEN_SESSION) {
+
+		if (!get_vals_from_err_msg(response_msg, &ret, returnOrigin)) {
+			OT_LOG(LOG_ERR, "Received unknown message")
+			goto err_com;
+		}
+
+		goto err_msg;
+	}
+
+	/* TODO: Copy parameters */
+
+	if (returnOrigin)
+		*returnOrigin = resp_open_msg->return_origin;
+	ret = resp_open_msg->return_code_open_session;
+	if (ret != TEE_SUCCESS)
+		goto err_ret;
+
+	(*session)->sess_id = resp_open_msg->msg_hdr.sess_id;
+	(*session)->session_state = SESSION_STATE_ACTIVE;
+
+	free(resp_open_msg);
+
+	return ret;
+
+err_com:
+	if (returnOrigin)
+		*returnOrigin = TEE_ORIGIN_COMMS;
+	ret = TEEC_ERROR_COMMUNICATION;
+
+err_ret:
+err_msg:
+	free(resp_open_msg);
+	free(*session);
+	*session = NULL;
+	return ret;
 }
 
 static int open_shared_mem(const char *name, void **buffer, int size, bool isOutput)
@@ -435,6 +494,88 @@ static int map_create_entry_exit_value(TEE_Result ret)
 
 	OT_LOG(LOG_ERR, "Unknown create entry point exit value");
 	exit(TA_EXIT_PANICKED);
+}
+
+TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
+				     uint32_t paramTypes, TEE_Param params[4],
+				     TEE_TASessionHandle *session, uint32_t *returnOrigin)
+{
+	struct ta_task *new_ta_task = NULL;
+
+	cancellationRequestTimeout = cancellationRequestTimeout;
+	paramTypes = paramTypes;
+	params = params;
+
+	if (!destination || !session) {
+		OT_LOG(LOG_ERR, "Destination or session NULL");
+		if (returnOrigin)
+			*returnOrigin = TEE_ORIGIN_TEE;
+		return TEE_ERROR_GENERIC;
+	}
+
+	*session = calloc(1, sizeof(struct __TEE_TASessionHandle));
+	if (!*session) {
+		OT_LOG(LOG_ERR, "out of memory")
+		goto err;
+	}
+
+	new_ta_task = calloc(1, sizeof(struct ta_task));
+	if (!new_ta_task) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		goto err;
+	}
+
+	new_ta_task->msg_len = sizeof(struct com_msg_open_session);
+	new_ta_task->msg = calloc(1, new_ta_task->msg_len);
+	if (!new_ta_task->msg) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		goto err;
+	}
+
+	/* Message header */
+	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.msg_name = COM_MSG_NAME_OPEN_SESSION;
+	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
+	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.sess_id = 0;
+
+	/* TODO: Copy parameters */
+	memcpy(&((struct com_msg_open_session *)new_ta_task->msg)->uuid,
+	       destination, sizeof(TEE_UUID));
+
+	add_msg_done_queue_and_notify(new_ta_task);
+
+	return wait_and_handle_open_sess_resp(paramTypes, params, session, returnOrigin);
+
+err:
+	free(*session);
+	*session = NULL;
+	free(new_ta_task);
+	if (returnOrigin)
+		*returnOrigin = TEE_ORIGIN_TEE;
+	return TEE_ERROR_GENERIC;
+}
+
+void ta_close_ta_session(TEE_TASessionHandle session)
+{
+	OT_LOG_STR("ta_close_ta_session")
+
+	session = session;
+}
+
+TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
+				       uint32_t cancellationRequestTimeout,
+				       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
+				       uint32_t *returnOrigin)
+{
+	OT_LOG_STR("ta_invoke_ta_command")
+
+	commandID = commandID;
+	cancellationRequestTimeout = cancellationRequestTimeout;
+	paramTypes = paramTypes;
+	params = params;
+	session = session;
+	returnOrigin = returnOrigin;
+
+	return TEE_ERROR_NOT_IMPLEMENTED;
 }
 
 void *ta_internal_thread(void *arg)
