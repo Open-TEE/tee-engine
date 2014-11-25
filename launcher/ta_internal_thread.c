@@ -46,6 +46,46 @@
 #define TEEC_MEMREF_PARTIAL_OUTPUT	0x0000000E
 #define TEEC_MEMREF_PARTIAL_INOUT	0x0000000F
 
+TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
+				     uint32_t paramTypes, TEE_Param params[4],
+				     TEE_TASessionHandle *session, uint32_t *returnOrigin)
+{
+	OT_LOG_STR("ta_open_ta_session")
+
+	destination = destination;
+	cancellationRequestTimeout = cancellationRequestTimeout;
+	paramTypes = paramTypes;
+	params = params;
+	session = session;
+	returnOrigin = returnOrigin;
+
+	return TEE_ERROR_NOT_IMPLEMENTED;
+}
+
+void ta_close_ta_session(TEE_TASessionHandle session)
+{
+	OT_LOG_STR("ta_close_ta_session")
+
+	session = session;
+}
+
+TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
+				       uint32_t cancellationRequestTimeout,
+				       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
+				       uint32_t *returnOrigin)
+{
+	OT_LOG_STR("ta_invoke_ta_command")
+
+	commandID = commandID;
+	cancellationRequestTimeout = cancellationRequestTimeout;
+	paramTypes = paramTypes;
+	params = params;
+	session = session;
+	returnOrigin = returnOrigin;
+
+	return TEE_ERROR_NOT_IMPLEMENTED;
+}
+
 static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 {
 	const uint64_t event = 1;

@@ -26,6 +26,7 @@ DynamicLibrary {
         "dynamic_loader.h",
         "dynamic_loader.c",
         "launcher_mainloop.c",
+        "internal_api_callbacks.h",
         "ta_extern_resources.h",
         "ta_internal_thread.h",
         "ta_internal_thread.c",

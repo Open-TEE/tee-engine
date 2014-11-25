@@ -14,22 +14,15 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TA_INTERNAL_THREAD_H__
-#define __TA_INTERNAL_THREAD_H__
+#ifndef __INTERNAL_API_CALLBACKS_H__
+#define __INTERNAL_API_CALLBACKS_H__
 
 #include "tee_internal_api.h"
 
-void *ta_internal_thread(void *arg);
+struct internal_api_callbacks {
+	void *fn_ptr_open_ta_session;
+	void *fn_ptr_close_ta_session;
+	void *fn_ptr_invoke_ta_command;
+};
 
-TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
-				     uint32_t paramTypes, TEE_Param params[4],
-				     TEE_TASessionHandle *session, uint32_t *returnOrigin);
-
-void ta_close_ta_session(TEE_TASessionHandle session);
-
-TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
-				       uint32_t cancellationRequestTimeout,
-				       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
-				       uint32_t *returnOrigin);
-
-#endif /* __TA_INTERNAL_THREAD_H__ */
+#endif /* __INTERNAL_API_CALLBACKS_H__ */

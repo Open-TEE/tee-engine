@@ -11,7 +11,8 @@ DynamicLibrary {
     }
 
     cpp.includePaths: [
-        "../include"
+        "../include",
+        "../launcher"
     ]
 
     destinationDirectory: '.'
@@ -20,6 +21,8 @@ DynamicLibrary {
         "../include/tee_internal_api.h",
         "../include/tee_shared_data_types.h",
         "../include/tee_logging.h",
+        "callbacks.h",
+        "callbacks.c",
         "openssl_1_0_2_beta_rsa_oaep.h",
         "openssl_1_0_2_beta_rsa_oaep.c",
         "storage_key_apis_external_funcs.h",
