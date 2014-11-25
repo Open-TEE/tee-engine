@@ -42,6 +42,14 @@ extern pthread_mutex_t todo_list_mutex;
 extern pthread_mutex_t done_list_mutex;
 extern pthread_cond_t condition;
 
+/* Blocking internal thread while waiting response message */
+extern pthread_mutex_t block_internal_thread_mutex;
+extern pthread_cond_t block_condition;
+
+/* Not creating own message queue for response messages, because only one message can be
+ * at time. So only one response message can be received */
+extern void *response_msg;
+
 /* Use eventfd to notify the io_thread that the TA thread has finished processing a task */
 extern int event_fd;
 
