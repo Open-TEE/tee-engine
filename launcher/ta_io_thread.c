@@ -103,6 +103,7 @@ void free_task(struct ta_task *released_task)
 void receive_from_manager(struct epoll_event *event, int man_sockfd)
 {
 	struct ta_task *new_ta_task = NULL;
+	uint8_t msg_type;
 	int ret;
 
 	if (event->events & (EPOLLHUP | EPOLLERR)) {
@@ -129,6 +130,25 @@ void receive_from_manager(struct epoll_event *event, int man_sockfd)
 		return;
 	}
 
+	if (com_get_msg_type(new_ta_task->msg, &msg_type)) {
+		OT_LOG(LOG_ERR, "Failed retrieve message type")
+		goto skip;
+	}
+
+	if (msg_type == COM_TYPE_RESPONSE) {
+		response_msg = new_ta_task->msg;
+		free(new_ta_task);
+
+		/* Inform the TA thread that we have a task to be completed */
+		if (pthread_cond_signal(&block_condition)) {
+			OT_LOG(LOG_ERR, "Failed signal to block thread")
+			free(response_msg);
+		}
+
+		return;
+	}
+
+skip:
 	add_task_todo_queue_and_notify(new_ta_task);
 }
 
