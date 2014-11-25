@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2014 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,19 +14,28 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
+#include <string.h>
 
-#include "tee_panic.h"
-#include "tee_logging.h"
+#include "callbacks.h"
 
-void TEE_Panic(TEE_Result panicCode)
+static struct internal_api_callbacks callbacks;
+
+void reg_internal_api_callbacks(struct internal_api_callbacks *calls)
 {
-	panicCode = panicCode;
+	memcpy(&callbacks, calls, sizeof(struct internal_api_callbacks));
+}
 
-	printf("P A N I C !\n");
+void *fn_ptr_open_ta_session()
+{
+	return callbacks.fn_ptr_open_ta_session;
+}
 
-	OT_LOG(LOG_DEBUG, "TA panicked and panic func has been reached\n");
+void *fn_ptr_close_ta_session()
+{
+	return callbacks.fn_ptr_close_ta_session;
+}
 
-	exit(panicCode);
+void *fn_ptr_invoke_ta_command()
+{
+	return callbacks.fn_ptr_invoke_ta_command;
 }

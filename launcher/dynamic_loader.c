@@ -15,18 +15,29 @@
 *****************************************************************************/
 
 #include "dynamic_loader.h"
+#include "callbacks.h"
 #include "conf_parser.h"
 #include "core_control_resources.h"
+#include "ta_internal_thread.h"
 #include "tee_logging.h"
 
 #include <dlfcn.h>
 #include <string.h>
 #include <stdlib.h>
 
+static void fill_internal_api_callbacks(struct internal_api_callbacks *calls)
+{
+	/* Internal Client API needed callbacks */
+	calls->fn_ptr_open_ta_session = ta_open_ta_session;
+	calls->fn_ptr_invoke_ta_command = ta_invoke_ta_command;
+	calls->fn_ptr_close_ta_session = ta_close_ta_session;
+}
+
 TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 {
 	struct ta_interface tmp_cb;
 	char *err = NULL;
+	struct internal_api_callbacks internal_api_calls;
 
 	memset((void *)&tmp_cb, 0, sizeof(struct ta_interface));
 	*callbacks = NULL;
@@ -85,6 +96,8 @@ TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 	}
 
 	memcpy(*callbacks, (void *)&tmp_cb, sizeof(struct ta_interface));
+	fill_internal_api_callbacks(&internal_api_calls);
+	reg_internal_api_callbacks(&internal_api_calls);
 
 err_cleanup:
 
