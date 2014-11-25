@@ -46,45 +46,12 @@
 #define TEEC_MEMREF_PARTIAL_OUTPUT	0x0000000E
 #define TEEC_MEMREF_PARTIAL_INOUT	0x0000000F
 
-static TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
-				     uint32_t paramTypes, TEE_Param params[4],
-				     TEE_TASessionHandle *session, uint32_t *returnOrigin)
-{
-	OT_LOG_STR("ta_open_ta_session")
+#define SESSION_STATE_ACTIVE		0x000000F0
 
-	destination = destination;
-	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
-	session = session;
-	returnOrigin = returnOrigin;
-
-	return TEE_ERROR_NOT_IMPLEMENTED;
-}
-
-static void ta_close_ta_session(TEE_TASessionHandle session)
-{
-	OT_LOG_STR("ta_close_ta_session")
-
-	session = session;
-}
-
-static TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
-				       uint32_t cancellationRequestTimeout,
-				       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
-				       uint32_t *returnOrigin)
-{
-	OT_LOG_STR("ta_invoke_ta_command")
-
-	commandID = commandID;
-	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
-	session = session;
-	returnOrigin = returnOrigin;
-
-	return TEE_ERROR_NOT_IMPLEMENTED;
-}
+struct __TEE_TASessionHandle {
+	uint64_t sess_id;
+	uint8_t session_state;
+};
 
 static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 {
@@ -110,6 +77,119 @@ static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 		OT_LOG(LOG_ERR, "Failed to notify the io thread: %s", strerror(errno))
 		/* TODO: See what is causing it! */
 	}
+}
+
+static bool wait_response_msg()
+{
+	if (pthread_mutex_lock(&block_internal_thread_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return false;
+	}
+
+	while (!response_msg) {
+		if (pthread_cond_wait(&block_condition, &block_internal_thread_mutex)) {
+			OT_LOG(LOG_ERR, "Failed to wait for condition");
+			continue;
+		}
+	}
+
+	if (pthread_mutex_unlock(&block_internal_thread_mutex))
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+
+	return true;
+}
+
+static TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
+				     uint32_t paramTypes, TEE_Param params[4],
+				     TEE_TASessionHandle *session, uint32_t *returnOrigin)
+{
+	struct ta_task *new_ta_task = NULL;
+	struct com_msg_open_session *resp_open_msg = NULL;
+	*session = NULL;
+
+	cancellationRequestTimeout = cancellationRequestTimeout;
+	paramTypes = paramTypes;
+	params = params;
+
+	if (!destination || !session) {
+		OT_LOG(LOG_ERR, "Destination or session NULL");
+		goto err_1;
+	}
+
+	*session = calloc(1, sizeof(struct __TEE_TASessionHandle));
+	if (!*session) {
+		OT_LOG(LOG_ERR, "out of memory")
+		goto err_1;
+	}
+
+	new_ta_task = calloc(1, sizeof(struct ta_task));
+	if (!new_ta_task) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		goto err_1;
+	}
+
+	new_ta_task->msg_len = sizeof(struct com_msg_open_session);
+	new_ta_task->msg = calloc(1, new_ta_task->msg_len);
+	if (!new_ta_task->msg) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		goto err_1;
+	}
+
+	/* TODO: Parameters */
+	memcpy(&((struct com_msg_open_session *)new_ta_task->msg)->uuid,
+	       destination, sizeof(TEE_UUID));
+
+	add_msg_done_queue_and_notify(new_ta_task);
+
+	if (!wait_response_msg())
+		goto err_2;
+
+	resp_open_msg = response_msg;
+
+	/* TODO: Verify/check message header */
+
+	/* TODO: Parameters */
+
+	(*session)->sess_id = resp_open_msg->msg_hdr.sess_id;
+	if (resp_open_msg->return_code_open_session == TEE_SUCCESS)
+		(*session)->session_state = SESSION_STATE_ACTIVE;
+	if (returnOrigin)
+		*returnOrigin = resp_open_msg->return_origin;
+
+	return TEE_SUCCESS;
+
+err_2:
+	free(new_ta_task->msg);
+err_1:
+	free(*session);
+	free(new_ta_task);
+	if (returnOrigin)
+		*returnOrigin = TEE_ORIGIN_TEE;
+	return TEE_ERROR_GENERIC;
+}
+
+static void ta_close_ta_session(TEE_TASessionHandle session)
+{
+	OT_LOG_STR("ta_close_ta_session")
+
+	session = session;
+}
+
+static TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
+				       uint32_t cancellationRequestTimeout,
+				       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
+				       uint32_t *returnOrigin)
+{
+	OT_LOG_STR("ta_invoke_ta_command")
+
+	commandID = commandID;
+	cancellationRequestTimeout = cancellationRequestTimeout;
+	paramTypes = paramTypes;
+	params = params;
+	session = session;
+	returnOrigin = returnOrigin;
+
+	return TEE_ERROR_NOT_IMPLEMENTED;
 }
 
 static int open_shared_mem(const char *name, void **buffer, int size, bool isOutput)
