@@ -14,37 +14,41 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
+#include <stdint.h>
+
+#include "callbacks.h"
 #include "tee_internal_client_api.h"
 
 TEE_Result TEE_OpenTASession(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
 			     uint32_t paramTypes, TEE_Param params[4],
 			     TEE_TASessionHandle *session, uint32_t *returnOrigin)
 {
-	destination = destination;
-	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
-	session = session;
-	returnOrigin = returnOrigin;
+	TEE_Result (*open_ta_session)(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
+				      uint32_t paramTypes, TEE_Param params[4],
+				      TEE_TASessionHandle *session,
+				      uint32_t *returnOrigin) = fn_ptr_open_ta_session();
 
-	return TEE_ERROR_NOT_IMPLEMENTED;
+	return open_ta_session(destination, cancellationRequestTimeout, paramTypes,
+			       params, session, returnOrigin);
 }
 
 void TEE_CloseTASession(TEE_TASessionHandle session)
 {
-	session = session;
+	void (*closeTaSession)(TEE_TASessionHandle session) = fn_ptr_close_ta_session();
+
+	closeTaSession(session);
 }
 
 TEE_Result TEE_InvokeTACommand(TEE_TASessionHandle session, uint32_t cancellationRequestTimeout,
 			       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
 			       uint32_t *returnOrigin)
 {
-	commandID = commandID;
-	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
-	session = session;
-	returnOrigin = returnOrigin;
+	TEE_Result (*invoke_ta_command)(TEE_TASessionHandle session,
+					uint32_t cancellationRequestTimeout,
+					uint32_t commandID, uint32_t paramTypes,
+					TEE_Param params[4],
+					uint32_t *returnOrigin) = fn_ptr_invoke_ta_command();
 
-	return TEE_ERROR_NOT_IMPLEMENTED;
+	return invoke_ta_command(session, cancellationRequestTimeout, commandID,
+				 paramTypes, params, returnOrigin);
 }
