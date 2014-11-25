@@ -11,7 +11,8 @@ DynamicLibrary {
     }
 
     cpp.includePaths: [
-        "../include"
+        "../include",
+        "../launcher"
     ]
 
     destinationDirectory: '.'

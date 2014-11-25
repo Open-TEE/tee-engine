@@ -17,6 +17,13 @@
 #ifndef __TA_INTERNAL_THREAD_H__
 #define __TA_INTERNAL_THREAD_H__
 
+/* TA internal client API functions. These function will need a callback */
+#define FN_TEE_OPEN_TA_SESSION		0x01
+#define FN_TEE_CLOSE_TA_SESSION		0x02
+#define FN_TEE_INCOKE_TA_COMMAND	0x03
+
 void *ta_internal_thread(void *arg);
+
+void *internal_api_fn_resolver(uint8_t fn);
 
 #endif /* __TA_INTERNAL_THREAD_H__ */

@@ -17,6 +17,7 @@
 #include "dynamic_loader.h"
 #include "conf_parser.h"
 #include "core_control_resources.h"
+#include "ta_internal_thread.h"
 #include "tee_logging.h"
 
 #include <dlfcn.h>
@@ -27,6 +28,7 @@ TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 {
 	struct ta_interface tmp_cb;
 	char *err = NULL;
+	void (*internal_client_api_reg_fn)(void *(*internal_api_fn_resolver)(uint8_t));
 
 	memset((void *)&tmp_cb, 0, sizeof(struct ta_interface));
 	*callbacks = NULL;
@@ -78,6 +80,13 @@ TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 		goto err_cleanup;
 	}
 
+	internal_client_api_reg_fn = dlsym(tmp_cb.library, "reg_internal_client_api_fn_resolver");
+	err = dlerror();
+	if (err != NULL || !internal_client_api_reg_fn) {
+		OT_LOG(LOG_DEBUG, "Failed to find internal client api reg fn Entry point");
+		goto err_cleanup;
+	}
+
 	*callbacks = TEE_Malloc(sizeof(struct ta_interface), 0);
 	if (!*callbacks) {
 		OT_LOG(LOG_DEBUG, "Out of memory");
@@ -85,6 +94,7 @@ TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 	}
 
 	memcpy(*callbacks, (void *)&tmp_cb, sizeof(struct ta_interface));
+	internal_client_api_reg_fn(internal_api_fn_resolver);
 
 err_cleanup:
 

@@ -46,6 +46,45 @@
 #define TEEC_MEMREF_PARTIAL_OUTPUT	0x0000000E
 #define TEEC_MEMREF_PARTIAL_INOUT	0x0000000F
 
+TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
+			      uint32_t paramTypes, TEE_Param params[4],
+			      TEE_TASessionHandle *session, uint32_t *returnOrigin)
+{
+	OT_LOG_STR("ta_open_ta_session")
+
+	destination = destination;
+	cancellationRequestTimeout = cancellationRequestTimeout;
+	paramTypes = paramTypes;
+	params = params;
+	session = session;
+	returnOrigin = returnOrigin;
+
+	return TEE_ERROR_NOT_IMPLEMENTED;
+}
+
+void ta_close_ta_session(TEE_TASessionHandle session)
+{
+	OT_LOG_STR("ta_close_ta_session")
+
+	session = session;
+}
+
+TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session, uint32_t cancellationRequestTimeout,
+				uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
+				uint32_t *returnOrigin)
+{
+	OT_LOG_STR("ta_invoke_ta_command")
+
+	commandID = commandID;
+	cancellationRequestTimeout = cancellationRequestTimeout;
+	paramTypes = paramTypes;
+	params = params;
+	session = session;
+	returnOrigin = returnOrigin;
+
+	return TEE_ERROR_NOT_IMPLEMENTED;
+}
+
 static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 {
 	const uint64_t event = 1;
@@ -331,6 +370,23 @@ static void first_open_session_msg(struct com_msg_open_session *open_msg)
 	open_ta_task->msg_len = sizeof(struct com_msg_open_session);
 
 	open_session(open_ta_task);
+}
+
+void *internal_api_fn_resolver(uint8_t fn)
+{
+	if (fn == FN_TEE_OPEN_TA_SESSION) {
+		return ta_open_ta_session;
+
+	} else if (fn == FN_TEE_INCOKE_TA_COMMAND) {
+		return ta_invoke_ta_command;
+
+	} else if (fn == FN_TEE_CLOSE_TA_SESSION) {
+		return ta_close_ta_session;
+
+	} else {
+		OT_LOG(LOG_ERR, "Unknow query")
+		return NULL;
+	}
 }
 
 void *ta_internal_thread(void *arg)
