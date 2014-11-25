@@ -29,4 +29,6 @@ TEE_Result TEE_InvokeTACommand(TEE_TASessionHandle session, uint32_t cancellatio
 			       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
 			       uint32_t *returnOrigin);
 
+void reg_internal_client_api_fn_resolver(void *(*internal_api_fn_resolver)(uint8_t));
+
 #endif /* __TEE_INTERNAL_CLIENT_API_H__ */
