@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_516215d9",
+        "filename": "internal_api/tee_internal_client_api.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 32,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-11-26T09:28:42Z",
+      "side": 1,
+      "message": "why is this in the client api ?  This can be in the launcher correct?",
+      "range": {
+        "startLine": 32,
+        "startChar": 5,
+        "endLine": 32,
+        "endChar": 40
+      },
+      "revId": "ea8b14dd67fbdd89c5e4e622d8ec1b377d04100f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
