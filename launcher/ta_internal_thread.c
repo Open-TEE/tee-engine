@@ -333,11 +333,82 @@ static void first_open_session_msg(struct com_msg_open_session *open_msg)
 	open_session(open_ta_task);
 }
 
+static int map_create_entry_exit_value(TEE_Result ret)
+{
+	switch (ret) {
+	case TEE_ERROR_GENERIC:
+		return 10;
+	case TEE_ERROR_ACCESS_DENIED:
+		return 11;
+	case TEE_ERROR_CANCEL:
+		return 12;
+	case TEE_ERROR_ACCESS_CONFLICT:
+		return 13;
+	case TEE_ERROR_EXCESS_DATA:
+		return 14;
+	case TEE_ERROR_BAD_FORMAT:
+		return 15;
+	case TEE_ERROR_BAD_PARAMETERS:
+		return 16;
+	case TEE_ERROR_BAD_STATE:
+		return 17;
+	case TEE_ERROR_ITEM_NOT_FOUND:
+		return 18;
+	case TEE_ERROR_NOT_IMPLEMENTED:
+		return 19;
+	case TEE_ERROR_NOT_SUPPORTED:
+		return 20;
+	case TEE_ERROR_NO_DATA:
+		return 21;
+	case TEE_ERROR_OUT_OF_MEMORY:
+		return 22;
+	case TEE_ERROR_BUSY:
+		return 23;
+	case TEE_ERROR_COMMUNICATION:
+		return 24;
+	case TEE_ERROR_SECURITY:
+		return 25;
+	case TEE_ERROR_SHORT_BUFFER:
+		return 26;
+	case TEE_PENDING:
+		return 27;
+	case TEE_ERROR_TIMEOUT:
+		return 28;
+	case TEE_ERROR_OVERFLOW:
+		return 29;
+	case TEE_ERROR_TARGET_DEAD:
+		return 30;
+	case TEE_ERROR_STORAGE_NO_SPACE:
+		return 31;
+	case TEE_ERROR_MAC_INVALID:
+		return 32;
+	case TEE_ERROR_SIGNATURE_INVALID:
+		return 33;
+	case TEE_ERROR_TIME_NOT_SET:
+		return 34;
+	case TEE_ERROR_TIME_NEEDS_RESET:
+		return 35;
+	default:
+		OT_LOG(LOG_ERR, "Unknown error value");
+		break;
+	}
+
+	OT_LOG(LOG_ERR, "Unknown create entry point exit value");
+	exit(TA_EXIT_PANICKED);
+}
+
 void *ta_internal_thread(void *arg)
 {
 	int ret;
+	TEE_Result tee_ret;
 	struct ta_task *task = NULL;
 	uint8_t com_msg_name;
+
+	tee_ret = interface->create();
+	if (tee_ret != TEE_SUCCESS) {
+		OT_LOG(LOG_ERR, "TA create entry point failed");
+		exit(map_create_entry_exit_value(tee_ret));
+	}
 
 	first_open_session_msg(arg);
 
