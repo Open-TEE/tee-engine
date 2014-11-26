@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_d16e05c9",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 406,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-26T09:13:54Z",
+      "side": 1,
+      "message": "By moving create entry point function call here is allowing to use ta client internal API functions.",
+      "revId": "16e854fbccea243996572c1d71cccc191a16c8b3",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
