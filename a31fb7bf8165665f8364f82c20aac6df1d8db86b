@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_b15c2127",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 108,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-11-26T08:48:57Z",
+      "side": 1,
+      "message": "If session is NULL, this dereference will crash",
+      "range": {
+        "startLine": 108,
+        "startChar": 1,
+        "endLine": 108,
+        "endChar": 9
+      },
+      "revId": "a31fb7bf8165665f8364f82c20aac6df1d8db86b",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_d1572501",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 169,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-11-26T08:48:57Z",
+      "side": 1,
+      "message": "If session is NULL, this dereference will crash",
+      "range": {
+        "startLine": 169,
+        "startChar": 6,
+        "endLine": 169,
+        "endChar": 15
+      },
+      "revId": "a31fb7bf8165665f8364f82c20aac6df1d8db86b",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
