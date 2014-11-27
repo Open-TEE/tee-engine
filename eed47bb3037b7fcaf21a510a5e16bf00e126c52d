@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_2e3e0bb9",
+        "filename": "internal_api/tee_bigint.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 180,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-27T06:56:35Z",
+      "side": 1,
+      "message": "Why assert and not panic?",
+      "revId": "eed47bb3037b7fcaf21a510a5e16bf00e126c52d",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
