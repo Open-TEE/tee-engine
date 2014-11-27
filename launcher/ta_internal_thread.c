@@ -195,6 +195,48 @@ static void wait_and_handle_close_session_resp(TEE_TASessionHandle session)
 	free(resp_close_msg);
 }
 
+static TEE_Result wait_and_handle_invoke_cmd_resp(uint32_t paramTypes, TEE_Param params[4],
+						  uint32_t *returnOrigin)
+{
+	struct com_msg_invoke_cmd *resp_invoke_msg = NULL;
+	TEE_Result ret;
+
+	paramTypes = paramTypes;
+	params = params;
+
+	if (!wait_response_msg())
+		goto err_com;
+
+	resp_invoke_msg = response_msg;
+
+	if (resp_invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_CMD) {
+
+		if (!get_vals_from_err_msg(response_msg, &ret, returnOrigin)) {
+			OT_LOG(LOG_ERR, "Received unknown message")
+			goto err_com;
+		}
+
+		goto err_msg;
+	}
+
+	/* TODO: Copy parameters */
+
+	if (returnOrigin)
+		*returnOrigin = resp_invoke_msg->return_origin;
+	ret = resp_invoke_msg->return_code;
+	free(resp_invoke_msg);
+	return ret;
+
+err_com:
+	if (returnOrigin)
+		*returnOrigin = TEE_ORIGIN_COMMS;
+	ret = TEEC_ERROR_COMMUNICATION;
+
+err_msg:
+	free(resp_invoke_msg);
+	return ret;
+}
+
 static int open_shared_mem(const char *name, void **buffer, int size, bool isOutput)
 {
 	int flag = 0;
@@ -617,16 +659,47 @@ TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
 				       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
 				       uint32_t *returnOrigin)
 {
-	OT_LOG_STR("ta_invoke_ta_command")
+	struct ta_task *new_ta_task = NULL;
 
 	commandID = commandID;
 	cancellationRequestTimeout = cancellationRequestTimeout;
 	paramTypes = paramTypes;
 	params = params;
-	session = session;
-	returnOrigin = returnOrigin;
 
-	return TEE_ERROR_NOT_IMPLEMENTED;
+	if (!session || session->session_state != SESSION_STATE_ACTIVE) {
+		OT_LOG(LOG_ERR, "Session NULL or not opened")
+		goto err;
+	}
+
+	new_ta_task = calloc(1, sizeof(struct ta_task));
+	if (!new_ta_task) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		goto err;
+	}
+
+	new_ta_task->msg_len = sizeof(struct com_msg_invoke_cmd);
+	new_ta_task->msg = calloc(1, new_ta_task->msg_len);
+	if (!new_ta_task->msg) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		goto err;
+	}
+
+	/* Message header */
+	((struct com_msg_invoke_cmd *)new_ta_task->msg)->msg_hdr.msg_name = COM_MSG_NAME_INVOKE_CMD;
+	((struct com_msg_invoke_cmd *)new_ta_task->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
+	((struct com_msg_invoke_cmd *)new_ta_task->msg)->msg_hdr.sess_id = session->sess_id;
+
+	/* TODO: Copy parameters */
+
+	add_msg_done_queue_and_notify(new_ta_task);
+
+	return wait_and_handle_invoke_cmd_resp(paramTypes, params, returnOrigin);
+
+err:
+	free(new_ta_task);
+	if (returnOrigin)
+		*returnOrigin = TEE_ORIGIN_TEE;
+	return TEE_ERROR_GENERIC;
 }
 
 void *ta_internal_thread(void *arg)
