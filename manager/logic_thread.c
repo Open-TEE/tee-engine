@@ -887,10 +887,38 @@ ignore_msg:
 	free_manager_msg(man_msg);
 }
 
+static void send_close_resp_msg_to_sender(proc_t to)
+{
+	struct manager_msg *new_man_msg = NULL;
+
+	new_man_msg = calloc(1, sizeof(struct manager_msg));
+	if (!new_man_msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		return;
+	}
+
+	new_man_msg->msg_len = sizeof(struct com_msg_close_session);
+	new_man_msg->msg = calloc(1, new_man_msg->msg_len);
+	if (!new_man_msg->msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		free(new_man_msg);
+		return;
+	}
+
+	((struct com_msg_close_session *)new_man_msg->msg)->msg_hdr.msg_name =
+			COM_MSG_NAME_CLOSE_SESSION;
+	((struct com_msg_close_session *)new_man_msg->msg)->msg_hdr.msg_type =
+			COM_TYPE_RESPONSE;
+
+	new_man_msg->proc = to;
+	add_msg_out_queue_and_notify(new_man_msg);
+}
+
 static void close_session(struct manager_msg *man_msg)
 {
 	struct com_msg_close_session *close_msg = man_msg->msg;
 	proc_t close_ta_proc;
+	proc_t sender_proc = man_msg->proc;
 	proc_t session;
 
 	/* Valid open session message */
@@ -946,6 +974,9 @@ static void close_session(struct manager_msg *man_msg)
 
 	man_msg->proc = close_ta_proc;
 	add_msg_out_queue_and_notify(man_msg);
+
+	if (sender_proc->p_type == proc_t_TA)
+		send_close_resp_msg_to_sender(sender_proc);
 
 	return;
 
