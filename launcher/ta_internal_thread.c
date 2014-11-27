@@ -171,6 +171,30 @@ err_msg:
 	return ret;
 }
 
+static void wait_and_handle_close_session_resp(TEE_TASessionHandle session)
+{
+	struct com_msg_open_session *resp_close_msg = NULL;
+
+	if (!wait_response_msg())
+		return;
+
+	resp_close_msg = response_msg;
+
+	/* Logging. Message is not containing any information */
+	if (resp_close_msg->msg_hdr.msg_name == COM_MSG_NAME_CLOSE_SESSION) {
+		/* Fine */
+
+	} else if (resp_close_msg->msg_hdr.msg_name == COM_MSG_NAME_ERROR) {
+		OT_LOG(LOG_ERR, "Received error message")
+
+	} else {
+		OT_LOG(LOG_ERR, "Received unknow message")
+	}
+
+	free(session);
+	free(resp_close_msg);
+}
+
 static int open_shared_mem(const char *name, void **buffer, int size, bool isOutput)
 {
 	int flag = 0;
@@ -556,9 +580,36 @@ err:
 
 void ta_close_ta_session(TEE_TASessionHandle session)
 {
-	OT_LOG_STR("ta_close_ta_session")
+	struct ta_task *new_ta_task = NULL;
 
-	session = session;
+	if (!session || session->session_state != SESSION_STATE_ACTIVE) {
+		OT_LOG(LOG_ERR, "Session NULL or not opened")
+		return;
+	}
+
+	new_ta_task = calloc(1, sizeof(struct ta_task));
+	if (!new_ta_task) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		return;
+	}
+
+	new_ta_task->msg_len = sizeof(struct com_msg_close_session);
+	new_ta_task->msg = calloc(1, new_ta_task->msg_len);
+	if (!new_ta_task->msg) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		free(new_ta_task);
+		return;
+	}
+
+	/* Message header */
+	((struct com_msg_close_session *)new_ta_task->msg)->msg_hdr.msg_name =
+			COM_MSG_NAME_CLOSE_SESSION;
+	((struct com_msg_close_session *)new_ta_task->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
+	((struct com_msg_close_session *)new_ta_task->msg)->msg_hdr.sess_id = session->sess_id;
+
+	add_msg_done_queue_and_notify(new_ta_task);
+
+	wait_and_handle_close_session_resp(session);
 }
 
 TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
