@@ -19,6 +19,24 @@
     },
     {
       "key": {
+        "uuid": "fafc7978_b44fec91",
+        "filename": "internal_api/tee_bigint.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 188,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-11-28T12:00:18Z",
+      "side": 1,
+      "message": "Because I moved the struct TEE_BigInt_InternalHeader away from header and just put size constant there.\n\nThis could be done with static_assert / compile time assert as well. but that would need some macro magic I decided not to start putting into this patch.",
+      "parentUuid": "fafc7978_d4c71011",
+      "revId": "a3b8cf94d7dc371e54009d916cf5a60916847749",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "fafc7978_34d81cef",
         "filename": "internal_api/tee_bigint.c",
         "patchSetId": 4
