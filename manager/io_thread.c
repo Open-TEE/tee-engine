@@ -30,35 +30,6 @@
 /* Used for hashtable init */
 #define CA_SES_APPROX_COUNT 20
 
-static int add_man_msg_todo_queue_and_notify(struct manager_msg *msg)
-{
-	int ret = 0;
-
-	/* Lock task queue from logic thread */
-	if (pthread_mutex_lock(&todo_queue_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to lock the mutex");
-		return 1;
-	}
-
-	/* enqueue the task manager queue */
-	list_add_before(&msg->list, &todo_queue.list);
-
-	if (pthread_mutex_unlock(&todo_queue_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
-		ret = 1;
-	}
-
-	/* Signal to logic thread */
-	if (pthread_cond_signal(&todo_queue_cond)) {
-		OT_LOG(LOG_ERR, "Manager msg queue signal fail");
-		/* Function only should fail if todo_queue_cond is not initialized
-		 * Therefore, this function call *should* not fails */
-		ret = 1; /* error return, because no granti if message get handeled! */
-	}
-
-	return ret;
-}
-
 static void notify_logic_fd_err(int err_nro, proc_t proc)
 {
 	struct manager_msg *new_man_msg = NULL;
@@ -475,4 +446,33 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 			free_manager_msg(new_man_msg);
 		}
 	}
+}
+
+int add_man_msg_todo_queue_and_notify(struct manager_msg *msg)
+{
+	int ret = 0;
+
+	/* Lock task queue from logic thread */
+	if (pthread_mutex_lock(&todo_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return 1;
+	}
+
+	/* enqueue the task manager queue */
+	list_add_before(&msg->list, &todo_queue.list);
+
+	if (pthread_mutex_unlock(&todo_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+		ret = 1;
+	}
+
+	/* Signal to logic thread */
+	if (pthread_cond_signal(&todo_queue_cond)) {
+		OT_LOG(LOG_ERR, "Manager msg queue signal fail");
+		/* Function only should fail if todo_queue_cond is not initialized
+		 * Therefore, this function call *should* not fails */
+		ret = 1; /* error return, because no granti if message get handeled! */
+	}
+
+	return ret;
 }
