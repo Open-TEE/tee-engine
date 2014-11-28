@@ -16,6 +16,7 @@
 
 #include <gelf.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
@@ -25,9 +26,10 @@
 
 #define MAX_SEC_NAME_LEN 20
 
-int get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, size_t *buf_len)
+bool get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, size_t *buf_len)
 {
-	int fd, is_sec_found = 1;
+	int fd;
+	bool is_sec_found = false;
 	Elf *e;
 	char *name;
 	Elf_Scn *scn = NULL;
@@ -37,13 +39,13 @@ int get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, siz
 
 	if (elf_version(EV_CURRENT) == EV_NONE) {
 		OT_LOG(LOG_ERR, "Elf version");
-		return 1;
+		return false;
 	}
 
 	fd = open(elf_file, O_RDONLY, 0);
 	if (fd == -1) {
 		OT_LOG(LOG_ERR, "Open file");
-		return 1;
+		return false;
 	}
 
 	e = elf_begin(fd, ELF_C_READ, NULL);
@@ -52,17 +54,15 @@ int get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, siz
 		goto end;
 	}
 
-	if (elf_kind(e) != ELF_K_ELF) {
-		OT_LOG(LOG_ERR, "elf kind");
-		goto end;
-	}
+	if (elf_kind(e) != ELF_K_ELF)
+		goto end; /* No error message, this might cause log fill */
 
 	if (elf_getshdrstrndx(e, &shstrndx) != 0) {
 		OT_LOG(LOG_ERR, "elf getshdrstrndx : %s", elf_errmsg(elf_errno()));
 		goto end;
 	}
 
-	while (is_sec_found) {
+	while (!is_sec_found) {
 
 		scn = elf_nextscn(e, scn);
 		if (!scn)
@@ -89,7 +89,8 @@ int get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, siz
 			if (*buf_len >= data->d_size) {
 				memcpy(buf, data->d_buf, data->d_size);
 				*buf_len = data->d_size;
-				is_sec_found = 0;
+				is_sec_found = true;
+				break;
 
 			} else {
 				OT_LOG(LOG_ERR, "Buffer too small");
@@ -99,9 +100,6 @@ int get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, siz
 	}
 
 end:
-	if (is_sec_found)
-		OT_LOG(LOG_ERR, "section not found");
-
 	elf_end(e);
 	close(fd);
 	return is_sec_found;
