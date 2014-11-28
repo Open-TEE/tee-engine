@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_d4c71011",
+        "filename": "internal_api/tee_bigint.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 188,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-28T11:06:27Z",
+      "side": 1,
+      "message": "Assert? Why?",
+      "revId": "a3b8cf94d7dc371e54009d916cf5a60916847749",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_34d81cef",
+        "filename": "internal_api/tee_bigint.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 369,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-11-28T11:06:27Z",
+      "side": 1,
+      "message": "OT_LOG",
+      "revId": "a3b8cf94d7dc371e54009d916cf5a60916847749",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
