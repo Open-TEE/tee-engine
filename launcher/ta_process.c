@@ -56,70 +56,6 @@ struct ta_task tasks_done;
 /* Maximum epoll events */
 #define MAX_CURR_EVENTS 5
 
-static int map_create_entry_exit_value(TEE_Result ret)
-{
-	switch (ret) {
-	case TEE_ERROR_GENERIC:
-		return 10;
-	case TEE_ERROR_ACCESS_DENIED:
-		return 11;
-	case TEE_ERROR_CANCEL:
-		return 12;
-	case TEE_ERROR_ACCESS_CONFLICT:
-		return 13;
-	case TEE_ERROR_EXCESS_DATA:
-		return 14;
-	case TEE_ERROR_BAD_FORMAT:
-		return 15;
-	case TEE_ERROR_BAD_PARAMETERS:
-		return 16;
-	case TEE_ERROR_BAD_STATE:
-		return 17;
-	case TEE_ERROR_ITEM_NOT_FOUND:
-		return 18;
-	case TEE_ERROR_NOT_IMPLEMENTED:
-		return 19;
-	case TEE_ERROR_NOT_SUPPORTED:
-		return 20;
-	case TEE_ERROR_NO_DATA:
-		return 21;
-	case TEE_ERROR_OUT_OF_MEMORY:
-		return 22;
-	case TEE_ERROR_BUSY:
-		return 23;
-	case TEE_ERROR_COMMUNICATION:
-		return 24;
-	case TEE_ERROR_SECURITY:
-		return 25;
-	case TEE_ERROR_SHORT_BUFFER:
-		return 26;
-	case TEE_PENDING:
-		return 27;
-	case TEE_ERROR_TIMEOUT:
-		return 28;
-	case TEE_ERROR_OVERFLOW:
-		return 29;
-	case TEE_ERROR_TARGET_DEAD:
-		return 30;
-	case TEE_ERROR_STORAGE_NO_SPACE:
-		return 31;
-	case TEE_ERROR_MAC_INVALID:
-		return 32;
-	case TEE_ERROR_SIGNATURE_INVALID:
-		return 33;
-	case TEE_ERROR_TIME_NOT_SET:
-		return 34;
-	case TEE_ERROR_TIME_NEEDS_RESET:
-		return 35;
-	default:
-		OT_LOG(LOG_ERR, "Unknown error value");
-		break;
-	}
-
-	OT_LOG(LOG_ERR, "Unknown create entry point exit value");
-	exit(TA_EXIT_PANICKED);
-}
-
 int ta_process_loop(void *arg)
 {
 	int ret;
@@ -130,7 +66,6 @@ int ta_process_loop(void *arg)
 	char proc_name[MAX_PR_NAME] = {0}; /* For now */
 	sigset_t sig_empty_set;
 	char *path = NULL;
-	TEE_Result TEE_ret;
 	struct core_control *ctl_params = ((struct ta_loop_arg *)arg)->ctl_params;
 	struct com_msg_open_session *open_msg = ((struct ta_loop_arg *)arg)->recv_open_msg;
 	int man_sockfd = ((struct ta_loop_arg *)arg)->com_sock;
@@ -217,12 +152,6 @@ int ta_process_loop(void *arg)
 	/* limitation: CA can not determ if TA is launched or not, because framework is calling
 	 * create entry point and open session function. Those functions return values is mapped
 	 * into one return value. */
-
-	TEE_ret = interface->create();
-	if (TEE_ret != TEE_SUCCESS) {
-		OT_LOG(LOG_ERR, "TA create entry point failed");
-		exit(map_create_entry_exit_value(TEE_ret));
-	}
 
 	/* Launch worker thread and pass open session message as a parameter */
 	ret = pthread_create(&ta_logic_thread, &attr, ta_internal_thread, open_msg);
