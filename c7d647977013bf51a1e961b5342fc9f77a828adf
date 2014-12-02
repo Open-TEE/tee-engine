@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_15c7cf46",
+        "filename": "internal_api/tee_bigint.c",
+        "patchSetId": 5
+      },
+      "lineNbr": 352,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-12-02T09:40:05Z",
+      "side": 1,
+      "message": "tut-tut",
+      "range": {
+        "startLine": 352,
+        "startChar": 14,
+        "endLine": 352,
+        "endChar": 35
+      },
+      "revId": "c7d647977013bf51a1e961b5342fc9f77a828adf",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
