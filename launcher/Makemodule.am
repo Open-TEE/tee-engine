@@ -1,0 +1,34 @@
+# libLauncherApi shared library
+
+lib_LTLIBRARIES += libLauncherApi.la
+
+libLauncherApi_la_includes = \
+	include/core_control_resources.h \
+	include/ta_exit_states.h \
+	internal_api/tee_data_types.h \
+	launcher/dynamic_loader.h \
+	launcher/ta_extern_resources.h \
+	launcher/ta_internal_thread.h \
+	launcher/ta_io_thread.h \
+	launcher/ta_process.h
+
+libLauncherApi_la_SOURCES = ${libLauncherApi_la_includes} \
+	launcher/dynamic_loader.c \
+	launcher/launcher_mainloop.c \
+	launcher/ta_internal_thread.c \
+	launcher/ta_io_thread.c \
+	launcher/ta_process.c
+
+libLauncherApi_la_CFLAGS = ${AM_CFLAGS} \
+	-iquote $(top_srcdir)/include \
+	-iquote $(top_srcdir)/internal_api \
+	-iquote $(top_srcdir)/launcher
+
+libLauncherApi_la_LDFLAGS = ${AM_LDFLAGS} \
+	-lpthread \
+	-ldl
+
+libLauncherApi_la_LIBADD =\
+	libInternalApi.la \
+	libCommonApi.la
+

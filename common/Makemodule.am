@@ -1,0 +1,30 @@
+# libCommonApi shared library
+
+lib_LTLIBRARIES += libCommonApi.la
+
+libCommonApi_la_includes = \
+	include/com_protocol.h \
+	include/elf_read.h \
+	include/epoll_wrapper.h \
+	include/h_table.h \
+	include/socket_help.h \
+	include/tee_list.h \
+	include/tee_logging.h
+
+libCommonApi_la_SOURCES = ${libCommonApi_la_includes} \
+	common/com_protocol.c \
+	common/elf_read.c \
+	common/epoll_wrapper.c \
+	common/h_table.c \
+	common/socket_help.c \
+	common/tee_list.c
+
+libCommonApi_la_CFLAGS = ${AM_CFLAGS} \
+	-iquote $(top_srcdir)/include
+
+libCommonApi_la_LDFLAGS = ${AM_LDFLAGS}
+	-lelf \
+	-lz
+
+libCommonApi_la_LIBADD =
+
