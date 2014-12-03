@@ -1,0 +1,73 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_8958c657",
+        "filename": "configure.ac",
+        "patchSetId": 1
+      },
+      "lineNbr": 19,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-12-03T17:54:01Z",
+      "side": 1,
+      "message": "add libelf",
+      "range": {
+        "startLine": 19,
+        "startChar": 0,
+        "endLine": 19,
+        "endChar": 12
+      },
+      "revId": "6dd5326cc05248d89e49513a75cb11f1dea3c838",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_a9366a01",
+        "filename": "configure.ac",
+        "patchSetId": 1
+      },
+      "lineNbr": 22,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-12-03T17:54:01Z",
+      "side": 1,
+      "message": "here",
+      "range": {
+        "startLine": 22,
+        "startChar": 0,
+        "endLine": 22,
+        "endChar": 16
+      },
+      "revId": "6dd5326cc05248d89e49513a75cb11f1dea3c838",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_093cd6e1",
+        "filename": "configure.ac",
+        "patchSetId": 1
+      },
+      "lineNbr": 41,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2014-12-03T17:54:01Z",
+      "side": 1,
+      "message": "to here, are these necessary",
+      "range": {
+        "startLine": 41,
+        "startChar": 0,
+        "endLine": 41,
+        "endChar": 14
+      },
+      "revId": "6dd5326cc05248d89e49513a75cb11f1dea3c838",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
