@@ -142,14 +142,15 @@ skip:
 	del_proc = NULL;
 }
 
-static bool add_msg_out_queue_and_notify(struct manager_msg *man_msg)
+static void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 {
 	const uint64_t event = 1;
 
 	/* Lock task queue from logic thread */
 	if (pthread_mutex_lock(&done_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
-		return false;
+		free_manager_msg(man_msg);
+		return;
 	}
 
 	/* enqueue the task manager queue */
@@ -165,8 +166,6 @@ static bool add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 		OT_LOG(LOG_ERR, "Failed to notify the io thread");
 		/* TODO/PLACEHOLDER: notify IO thread */
 	}
-
-	return true;
 }
 
 static void gen_err_msg_and_add_to_out(struct manager_msg *man_msg, uint32_t err_origin,
@@ -1045,10 +1044,7 @@ static void send_err_to_initialized_sess(proc_t ta, uint8_t exit_status)
 			((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TEE;
 		}
 
-		if (!add_msg_out_queue_and_notify(man_msg)) {
-			OT_LOG(LOG_ERR, "Failed to add out queue")
-			free_manager_msg(man_msg);
-		}
+		add_msg_out_queue_and_notify(man_msg);
 	}
 }
 
@@ -1183,10 +1179,7 @@ static void send_close_msg_to_all_sessions(proc_t ca_proc)
 			continue;
 		}
 
-		if (!add_msg_out_queue_and_notify(man_msg)) {
-			OT_LOG(LOG_ERR, "Failed to add out queue");
-			free_manager_msg(man_msg);
-		}
+		add_msg_out_queue_and_notify(man_msg);
 	}
 }
 
