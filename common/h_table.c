@@ -242,6 +242,8 @@ void h_table_init_stepper(HASHTABLE table)
 	if (!table)
 		return;
 
+	table->y_index = NULL;
+
 	for (table->x_index = 0; table->x_index < table->h_table_size; ++table->x_index) {
 
 		if (table->buckets[table->x_index]) {
