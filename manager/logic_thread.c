@@ -225,7 +225,7 @@ static void ca_init_context(struct manager_msg *man_msg)
 	return;
 
 discard_msg:
-	free(man_msg);
+	free_manager_msg(man_msg);
 }
 
 static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
