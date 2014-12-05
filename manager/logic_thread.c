@@ -227,6 +227,105 @@ discard_msg:
 	free_manager_msg(man_msg);
 }
 
+static bool active_sess_in_ta(proc_t ta_proc)
+{
+	proc_t sess;
+
+	h_table_init_stepper(ta_proc->content.process.links);
+
+	while (1) {
+		sess = h_table_step(ta_proc->content.process.links);
+		if (!sess)
+			return false;
+
+		/* Initialized means that there might be an open session message out */
+		if (sess->content.sesLink.status == sess_active ||
+		    sess->content.sesLink.status == sess_initialized)
+			return true;
+	}
+}
+
+/*!
+ * \brief should_ta_destroy
+ * \param ta_proc
+ * \return If TA should destroy, return 1.
+ * If TA should not destroy, return 0.
+ * In case of error (e.g. TA not found in TA directory), return -1
+ */
+static int should_ta_destroy(proc_t ta_proc)
+{
+	struct trusted_app_propertie *ta_properties;
+	int ret = 0; /* Default action is not to destroy */
+
+	if (ta_dir_watch_lock_mutex())
+		return -1; /* Err logged */
+
+	ta_properties = ta_dir_watch_props(&ta_proc->content.process.ta_uuid);
+	if (!ta_properties) {
+		OT_LOG(LOG_ERR, "TA with requested UUID is not found");
+		ret = -1;
+		goto unlock;
+	}
+
+	/* Keep alive instance is never terminated */
+	if (ta_properties->user_config.instanceKeepAlive) {
+		ret = 0;
+		goto unlock;
+	}
+
+	/* TA might be signleton or multi-instance TA,
+	 * but if there is no session opens, terminate */
+	if (!active_sess_in_ta(ta_proc))
+		ret = 1;
+
+unlock:
+	ta_dir_watch_unlock_mutex();
+
+	return ret;
+}
+
+static void send_close_sess_msg(proc_t ta_sess)
+{
+	struct manager_msg *man_msg = NULL;
+
+	if (ta_sess->p_type != proc_t_session ||
+	    ta_sess->content.sesLink.owner->p_type != proc_t_TA) {
+		OT_LOG(LOG_ERR, "Not session or not session in TA process\n");
+		return;
+	}
+
+	man_msg = calloc(1, sizeof(struct manager_msg));
+	if (!man_msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		return;
+	}
+
+	man_msg->msg = calloc(1, sizeof(struct com_msg_close_session));
+	if (!man_msg->msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		free(man_msg);
+		return;
+	}
+
+	man_msg->msg_len = sizeof(struct com_msg_close_session);
+	man_msg->proc = ta_sess->content.sesLink.owner;
+
+	((struct com_msg_close_session *)man_msg->msg)->msg_hdr.msg_name =
+			COM_MSG_NAME_CLOSE_SESSION;
+	((struct com_msg_close_session *)man_msg->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
+	((struct com_msg_close_session *)man_msg->msg)->sess_ctx =
+			ta_sess->content.sesLink.sess_ctx;
+
+	((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy =
+	    should_ta_destroy(ta_sess->content.sesLink.owner);
+	if (((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy == -1) {
+		free_manager_msg(man_msg);
+		return;
+	}
+
+	add_msg_out_queue_and_notify(man_msg);
+}
+
 static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
 {
 	free(h_table_remove(owner->content.process.links, (unsigned char *)(&sess_id),
@@ -277,6 +376,14 @@ static void open_session_response(struct manager_msg *man_msg)
 	/* Check received message answer and proceed according to that */
 
 	if (open_resp_msg->return_code_open_session != TEE_SUCCESS) {
+
+		/* Although session will be removed, it is marked as closed. It is done,
+		 * because then we can call send_close_sess_msg() and it can decide if TA needs
+		 * to be terminated. */
+		ta_session->content.sesLink.status = sess_closed;
+		ta_session->content.sesLink.to->content.sesLink.status = sess_closed;
+
+		send_close_sess_msg(ta_session);
 
 		remove_session_between(ta_session->content.sesLink.owner,
 				       ta_session->content.sesLink.to->content.sesLink.owner,
@@ -780,63 +887,6 @@ ignore_msg:
 	free_manager_msg(man_msg);
 }
 
-static bool active_sess_in_ta(proc_t ta_proc)
-{
-	proc_t sess;
-
-	h_table_init_stepper(ta_proc->content.process.links);
-
-	while (1) {
-		sess = h_table_step(ta_proc->content.process.links);
-		if (!sess)
-			return false;
-
-		/* Initialized means that there might be an open session message out */
-		if (sess->content.sesLink.status == sess_active ||
-		    sess->content.sesLink.status == sess_initialized)
-			return true;
-	}
-}
-
-/*!
- * \brief should_ta_destroy
- * \param ta_proc
- * \return If TA should destroy, return 1.
- * If TA should not destroy, return 0.
- * In case of error (e.g. TA not found in TA directory), return -1
- */
-static int should_ta_destroy(proc_t ta_proc)
-{
-	struct trusted_app_propertie *ta_properties;
-	int ret = 0; /* Default action is not to destroy */
-
-	if (ta_dir_watch_lock_mutex())
-		return -1; /* Err logged */
-
-	ta_properties = ta_dir_watch_props(&ta_proc->content.process.ta_uuid);
-	if (!ta_properties) {
-		OT_LOG(LOG_ERR, "TA with requested UUID is not found");
-		ret = -1;
-		goto unlock;
-	}
-
-	/* Keep alive instance is never terminated */
-	if (ta_properties->user_config.instanceKeepAlive) {
-		ret = 0;
-		goto unlock;
-	}
-
-	/* TA might be signleton or multi-instance TA,
-	 * but if there is no session opens, terminate */
-	if (!active_sess_in_ta(ta_proc))
-		ret = 1;
-
-unlock:
-	ta_dir_watch_unlock_mutex();
-
-	return ret;
-}
-
 static void close_session(struct manager_msg *man_msg)
 {
 	struct com_msg_close_session *close_msg = man_msg->msg;
@@ -1145,7 +1195,6 @@ static void proc_changed_state(struct manager_msg *man_msg)
 
 static void send_close_msg_to_all_sessions(proc_t ca_proc)
 {
-	struct manager_msg *man_msg = NULL;
 	proc_t ca_sess;
 
 	h_table_init_stepper(ca_proc->content.process.links);
@@ -1155,36 +1204,7 @@ static void send_close_msg_to_all_sessions(proc_t ca_proc)
 		if (!ca_sess)
 			break;
 
-		man_msg = calloc(1, sizeof(struct manager_msg));
-		if (!man_msg) {
-			OT_LOG(LOG_ERR, "Out of memory\n");
-			continue;
-		}
-
-		man_msg->msg = calloc(1, sizeof(struct com_msg_close_session));
-		if (!man_msg->msg) {
-			OT_LOG(LOG_ERR, "Out of memory\n");
-			free(man_msg);
-			continue;
-		}
-
-		man_msg->msg_len = sizeof(struct com_msg_close_session);
-		man_msg->proc = ca_sess->content.sesLink.to->content.sesLink.owner;
-
-		((struct com_msg_close_session *)man_msg->msg)->msg_hdr.msg_name =
-				COM_MSG_NAME_ERROR;
-		((struct com_msg_close_session *)man_msg->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
-		((struct com_msg_close_session *)man_msg->msg)->sess_ctx =
-				ca_sess->content.sesLink.sess_ctx;
-
-		((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy =
-		    should_ta_destroy(ca_sess->content.sesLink.to->content.sesLink.owner);
-		if (((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy == -1) {
-			free_manager_msg(man_msg);
-			continue;
-		}
-
-		add_msg_out_queue_and_notify(man_msg);
+		send_close_sess_msg(ca_sess->content.sesLink.to);
 	}
 }
 
