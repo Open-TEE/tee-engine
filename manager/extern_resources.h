@@ -24,6 +24,10 @@
 #include "tee_list.h"
 #include "tee_shared_data_types.h"
 
+#define WAIT_NO_MSG_OUT		1
+#define WAIT_OPEN_SESSION_MSG	2
+#define WAIT_INVOKE_MSG		3
+
 /* define an opaque structure to handle the process related information */
 typedef struct __proc *proc_t;
 
@@ -122,6 +126,7 @@ struct __proc {
 			proc_t to;
 			uintptr_t sess_ctx;
 			int session_id;
+			int waiting_response_msg;
 			enum session_status status;
 		} sesLink;
 
