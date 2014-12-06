@@ -23,6 +23,7 @@ DynamicLibrary {
     files: [
         "../include/core_control_resources.h",
         "../include/ta_exit_states.h",
+        "../internal_api/callbacks.h",
         "dynamic_loader.h",
         "dynamic_loader.c",
         "launcher_mainloop.c",
