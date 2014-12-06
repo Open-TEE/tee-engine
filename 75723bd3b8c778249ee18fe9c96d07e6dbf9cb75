@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_df06fd1f",
+        "filename": "Makefile.am",
+        "patchSetId": 2
+      },
+      "lineNbr": 7,
+      "author": {
+        "id": 1002619
+      },
+      "writtenOn": "2014-12-06T10:31:45Z",
+      "side": 1,
+      "message": "Unable to add -Werror as it will break the build",
+      "revId": "75723bd3b8c778249ee18fe9c96d07e6dbf9cb75",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
