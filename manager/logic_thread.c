@@ -566,6 +566,9 @@ static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
 		return 1;
 	}
 
+	/* It is initialized to waiting open session message, because immediately
+	 * after this is open session message send out */
+	new_owner_ses->content.sesLink.waiting_response_msg = WAIT_OPEN_SESSION_MSG;
 	new_owner_ses->content.sesLink.to = new_to_ses;
 
 	return 0;
@@ -843,10 +846,13 @@ static void invoke_cmd(struct manager_msg *man_msg)
 		return;
 	}
 
-	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY)
+	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
+		session->content.sesLink.waiting_response_msg = WAIT_INVOKE_MSG;
 		invoke_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
 
-	/* TODO: Panic handling. Here should be logic, which checks session status! */
+	} else if (invoke_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE) {
+		session->content.sesLink.to->content.sesLink.waiting_response_msg = WAIT_NO_MSG_OUT;
+	}
 
 	man_msg->proc = session->content.sesLink.to->content.sesLink.owner;
 	add_msg_out_queue_and_notify(man_msg);
@@ -1057,9 +1063,57 @@ static TEE_Result unmap_create_entry_exit_value(uint8_t ret)
 	return TEE_ERROR_GENERIC; /* Should not end up here */
 }
 
-static void send_err_to_initialized_sess(proc_t ta, uint8_t exit_status)
+static void gen_man_and_err_and_send(proc_t ta_sess, uint8_t exit_status, int waited_msg)
 {
 	struct manager_msg *man_msg = NULL;
+
+	man_msg = calloc(1, sizeof(struct manager_msg));
+	if (!man_msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		return;
+	}
+
+	man_msg->msg = calloc(1, sizeof(struct com_msg_error));
+	if (!man_msg->msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		free(man_msg);
+		return;
+	}
+
+	man_msg->msg_len = sizeof(struct com_msg_error);
+	man_msg->proc = ta_sess->content.sesLink.to->content.sesLink.owner;
+
+	((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
+
+	if (exit_status) {
+		((struct com_msg_error *)man_msg->msg)->ret =
+				unmap_create_entry_exit_value(exit_status);
+		((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TRUSTED_APP;
+
+	} else if (waited_msg) {
+
+		if (waited_msg == WAIT_OPEN_SESSION_MSG)
+			((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_name =
+				COM_MSG_NAME_OPEN_SESSION;
+
+		else if (waited_msg == WAIT_INVOKE_MSG)
+			((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_name =
+				COM_MSG_NAME_INVOKE_CMD;
+
+		/* If TA exited during the out message, only possibility is panic! */
+		((struct com_msg_error *)man_msg->msg)->ret = TEE_ERROR_TARGET_DEAD;
+		((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TRUSTED_APP;
+
+	} else {
+		((struct com_msg_error *)man_msg->msg)->ret = TEE_ERROR_GENERIC;
+		((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TEE;
+	}
+
+	add_msg_out_queue_and_notify(man_msg);
+}
+
+static void send_err_to_initialized_sess(proc_t ta, uint8_t exit_status)
+{
 	proc_t proc_sess;
 
 	h_table_init_stepper(ta->content.process.links);
@@ -1072,37 +1126,47 @@ static void send_err_to_initialized_sess(proc_t ta, uint8_t exit_status)
 		if (proc_sess->content.sesLink.status != sess_initialized)
 			continue;
 
-		man_msg = calloc(1, sizeof(struct manager_msg));
-		if (!man_msg) {
-			OT_LOG(LOG_ERR, "Out of memory\n");
-			continue;
-		}
-
-		man_msg->msg = calloc(1, sizeof(struct com_msg_error));
-		if (!man_msg->msg) {
-			OT_LOG(LOG_ERR, "Out of memory\n");
-			free(man_msg);
-			continue;
-		}
-
-		man_msg->msg_len = sizeof(struct com_msg_error);
-		man_msg->proc = proc_sess->content.sesLink.to->content.sesLink.owner;
-
-		((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
-
-		if (exit_status) {
-			((struct com_msg_error *)man_msg->msg)->ret =
-					unmap_create_entry_exit_value(exit_status);
-			((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TRUSTED_APP;
-		} else {
-			((struct com_msg_error *)man_msg->msg)->ret = TEE_ERROR_GENERIC;
-			((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TEE;
-		}
-
-		add_msg_out_queue_and_notify(man_msg);
+		gen_man_and_err_and_send(proc_sess, exit_status, 0);
 	}
 }
 
+static void send_err_msg_to_waiting_sess(proc_t ta)
+{
+	proc_t proc_sess;
+
+	h_table_init_stepper(ta->content.process.links);
+	while (1) {
+
+		proc_sess = h_table_step(ta->content.process.links);
+		if (!proc_sess)
+			break;
+
+		if (proc_sess->content.sesLink.to->content.sesLink.waiting_response_msg ==
+		    WAIT_NO_MSG_OUT)
+			continue;
+
+		proc_sess->content.sesLink.to->content.sesLink.waiting_response_msg =
+				WAIT_NO_MSG_OUT;
+		gen_man_and_err_and_send(proc_sess, 0,
+					 proc_sess->content.sesLink.to->
+					 content.sesLink.waiting_response_msg);
+	}
+}
+
+static void send_err_generic_err_msg(proc_t ta)
+{
+	proc_t proc_sess;
+
+	h_table_init_stepper(ta->content.process.links);
+	while (1) {
+
+		proc_sess = h_table_step(ta->content.process.links);
+		if (!proc_sess)
+			break;
+
+		gen_man_and_err_and_send(proc_sess, 0, 0);
+	}
+}
 
 static void ta_status_change(pid_t ta_pid, int status)
 {
@@ -1117,6 +1181,7 @@ static void ta_status_change(pid_t ta_pid, int status)
 	/* Signal caused termination */
 	if (WIFSIGNALED(status)) {
 		set_all_ta_sess_status(ta, sess_panicked);
+		send_err_msg_to_waiting_sess(ta);
 		free_proc(ta);
 	}
 
@@ -1132,24 +1197,24 @@ static void ta_status_change(pid_t ta_pid, int status)
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_PANICKED) {
 			set_all_ta_sess_status(ta, sess_panicked);
+			send_err_msg_to_waiting_sess(ta);
 			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_LAUNCH_FAILED) {
-			send_err_to_initialized_sess(ta, 0);
+			send_err_generic_err_msg(ta);
 			rm_all_ta_sessions(ta);
 			free_proc(ta);
 
 		} else if (WEXITSTATUS(status) == TA_EXIT_FIRST_OPEN_SESS_FAILED) {
-			send_err_to_initialized_sess(ta, 0);
+			send_err_generic_err_msg(ta);
 			rm_all_ta_sessions(ta);
-			if (should_ta_destroy(ta) == 1)
-				free_proc(ta);
+			free_proc(ta);
 
 		} else {
 			OT_LOG(LOG_ERR, "Unknow exit status, handeled as panic!");
 			set_all_ta_sess_status(ta, sess_panicked);
-			if (should_ta_destroy(ta) == 1)
-				free_proc(ta);
+			send_err_msg_to_waiting_sess(ta);
+			free_proc(ta);
 		}
 	}
 }
