@@ -728,6 +728,12 @@ static void invoke_cmd(struct manager_msg *man_msg)
 		goto discard_msg;
 	}
 
+	if (session->content.sesLink.status == sess_panicked) {
+		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_TARGET_DEAD);
+		free_sess(session);
+		return;
+	}
+
 	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY)
 		invoke_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
 
@@ -856,6 +862,11 @@ static void close_session(struct manager_msg *man_msg)
 		goto ignore_msg;
 	}
 
+	if (session->content.sesLink.status == sess_panicked) {
+		free_sess(session);
+		return;
+	}
+
 	/* Fill in session ctx before session gets removed */
 	close_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
 
@@ -869,23 +880,19 @@ static void close_session(struct manager_msg *man_msg)
 		goto ignore_msg;
 
 	} else if (close_msg->should_ta_destroy == 1) {
-		/* Session is not removed. It will be removed when TA exit */
-		session->content.sesLink.status = sess_closed;
-		session->content.sesLink.to->content.sesLink.status = sess_closed;
-		/* No new open session message to TA */
+		/* Mark TA as disconnected for signaling that this TA will be removed */
 		session->content.sesLink.to->content.sesLink.owner->content.process.status
 				= proc_disconnected;
 
 		/* No more messages from this TA */
 		if (epoll_unreg(session->content.sesLink.to->content.sesLink.owner->sockfd))
 			OT_LOG(LOG_ERR, "Failed to unreg socket");
-
-	} else {
-		/* Remove sessions, because TA will be not terminated */
-		remove_session_between(session->content.sesLink.owner,
-				       session->content.sesLink.to->content.sesLink.owner,
-				       session->content.sesLink.session_id);
 	}
+
+	/* Remove session */
+	remove_session_between(session->content.sesLink.owner,
+			       session->content.sesLink.to->content.sesLink.owner,
+			       session->content.sesLink.session_id);
 
 	man_msg->proc = close_ta_proc;
 	add_msg_out_queue_and_notify(man_msg);
