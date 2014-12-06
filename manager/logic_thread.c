@@ -1354,6 +1354,29 @@ static void fd_error(struct manager_msg *man_msg)
 	free_manager_msg(man_msg); /* No information */
 }
 
+static void ta_rem_from_dir(struct manager_msg *man_msg)
+{
+	struct com_msg_ta_rem_from_dir *rem_ta_msg = man_msg->msg;
+	proc_t ta;
+
+	h_table_init_stepper(trustedApps);
+
+	while (1) {
+		ta = h_table_step(trustedApps);
+		if (!ta)
+			break;
+
+		if (!bcmp(&rem_ta_msg->uuid, &ta->content.process.ta_uuid, sizeof(TEE_UUID))) {
+			set_all_ta_sess_status(ta, sess_panicked);
+			rm_all_ta_sessions(ta);
+			free_proc(ta);
+			break;
+		}
+	}
+
+	free_manager_msg(man_msg);
+}
+
 void *logic_thread_mainloop(void *arg)
 {
 	arg = arg; /* ignored */
@@ -1394,7 +1417,8 @@ void *logic_thread_mainloop(void *arg)
 		}
 
 		if (com_msg_name == COM_MSG_NAME_PROC_STATUS_CHANGE ||
-		    com_msg_name == COM_MSG_NAME_FD_ERR) {
+		    com_msg_name == COM_MSG_NAME_FD_ERR ||
+		    com_msg_name == COM_MSG_NAME_TA_REM_FROM_DIR) {
 
 			/* Empty: No need sender details */
 
@@ -1434,6 +1458,10 @@ void *logic_thread_mainloop(void *arg)
 
 		case COM_MSG_NAME_CA_FINALIZ_CONTEXT:
 			ca_finalize_context(handled_msg);
+			break;
+
+		case COM_MSG_NAME_TA_REM_FROM_DIR:
+			ta_rem_from_dir(handled_msg);
 			break;
 
 		default:

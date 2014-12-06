@@ -24,8 +24,8 @@
  * \param sec_name Seeked section name. Name must be NULL (\0) terminated
  * \param buf section data to read
  * \param buf_len Buf lenght. If section is found, data that is read to buffer is filled to buf_len
- * \return If section is found, return value is 0. If section is not found, return value is 1.
+ * \return If section is found, return value is true. If section is not found,return value is false.
  */
-int get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, size_t *buf_len);
+bool get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, size_t *buf_len);
 
 #endif /* __ELF_READ__ */

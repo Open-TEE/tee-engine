@@ -66,4 +66,12 @@ void handle_close_sock(struct epoll_event *event);
  */
 void manager_check_signal(struct core_control *control_params, struct epoll_event *event);
 
+/*!
+ * \brief add_man_msg_todo_queue_and_notify
+ * Adding message to inbound queue
+ * \param msg Added message
+ * \return in case of message added, return 0
+ */
+int add_man_msg_todo_queue_and_notify(struct manager_msg *msg);
+
 #endif /* __IO_THREAD__ */

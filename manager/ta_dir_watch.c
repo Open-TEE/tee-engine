@@ -29,9 +29,12 @@
 #include <unistd.h>
 
 #include "conf_parser.h"
+#include "com_protocol.h"
 #include "core_control_resources.h"
 #include "elf_read.h"
 #include "epoll_wrapper.h"
+#include "extern_resources.h"
+#include "io_thread.h"
 #include "h_table.h"
 #include "ta_dir_watch.h"
 #include "tee_ta_properties.h"
@@ -47,6 +50,33 @@ static uint32_t inotify_flags =
     IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO;
 #define BUF_LEN (10 * (sizeof(struct inotify_event) + NAME_MAX + 1))
 #define ESTIMATE_COUNT_OF_TAS 40
+
+static void free_ta(struct trusted_app_propertie *ta)
+{
+	struct manager_msg *new_man_msg = NULL;
+
+	new_man_msg = calloc(1, sizeof(struct manager_msg));
+	if (!new_man_msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		return;
+	}
+
+	new_man_msg->msg = calloc(1, sizeof(struct com_msg_ta_rem_from_dir));
+	if (!new_man_msg->msg) {
+		OT_LOG(LOG_ERR, "Out of memory\n");
+		free(new_man_msg);
+		return;
+	}
+
+	((struct com_msg_ta_rem_from_dir *)new_man_msg->msg)->msg_hdr.msg_name =
+			COM_MSG_NAME_TA_REM_FROM_DIR;
+
+	memcpy(&((struct com_msg_ta_rem_from_dir *)new_man_msg->msg)->uuid,
+	       &ta->user_config.appID, sizeof(TEE_UUID));
+
+	if (add_man_msg_todo_queue_and_notify(new_man_msg))
+		free_manager_msg(new_man_msg);
+}
 
 static void remove_all_tas()
 {
@@ -67,8 +97,7 @@ static void remove_all_tas()
 
 		h_table_remove(ta_dir_table, (unsigned char *)&ta->user_config.appID,
 			       sizeof(TEE_UUID));
-		free(ta);
-		ta = NULL;
+		free_ta(ta);
 	}
 
 	ta_dir_watch_unlock_mutex();
@@ -91,14 +120,16 @@ static bool does_name_and_uuid_in_table(struct trusted_app_propertie *new_ta)
 
 		if (!strncasecmp(ta_in_table->ta_so_name, new_ta->ta_so_name,
 				 strlen(ta_in_table->ta_so_name))) {
-			OT_LOG(LOG_ERR, "TA .so name is already in use");
+			OT_LOG(LOG_ERR, "TA .so name: %s : is already in use",
+			       ta_in_table->ta_so_name);
 			ret = true;
 			goto end;
 		}
 
 		if (!bcmp(&ta_in_table->user_config.appID, &new_ta->user_config.appID,
 			  sizeof(TEE_UUID))) {
-			OT_LOG(LOG_ERR, "TA uuid is already in use");
+			OT_LOG(LOG_ERR, "TAs has same UUID: %s : %s",
+			       ta_in_table->ta_so_name, new_ta->ta_so_name);
 			ret = true;
 			goto end;
 		}
@@ -132,9 +163,9 @@ static void add_new_ta(char *name)
 		goto err;
 	}
 
-	if (get_data_from_elf(ta_with_path, seek_section_name, &new_ta_propertie->user_config,
-			      &ta_user_config_size)) {
-		OT_LOG(LOG_ERR, "TA properties section is not found");
+	if (!get_data_from_elf(ta_with_path, seek_section_name, &new_ta_propertie->user_config,
+			       &ta_user_config_size)) {
+		OT_LOG(LOG_ERR, "%s : properties section is not found", name);
 		goto err;
 	}
 
@@ -166,6 +197,7 @@ static void add_new_ta(char *name)
 	return;
 
 err:
+	OT_LOG(LOG_ERR, "TA \"%s\" rejected", name)
 	free(ta_with_path);
 	free(new_ta_propertie);
 }
@@ -193,8 +225,7 @@ static void delete_ta(char *name)
 		/* Found */
 		h_table_remove(ta_dir_table, (unsigned char *)&ta->user_config.appID,
 			       sizeof(TEE_UUID));
-		free(ta);
-		ta = NULL;
+		free_ta(ta);
 		break;
 	}
 
@@ -312,11 +343,11 @@ void ta_dir_watch_event(struct epoll_event *e_event, int *man_ta_dir_watch_fd)
 		if (i_event->mask & IN_Q_OVERFLOW)
 			goto reinit_ta_properties;
 
-		if (i_event->mask & (IN_CREATE | IN_MOVED_TO | IN_CLOSE_WRITE))
-			add_new_ta(i_event->name);
-
 		if (i_event->mask & (IN_DELETE | IN_MOVED_FROM))
 			delete_ta(i_event->name);
+
+		if (i_event->mask & (IN_CREATE | IN_MOVED_TO | IN_CLOSE_WRITE))
+			add_new_ta(i_event->name);
 
 		i += sizeof(struct inotify_event) + i_event->len;
 	}
