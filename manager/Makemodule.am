@@ -1,0 +1,27 @@
+# libManagerApi shared library
+
+lib_LTLIBRARIES += libManagerApi.la
+
+libManagerApi_la_includes = \
+	include/com_protocol.h \
+	include/core_control_resources.h \
+	include/ta_exit_states.h \
+	manager/extern_resources.h \
+	manager/io_thread.h \
+	manager/logic_thread.h \
+	manager/ta_dir_watch.h \
+	manager/tee_ta_properties.h
+
+libManagerApi_la_SOURCES = ${libManagerApi_la_includes} \
+	manager/io_thread.c \
+	manager/logic_thread.c \
+	manager/mainloop.c \
+	manager/ta_dir_watch.c
+
+libManagerApi_la_CFLAGS = ${AM_CFLAGS} \
+	-iquote $(top_srcdir)/include \
+	-iquote $(top_srcdir)/manager
+
+libManagerApi_la_LIBADD = -ldl -lpthread \
+	libCommonApi.la
+
