@@ -22,6 +22,30 @@
       "revId": "582db2898ea62a524a8fbb4f8e8f81689b0c91cb",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_42d07050",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 547,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2014-12-06T13:29:51Z",
+      "side": 1,
+      "message": "No, just session is correct. Session check is done, because then we can use goto at line 511",
+      "parentUuid": "fafc7978_e2e7e43e",
+      "range": {
+        "startLine": 547,
+        "startChar": 4,
+        "endLine": 547,
+        "endChar": 11
+      },
+      "revId": "582db2898ea62a524a8fbb4f8e8f81689b0c91cb",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
