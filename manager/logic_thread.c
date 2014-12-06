@@ -224,7 +224,7 @@ static void ca_init_context(struct manager_msg *man_msg)
 	return;
 
 discard_msg:
-	free(man_msg);
+	free_manager_msg(man_msg);
 }
 
 static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
@@ -240,6 +240,7 @@ static void open_session_response(struct manager_msg *man_msg)
 {
 	struct com_msg_open_session *open_resp_msg = man_msg->msg;
 	proc_t ta_session;
+	proc_t resp_msg_to_proc;
 
 	/* Message can be received only from trusted App! */
 	if (man_msg->proc->p_type != proc_t_TA) {
@@ -269,6 +270,10 @@ static void open_session_response(struct manager_msg *man_msg)
 		goto ignore_msg;
 	}
 
+	/* Session might be removed, because return code is not TEE_SUCCESS. Therefore
+	 * we need save "address" to where this message to send */
+	resp_msg_to_proc = ta_session->content.sesLink.to->content.sesLink.owner;
+
 	/* Check received message answer and proceed according to that */
 
 	if (open_resp_msg->return_code_open_session != TEE_SUCCESS) {
@@ -292,7 +297,7 @@ static void open_session_response(struct manager_msg *man_msg)
 
 	/* Send message to its initial sender
 	 * man_msg->proc will be used as message "address" */
-	man_msg->proc = ta_session->content.sesLink.to->content.sesLink.owner;
+	man_msg->proc = resp_msg_to_proc;
 	add_msg_out_queue_and_notify(man_msg);
 
 	return;
