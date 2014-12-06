@@ -618,8 +618,6 @@ static void open_session_query(struct manager_msg *man_msg)
 	/* SessID is needed when message is sent back from TA */
 	open_msg->msg_hdr.sess_id = new_session_id;
 
-	/* TODO: Check TA state (may have panicked)! */
-
 	/* Note: Function will return TRUE/FALSE, but this boolean is not about should we
 	 * connect to existing TA. If function return FALSE, TA might not be availible in TA
 	 * folder or can not lock mutex. If true, TA is availible, but we must check also
@@ -824,9 +822,9 @@ static int should_ta_destroy(proc_t ta_proc)
 		goto unlock;
 	}
 
-	/* TA might be signleton or multi-instance TA, but if there is no session opens, terminate
-	 */
-	if (active_sess_in_ta(ta_proc))
+	/* TA might be signleton or multi-instance TA,
+	 * but if there is no session opens, terminate */
+	if (!active_sess_in_ta(ta_proc))
 		ret = 1;
 
 unlock:
@@ -867,32 +865,30 @@ static void close_session(struct manager_msg *man_msg)
 		return;
 	}
 
-	/* Fill in session ctx before session gets removed */
-	close_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
-
 	/* Save session TO proc addr, because session might be removed */
 	close_ta_proc = session->content.sesLink.to->content.sesLink.owner;
 
-	/* Update close message */
-	close_msg->should_ta_destroy =
-	    should_ta_destroy(session->content.sesLink.to->content.sesLink.owner);
-	if (close_msg->should_ta_destroy == -1) {
-		goto ignore_msg;
-
-	} else if (close_msg->should_ta_destroy == 1) {
-		/* Mark TA as disconnected for signaling that this TA will be removed */
-		session->content.sesLink.to->content.sesLink.owner->content.process.status
-				= proc_disconnected;
-
-		/* No more messages from this TA */
-		if (epoll_unreg(session->content.sesLink.to->content.sesLink.owner->sockfd))
-			OT_LOG(LOG_ERR, "Failed to unreg socket");
-	}
+	/* Fill in session ctx before session gets removed */
+	close_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
 
 	/* Remove session */
 	remove_session_between(session->content.sesLink.owner,
 			       session->content.sesLink.to->content.sesLink.owner,
 			       session->content.sesLink.session_id);
+
+	/* Update close message */
+	close_msg->should_ta_destroy = should_ta_destroy(close_ta_proc);
+	if (close_msg->should_ta_destroy == -1) {
+		goto ignore_msg;
+
+	} else if (close_msg->should_ta_destroy == 1) {
+		/* Mark TA as disconnected for signaling that this TA will be removed */
+		close_ta_proc->content.process.status = proc_disconnected;
+
+		/* No more messages from this TA */
+		if (epoll_unreg(close_ta_proc->sockfd))
+			OT_LOG(LOG_ERR, "Failed to unreg socket");
+	}
 
 	man_msg->proc = close_ta_proc;
 	add_msg_out_queue_and_notify(man_msg);
