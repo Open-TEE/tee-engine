@@ -135,6 +135,23 @@ static bool get_vals_from_err_msg(void *msg, TEE_Result *ret_code, uint32_t *msg
 	return true;
 }
 
+static bool map_and_cpy_parameters(uint32_t paramTypes, TEE_Param *params,
+				   struct com_msg_operation *operation)
+{
+	paramTypes = paramTypes;
+	params = params;
+	operation = operation;
+	return true;
+}
+
+static void cpy_and_close_parameters(uint32_t paramTypes, TEE_Param *params,
+				      struct com_msg_operation *operation)
+{
+	paramTypes = paramTypes;
+	params = params;
+	operation = operation;
+}
+
 static TEE_Result wait_and_handle_open_sess_resp(uint32_t paramTypes, TEE_Param params[4],
 						 TEE_TASessionHandle *session,
 						 uint32_t *returnOrigin)
@@ -160,7 +177,7 @@ static TEE_Result wait_and_handle_open_sess_resp(uint32_t paramTypes, TEE_Param 
 		goto err_msg;
 	}
 
-	/* TODO: Copy parameters */
+	cpy_and_close_parameters(paramTypes, params, &resp_open_msg->operation);
 
 	if (returnOrigin)
 		*returnOrigin = resp_open_msg->return_origin;
@@ -236,7 +253,7 @@ static TEE_Result wait_and_handle_invoke_cmd_resp(uint32_t paramTypes, TEE_Param
 		goto err_msg;
 	}
 
-	/* TODO: Copy parameters */
+	cpy_and_close_parameters(paramTypes, params, &resp_invoke_msg->operation);
 
 	if (returnOrigin)
 		*returnOrigin = resp_invoke_msg->return_origin;
@@ -311,10 +328,17 @@ errorExit:
 	return -1;
 }
 
-static void copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_Param *params,
+static bool ta_to_ta_cpy_param_to_com_msg(int i, struct com_msg_operation *operation,
+					  TEE_Param *params)
+{
+	return true;
+}
+
+static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_Param *params,
 				      int32_t tee_param_types)
 {
 	int i;
+	bool ret = true;
 
 	for (i = 0; i < 4; i++) {
 		if (TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_VALUE_OUTPUT ||
@@ -335,8 +359,23 @@ static void copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_P
 			 */
 			if (params[i].memref.buffer)
 				munmap(params[i].memref.buffer, params[i].memref.size);
+
+		} else if (TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_MEMREF_INPUT ||
+			   TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_MEMREF_OUTPUT ||
+			   TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_MEMREF_INOUT) {
+
+			if (!ta_to_ta_cpy_param_to_com_msg(i, operation, params))
+				ret = false;
 		}
 	}
+
+	return ret;
+}
+
+static bool ta_to_ta_cpy_com_msg_op_to_param(int i, struct com_msg_operation *operation,
+					     TEE_Param *params)
+{
+	return true;
 }
 
 static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Param *params,
@@ -358,6 +397,13 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 
 			memcpy(&params[i].value,
 			       &operation->params[i].value, sizeof(params[i].value));
+
+		} else if (TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_MEMREF_INPUT ||
+			   TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_MEMREF_OUTPUT ||
+			   TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_MEMREF_INOUT) {
+
+			if (!ta_to_ta_cpy_com_msg_op_to_param(i, operation, params))
+				ret = -1;
 
 		} else {
 
@@ -396,7 +442,6 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 			types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
 
 		} else {
-
 			types[i] = TEE_PARAM_TYPE_GET(param_types, i);
 		}
 	}
@@ -444,10 +489,14 @@ static void open_session(struct ta_task *in_task)
 
 	set_exec_operation_id(0);
 
-	open_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
-
 	/* Copy the data back from the TA to the client */
-	copy_params_to_com_msg_op(&open_msg->operation, params, paramTypes);
+	if (!copy_params_to_com_msg_op(&open_msg->operation, params, paramTypes)) {
+		open_msg->return_code_open_session = TEE_ERROR_GENERIC;
+		open_msg->return_origin = TEE_ORIGIN_TEE;
+		goto out;
+	}
+
+	open_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 
 out:
 	open_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
@@ -489,11 +538,14 @@ static void invoke_cmd(struct ta_task *in_task)
 
 	set_exec_operation_id(0);
 
-	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
-
 	/* Copy the data back from the TA to the client */
-	copy_params_to_com_msg_op(&invoke_msg->operation, params, paramTypes);
+	if (!copy_params_to_com_msg_op(&invoke_msg->operation, params, paramTypes)) {
+		invoke_msg->return_code = TEE_ERROR_GENERIC;
+		invoke_msg->return_origin = TEE_ORIGIN_TEE;
+		goto out;
+	}
 
+	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 out:
 	invoke_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 	add_msg_done_queue_and_notify(in_task);
@@ -606,9 +658,8 @@ TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationReques
 {
 	struct ta_task *new_ta_task = NULL;
 
+	/* TODO: cancel timeout */
 	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
 
 	if (!destination || !session) {
 		OT_LOG(LOG_ERR, "Destination or session NULL");
@@ -636,12 +687,16 @@ TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationReques
 		goto err;
 	}
 
+	if (map_and_cpy_parameters(paramTypes, params,
+				   &((struct com_msg_open_session *)new_ta_task->msg)->operation))
+		goto err; /* Err logged */
+
 	/* Message header */
 	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.msg_name = COM_MSG_NAME_OPEN_SESSION;
 	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
 	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.sess_id = 0;
+	((struct com_msg_open_session *)new_ta_task->msg)->operation.operation_id = 0;
 
-	/* TODO: Copy parameters */
 	memcpy(&((struct com_msg_open_session *)new_ta_task->msg)->uuid,
 	       destination, sizeof(TEE_UUID));
 
@@ -699,10 +754,8 @@ TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
 {
 	struct ta_task *new_ta_task = NULL;
 
-	commandID = commandID;
+	/* TODO: cancel timeout */
 	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
 
 	if (!session || session->session_state != SESSION_STATE_ACTIVE) {
 		OT_LOG(LOG_ERR, "Session NULL or not opened")
@@ -722,12 +775,16 @@ TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
 		goto err;
 	}
 
+	if (map_and_cpy_parameters(paramTypes, params,
+				   &((struct com_msg_invoke_cmd *)new_ta_task->msg)->operation))
+		goto err; /* Err logged */
+
 	/* Message header */
 	((struct com_msg_invoke_cmd *)new_ta_task->msg)->msg_hdr.msg_name = COM_MSG_NAME_INVOKE_CMD;
 	((struct com_msg_invoke_cmd *)new_ta_task->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
 	((struct com_msg_invoke_cmd *)new_ta_task->msg)->msg_hdr.sess_id = session->sess_id;
-
-	/* TODO: Copy parameters */
+	((struct com_msg_invoke_cmd *)new_ta_task->msg)->cmd_id = commandID;
+	((struct com_msg_invoke_cmd *)new_ta_task->msg)->operation.operation_id = 0;
 
 	add_msg_done_queue_and_notify(new_ta_task);
 
@@ -812,7 +869,7 @@ void *ta_internal_thread(void *arg)
 		switch (com_msg_name) {
 
 		case COM_MSG_NAME_OPEN_SESSION:
-			open_session(task);
+			open_s ession(task);
 			break;
 
 		case COM_MSG_NAME_INVOKE_CMD:
