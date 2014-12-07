@@ -28,6 +28,8 @@ DynamicLibrary {
         "storage_key_apis_external_funcs.c",
         "tee_bigint.h",
         "tee_bigint.c",
+        "tee_cancellation.h",
+        "tee_cancellation.c",
         "tee_crypto_api.h",
         "tee_crypto_api.c",
         "tee_data_types.h",
