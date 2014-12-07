@@ -39,3 +39,18 @@ void *fn_ptr_invoke_ta_command()
 {
 	return callbacks.fn_ptr_invoke_ta_command;
 }
+
+void *fn_ptr_get_cancel_flag()
+{
+	return callbacks.fn_ptr_get_cancel_flag;
+}
+
+void *fn_ptr_mask_cancellation()
+{
+	return callbacks.fn_ptr_mask_cancellation;
+}
+
+void *fn_ptr_unmask_cancellation()
+{
+	return callbacks.fn_ptr_unmask_cancellation;
+}

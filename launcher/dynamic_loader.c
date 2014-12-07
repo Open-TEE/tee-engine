@@ -31,6 +31,11 @@ static void fill_internal_api_callbacks(struct internal_api_callbacks *calls)
 	calls->fn_ptr_open_ta_session = ta_open_ta_session;
 	calls->fn_ptr_invoke_ta_command = ta_invoke_ta_command;
 	calls->fn_ptr_close_ta_session = ta_close_ta_session;
+
+	/* Cancellation API */
+	calls->fn_ptr_get_cancel_flag = get_cancellation_flag;
+	calls->fn_ptr_mask_cancellation = mask_cancellation;
+	calls->fn_ptr_unmask_cancellation = unmask_cancellation;
 }
 
 TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
