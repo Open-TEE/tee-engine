@@ -135,6 +135,23 @@ static bool get_vals_from_err_msg(void *msg, TEE_Result *ret_code, uint32_t *msg
 	return true;
 }
 
+static bool map_and_cpy_parameters(uint32_t paramTypes, TEE_Param *params,
+				   struct com_msg_operation *operation)
+{
+	paramTypes = paramTypes;
+	params = params;
+	operation = operation;
+	return true;
+}
+
+static void cpy_and_close_parameters(uint32_t paramTypes, TEE_Param *params,
+				      struct com_msg_operation *operation)
+{
+	paramTypes = paramTypes;
+	params = params;
+	operation = operation;
+}
+
 static TEE_Result wait_and_handle_open_sess_resp(uint32_t paramTypes, TEE_Param params[4],
 						 TEE_TASessionHandle *session,
 						 uint32_t *returnOrigin)
@@ -160,7 +177,7 @@ static TEE_Result wait_and_handle_open_sess_resp(uint32_t paramTypes, TEE_Param 
 		goto err_msg;
 	}
 
-	/* TODO: Copy parameters */
+	cpy_and_close_parameters(paramTypes, params, &resp_open_msg->operation);
 
 	if (returnOrigin)
 		*returnOrigin = resp_open_msg->return_origin;
@@ -236,7 +253,7 @@ static TEE_Result wait_and_handle_invoke_cmd_resp(uint32_t paramTypes, TEE_Param
 		goto err_msg;
 	}
 
-	/* TODO: Copy parameters */
+	cpy_and_close_parameters(paramTypes, params, &resp_invoke_msg->operation);
 
 	if (returnOrigin)
 		*returnOrigin = resp_invoke_msg->return_origin;
@@ -606,9 +623,8 @@ TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationReques
 {
 	struct ta_task *new_ta_task = NULL;
 
+	/* TODO: cancel timeout */
 	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
 
 	if (!destination || !session) {
 		OT_LOG(LOG_ERR, "Destination or session NULL");
@@ -636,12 +652,16 @@ TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationReques
 		goto err;
 	}
 
+	if (map_and_cpy_parameters(paramTypes, params,
+				   &((struct com_msg_open_session *)new_ta_task->msg)->operation))
+		goto err; /* Err logged */
+
 	/* Message header */
 	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.msg_name = COM_MSG_NAME_OPEN_SESSION;
 	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
 	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.sess_id = 0;
+	((struct com_msg_open_session *)new_ta_task->msg)->operation.operation_id = 0;
 
-	/* TODO: Copy parameters */
 	memcpy(&((struct com_msg_open_session *)new_ta_task->msg)->uuid,
 	       destination, sizeof(TEE_UUID));
 
@@ -699,10 +719,8 @@ TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
 {
 	struct ta_task *new_ta_task = NULL;
 
-	commandID = commandID;
+	/* TODO: cancel timeout */
 	cancellationRequestTimeout = cancellationRequestTimeout;
-	paramTypes = paramTypes;
-	params = params;
 
 	if (!session || session->session_state != SESSION_STATE_ACTIVE) {
 		OT_LOG(LOG_ERR, "Session NULL or not opened")
@@ -722,12 +740,16 @@ TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
 		goto err;
 	}
 
+	if (map_and_cpy_parameters(paramTypes, params,
+				   &((struct com_msg_invoke_cmd *)new_ta_task->msg)->operation))
+		goto err; /* Err logged */
+
 	/* Message header */
 	((struct com_msg_invoke_cmd *)new_ta_task->msg)->msg_hdr.msg_name = COM_MSG_NAME_INVOKE_CMD;
 	((struct com_msg_invoke_cmd *)new_ta_task->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
 	((struct com_msg_invoke_cmd *)new_ta_task->msg)->msg_hdr.sess_id = session->sess_id;
-
-	/* TODO: Copy parameters */
+	((struct com_msg_invoke_cmd *)new_ta_task->msg)->cmd_id = commandID;
+	((struct com_msg_invoke_cmd *)new_ta_task->msg)->operation.operation_id = 0;
 
 	add_msg_done_queue_and_notify(new_ta_task);
 
