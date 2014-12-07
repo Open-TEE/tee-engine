@@ -1391,13 +1391,13 @@ static void request_cancel(struct manager_msg *man_msg)
 	proc_t ca_sess;
 
 	if (cancel_msg->msg_hdr.msg_name != COM_MSG_NAME_REQUEST_CANCEL ||
-	    cancel_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
+	    cancel_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
 		OT_LOG(LOG_ERR, "Handling wrong message");
 		goto discard_msg;
 	}
 
 	/* Function is only valid for proc CAs */
-	if (man_msg->proc->p_type == proc_t_CA) {
+	if (man_msg->proc->p_type != proc_t_CA) {
 		OT_LOG(LOG_ERR, "Invalid sender");
 		goto discard_msg;
 	}
@@ -1429,7 +1429,7 @@ static void request_cancel(struct manager_msg *man_msg)
 		new_man_msg->msg_len = sizeof(struct com_msg_request_cancellation);
 		new_man_msg->proc = ca_sess->content.sesLink.to->content.sesLink.owner;
 
-		memcpy(new_man_msg->msg, man_msg->msg, sizeof(struct com_msg_request_cancellation));
+		memcpy(new_man_msg->msg, cancel_msg, sizeof(struct com_msg_request_cancellation));
 
 		add_msg_out_queue_and_notify(new_man_msg);
 	}

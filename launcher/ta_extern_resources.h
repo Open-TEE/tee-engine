@@ -18,6 +18,7 @@
 #define __TA_EXTERN_RESOURCES_H__
 
 #include <pthread.h>
+#include <stdbool.h>
 
 #include "tee_list.h"
 
@@ -58,5 +59,9 @@ extern void *response_msg;
 
 /* Use eventfd to notify the io_thread that the TA thread has finished processing a task */
 extern int event_fd;
+
+/* Interal API cancel functionality */
+extern bool cancellation_mask;
+extern bool cancellation_flag;
 
 #endif /* __TA_EXTERN_RESOURCES_H__ */

@@ -22,8 +22,10 @@
 
 #include "com_protocol.h"
 #include "epoll_wrapper.h"
+#include "ta_internal_thread.h"
 #include "ta_exit_states.h"
 #include "ta_io_thread.h"
+#include "tee_cancellation.h"
 #include "tee_logging.h"
 
 static void terminate_ta_gracefully()
@@ -127,7 +129,8 @@ static void request_cancel_msg(struct ta_task *task)
 	/* Because only ONE command can be out, message is queued in TODO or executed! */
 	if (((struct com_msg_request_cancellation *)task->msg)->operation_id ==
 	    executed_operation_id) {
-		/* TODO: set cancel flag */
+		cancellation_flag = true;
+
 	} else {
 		cancel_from_todo(task);
 	}
@@ -233,7 +236,7 @@ void receive_from_manager(struct epoll_event *event, int man_sockfd)
 		return;
 	}
 
-	if (com_get_msg_type(new_ta_task->msg, &msg_name)) {
+	if (com_get_msg_name(new_ta_task->msg, &msg_name)) {
 		OT_LOG(LOG_ERR, "Failed retrieve message name");
 		goto skip;
 	}
