@@ -32,4 +32,8 @@ TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
 				       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
 				       uint32_t *returnOrigin);
 
+bool get_cancellation_flag();
+bool mask_cancellation();
+bool unmask_cancellation();
+
 #endif /* __TA_INTERNAL_THREAD_H__ */

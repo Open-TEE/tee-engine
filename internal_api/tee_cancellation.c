@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Intel Corporation.                                    **
+** Copyright (C) 2014 Tanel Dettenborn.	                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,18 +14,22 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_INTERNAL_API_EMU_H__
-#define __TEE_INTERNAL_API_EMU_H__
+#include "callbacks.h"
+#include "tee_cancellation.h"
+#include "tee_logging.h"
+#include "tee_panic.h"
 
-#include "../internal_api/tee_data_types.h"
-#include "../internal_api/tee_memory.h"
-#include "../internal_api/tee_ta_interface.h"
-#include "../internal_api/tee_time_api.h"
-#include "../internal_api/tee_storage_api.h"
-#include "../internal_api/tee_panic.h"
-#include "../internal_api/tee_crypto_api.h"
-#include "../internal_api/tee_bigint.h"
-#include "../internal_api/tee_internal_client_api.h"
-#include "../internal_api/tee_cancellation.h"
+bool TEE_GetCancellationFlag(void)
+{
+	return fn_ptr_get_canel_flag();
+}
 
-#endif
+bool TEE_UnmaskCancellation(void)
+{
+	return fn_ptr_unmask_cancellation();
+}
+
+bool TEE_MaskCancellation(void)
+{
+	return fn_ptr_mask_cancellation();
+}
