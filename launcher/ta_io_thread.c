@@ -59,6 +59,91 @@ static void fd_error(int fd_errno)
 	}
 }
 
+static void cancel_from_todo(struct ta_task *task)
+{
+	struct list_head *pos, *la;
+	struct ta_task *todo_queue_task;
+	uint8_t msg_name;
+
+	if (list_is_empty(&tasks_todo.list))
+		return;
+
+	LIST_FOR_EACH_SAFE(pos, la, &tasks_todo.list) {
+
+		todo_queue_task = LIST_ENTRY(pos, struct ta_task, list);
+
+		if (com_get_msg_type(todo_queue_task->msg, &msg_name)) {
+			OT_LOG(LOG_ERR, "Failed retrieve message name");
+			continue;
+		}
+
+		if (msg_name == COM_MSG_NAME_OPEN_SESSION &&
+		    ((struct com_msg_open_session *)todo_queue_task->msg)->operation.operation_id ==
+		    ((struct com_msg_request_cancellation *)task->msg)->operation_id) {
+
+			((struct com_msg_open_session *)todo_queue_task->msg)->
+					return_code_open_session = TEE_ERROR_CANCEL;
+
+			((struct com_msg_open_session *)todo_queue_task->msg)->return_origin =
+					TEE_ORIGIN_TEE;
+
+			list_unlink(&todo_queue_task->list);
+			list_add_before(&todo_queue_task->list, &tasks_done.list);
+
+		} else if (msg_name == COM_MSG_NAME_INVOKE_CMD &&
+		    ((struct com_msg_invoke_cmd *)todo_queue_task->msg)->operation.operation_id ==
+		    ((struct com_msg_request_cancellation *)task->msg)->operation_id) {
+
+			((struct com_msg_invoke_cmd *)todo_queue_task->msg)->return_code =
+					TEE_ERROR_CANCEL;
+
+			((struct com_msg_invoke_cmd *)todo_queue_task->msg)->return_origin =
+					TEE_ORIGIN_TEE;
+
+			list_unlink(&todo_queue_task->list);
+			list_add_before(&todo_queue_task->list, &tasks_done.list);
+		}
+	}
+}
+
+static void request_cancel_msg(struct ta_task *task)
+{
+	/* acquire mutexes */
+	if (pthread_mutex_lock(&todo_list_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		goto err_1;
+	}
+
+	if (pthread_mutex_lock(&done_list_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		goto err_2;
+	}
+
+	if (pthread_mutex_lock(&executed_operation_id_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		goto err_3;
+	}
+
+	/* Because only ONE command can be out, message is queued in TODO or executed! */
+	if (((struct com_msg_request_cancellation *)task->msg)->operation_id ==
+	    executed_operation_id) {
+		/* TODO: set cancel flag */
+	} else {
+		cancel_from_todo(task);
+	}
+
+	if (pthread_mutex_unlock(&executed_operation_id_mutex))
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+err_3:
+	if (pthread_mutex_unlock(&done_list_mutex))
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+err_2:
+	if (pthread_mutex_unlock(&todo_list_mutex))
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+err_1:
+	free_task(task);
+}
+
 static void add_task_todo_queue_and_notify(struct ta_task *task)
 {
 	if (pthread_mutex_lock(&todo_list_mutex)) {
@@ -103,7 +188,7 @@ void free_task(struct ta_task *released_task)
 void receive_from_manager(struct epoll_event *event, int man_sockfd)
 {
 	struct ta_task *new_ta_task = NULL;
-	uint8_t msg_type;
+	uint8_t msg_type, msg_name;
 	int ret;
 
 	if (event->events & (EPOLLHUP | EPOLLERR)) {
@@ -145,6 +230,17 @@ void receive_from_manager(struct epoll_event *event, int man_sockfd)
 			free(response_msg);
 		}
 
+		return;
+	}
+
+	if (com_get_msg_type(new_ta_task->msg, &msg_name)) {
+		OT_LOG(LOG_ERR, "Failed retrieve message name");
+		goto skip;
+	}
+
+	if (msg_name == COM_MSG_NAME_REQUEST_CANCEL) {
+		/* Cancel message must handle in IO thread. Logic thread might be busy */
+		request_cancel_msg(new_ta_task);
 		return;
 	}
 

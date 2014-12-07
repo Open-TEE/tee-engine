@@ -46,6 +46,12 @@ extern pthread_cond_t condition;
 extern pthread_mutex_t block_internal_thread_mutex;
 extern pthread_cond_t block_condition;
 
+/* Synchronize executed_operation_id variable accessing */
+extern pthread_mutex_t executed_operation_id_mutex;
+
+/* Logic thread update to here what is executed operation ID */
+extern uint64_t executed_operation_id;
+
 /* Not creating own message queue for response messages, because only one message can be
  * at time. So only one response message can be received */
 extern void *response_msg;

@@ -53,6 +53,22 @@ struct __TEE_TASessionHandle {
 	uint8_t session_state;
 };
 
+static bool set_exec_operation_id(uint64_t new_op_id)
+{
+	/* Lock task queue from logic thread */
+	if (pthread_mutex_lock(&executed_operation_id_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex")
+		return false;
+	}
+
+	executed_operation_id = new_op_id;
+
+	if (pthread_mutex_unlock(&executed_operation_id_mutex))
+		OT_LOG(LOG_ERR, "Failed to lock the mutex")
+
+	return true;
+}
+
 static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 {
 	const uint64_t event = 1;
@@ -413,9 +429,18 @@ static void open_session(struct ta_task *in_task)
 		goto out;
 	}
 
+	if (set_exec_operation_id(open_msg->operation.operation_id)) {
+		open_msg->return_code_open_session = TEE_ERROR_GENERIC;
+		open_msg->return_origin = TEE_ORIGIN_TEE;
+		goto out;
+	}
+
 	/* Do the task */
 	open_msg->return_code_open_session = interface->open_session(paramTypes, params,
 								     (void **)&open_msg->sess_ctx);
+
+	set_exec_operation_id(0);
+
 	open_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 
 	/* Copy the data back from the TA to the client */
@@ -447,9 +472,17 @@ static void invoke_cmd(struct ta_task *in_task)
 		goto out;
 	}
 
+	if (set_exec_operation_id(invoke_msg->operation.operation_id)) {
+		invoke_msg->return_code = TEE_ERROR_GENERIC;
+		invoke_msg->return_origin = TEE_ORIGIN_TEE;
+		goto out;
+	}
+
 	/* Do the task */
 	invoke_msg->return_code = interface->invoke_cmd((void *)invoke_msg->sess_ctx,
 							invoke_msg->cmd_id, paramTypes, params);
+
+	set_exec_operation_id(0);
 
 	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 

@@ -45,6 +45,12 @@ pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t block_internal_thread_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t block_condition = PTHREAD_COND_INITIALIZER;
 
+/* Synchronize executed_operation_id variable accessing */
+pthread_mutex_t executed_operation_id_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Logic thread update to here what is executed operation ID */
+uint64_t executed_operation_id;
+
 /* Not creating own message queue for response messages, because only one message can be
  * at time. So only one response message can be received */
 void *response_msg;

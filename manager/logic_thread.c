@@ -189,14 +189,20 @@ static void gen_err_msg_and_add_to_out(struct manager_msg *man_msg, uint32_t err
 	add_msg_out_queue_and_notify(man_msg);
 }
 
+static void get_next_operation_id(uint64_t *next_op_id)
+{
+	static uint64_t next_operation_id;
+
+	*next_op_id = ++next_operation_id;
+
+	/* Note: Zero is reserved ID! */
+	if (!*next_op_id)
+		(*next_op_id)++;
+}
+
 static void ca_init_context(struct manager_msg *man_msg)
 {
-	struct com_msg_ca_init_tee_conn *init_msg;
-
-	if (!man_msg)
-		return;
-
-	init_msg = man_msg->msg;
+	struct com_msg_ca_init_tee_conn *init_msg = man_msg->msg;
 
 	/* Valid init message */
 	if (init_msg->msg_hdr.msg_name != COM_MSG_NAME_CA_INIT_CONTEXT ||
@@ -217,6 +223,7 @@ static void ca_init_context(struct manager_msg *man_msg)
 
 	/* Response to CA */
 	init_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
+	get_next_operation_id(&init_msg->operation_id);
 	init_msg->ret = TEE_SUCCESS;
 
 	add_msg_out_queue_and_notify(man_msg);
@@ -1377,6 +1384,61 @@ static void ta_rem_from_dir(struct manager_msg *man_msg)
 	free_manager_msg(man_msg);
 }
 
+static void request_cancel(struct manager_msg *man_msg)
+{
+	struct com_msg_request_cancellation *cancel_msg = man_msg->msg;
+	struct manager_msg *new_man_msg = NULL;
+	proc_t ca_sess;
+
+	if (cancel_msg->msg_hdr.msg_name != COM_MSG_NAME_REQUEST_CANCEL ||
+	    cancel_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
+		OT_LOG(LOG_ERR, "Handling wrong message");
+		goto discard_msg;
+	}
+
+	/* Function is only valid for proc CAs */
+	if (man_msg->proc->p_type == proc_t_CA) {
+		OT_LOG(LOG_ERR, "Invalid sender");
+		goto discard_msg;
+	}
+
+	h_table_init_stepper(man_msg->proc->content.process.links);
+
+	while (1) {
+		ca_sess = h_table_step(man_msg->proc->content.process.links);
+		if (!ca_sess)
+			break;
+
+		if (ca_sess->content.sesLink.status == sess_panicked ||
+		    ca_sess->content.sesLink.waiting_response_msg == WAIT_NO_MSG_OUT)
+			continue;
+
+		new_man_msg = calloc(1, sizeof(struct manager_msg));
+		if (!man_msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			continue;
+		}
+
+		new_man_msg->msg = calloc(1, sizeof(struct com_msg_request_cancellation));
+		if (!new_man_msg->msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			free(new_man_msg);
+			continue;
+		}
+
+		new_man_msg->msg_len = sizeof(struct com_msg_request_cancellation);
+		new_man_msg->proc = ca_sess->content.sesLink.to->content.sesLink.owner;
+
+		memcpy(new_man_msg->msg, man_msg->msg, sizeof(struct com_msg_request_cancellation));
+
+		add_msg_out_queue_and_notify(new_man_msg);
+	}
+
+discard_msg:
+	free_manager_msg(man_msg);
+}
+
+
 void *logic_thread_mainloop(void *arg)
 {
 	arg = arg; /* ignored */
@@ -1462,6 +1524,10 @@ void *logic_thread_mainloop(void *arg)
 
 		case COM_MSG_NAME_TA_REM_FROM_DIR:
 			ta_rem_from_dir(handled_msg);
+			break;
+
+		case COM_MSG_NAME_REQUEST_CANCEL:
+			request_cancel(handled_msg);
 			break;
 
 		default:
