@@ -29,6 +29,7 @@
 #include "ta_extern_resources.h"
 #include "ta_internal_thread.h"
 #include "tee_data_types.h"
+#include "tee_cancellation.h"
 #include "ta_io_thread.h"
 #include "tee_list.h"
 #include "tee_logging.h"
@@ -435,6 +436,8 @@ static void open_session(struct ta_task *in_task)
 		goto out;
 	}
 
+	mask_cancellation();
+
 	/* Do the task */
 	open_msg->return_code_open_session = interface->open_session(paramTypes, params,
 								     (void **)&open_msg->sess_ctx);
@@ -477,6 +480,8 @@ static void invoke_cmd(struct ta_task *in_task)
 		invoke_msg->return_origin = TEE_ORIGIN_TEE;
 		goto out;
 	}
+
+	mask_cancellation();
 
 	/* Do the task */
 	invoke_msg->return_code = interface->invoke_cmd((void *)invoke_msg->sess_ctx,
@@ -733,6 +738,29 @@ err:
 	if (returnOrigin)
 		*returnOrigin = TEE_ORIGIN_TEE;
 	return TEE_ERROR_GENERIC;
+}
+
+bool get_cancellation_flag()
+{
+	return cancellation_mask ? false : true;
+}
+
+bool mask_cancellation()
+{
+	bool ret = cancellation_mask;
+
+	cancellation_mask = false;
+
+	return ret;
+}
+
+bool unmask_cancellation()
+{
+	bool ret = cancellation_mask;
+
+	cancellation_mask = true;
+
+	return ret;
 }
 
 void *ta_internal_thread(void *arg)

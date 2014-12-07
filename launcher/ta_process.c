@@ -67,6 +67,10 @@ struct ta_task tasks_todo;
 /* These are for tasks that are complete and are being returned to the caller */
 struct ta_task tasks_done;
 
+/* Interal API cancel functionality */
+bool cancellation_mask;
+bool cancellation_flag;
+
 /* Maximum epoll events */
 #define MAX_CURR_EVENTS 5
 
