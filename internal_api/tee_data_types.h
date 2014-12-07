@@ -45,14 +45,22 @@ typedef struct __TEE_TASessionHandle* TEE_TASessionHandle;
 typedef struct __TEE_PropSetHandle* TEE_PropSetHandle;
 
 /* clang-format off */
+
+/* TEE_PARAM_TYPE_MEMREF_XXXX is conflicting Client API TEEC_MEMREF_TEMP_XXX types. Conflict is
+ * that these two types need to handle differently if our implementation would like use same
+ * functionality in TA to TA communication (as Ca to TA com) */
+#define TEEC_PARAM_ID_NOT_USED_1	0x00000004
+#define TEEC_PARAM_ID_NOT_USED_2	0x00000008
+#define TEEC_PARAM_ID_NOT_USED_3	0x00000009
+
 /* Paramater Types */
 #define TEE_PARAM_TYPE_NONE		0x00000000
 #define TEE_PARAM_TYPE_VALUE_INPUT	0x00000001
 #define TEE_PARAM_TYPE_VALUE_OUTPUT	0x00000002
 #define TEE_PARAM_TYPE_VALUE_INOUT	0x00000003
-#define TEE_PARAM_TYPE_MEMREF_INPUT	0x00000005
-#define TEE_PARAM_TYPE_MEMREF_OUTPUT	0x00000006
-#define TEE_PARAM_TYPE_MEMREF_INOUT	0x00000007
+#define TEE_PARAM_TYPE_MEMREF_INPUT	TEEC_PARAM_ID_NOT_USED_1
+#define TEE_PARAM_TYPE_MEMREF_OUTPUT	TEEC_PARAM_ID_NOT_USED_2
+#define TEE_PARAM_TYPE_MEMREF_INOUT	TEEC_PARAM_ID_NOT_USED_3
 
 /* Session Login Methods (core api) */
 #define TEE_LOGIN_PUBLIC		0x00000000
