@@ -429,7 +429,7 @@ static void open_session(struct ta_task *in_task)
 		goto out;
 	}
 
-	if (set_exec_operation_id(open_msg->operation.operation_id)) {
+	if (!set_exec_operation_id(open_msg->operation.operation_id)) {
 		open_msg->return_code_open_session = TEE_ERROR_GENERIC;
 		open_msg->return_origin = TEE_ORIGIN_TEE;
 		goto out;
@@ -472,7 +472,7 @@ static void invoke_cmd(struct ta_task *in_task)
 		goto out;
 	}
 
-	if (set_exec_operation_id(invoke_msg->operation.operation_id)) {
+	if (!set_exec_operation_id(invoke_msg->operation.operation_id)) {
 		invoke_msg->return_code = TEE_ERROR_GENERIC;
 		invoke_msg->return_origin = TEE_ORIGIN_TEE;
 		goto out;
