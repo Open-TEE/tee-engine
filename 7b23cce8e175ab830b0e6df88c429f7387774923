@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_f1797094",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 872,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-12-09T13:03:19Z",
+      "side": 1,
+      "message": "probably doesn\u0027t compile?",
+      "range": {
+        "startLine": 872,
+        "startChar": 9,
+        "endLine": 872,
+        "endChar": 10
+      },
+      "revId": "7b23cce8e175ab830b0e6df88c429f7387774923",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
