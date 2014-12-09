@@ -1,0 +1,142 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_510afc21",
+        "filename": "internal_api/callbacks.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 43,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-12-09T12:55:45Z",
+      "side": 1,
+      "message": "canel",
+      "range": {
+        "startLine": 43,
+        "startChar": 17,
+        "endLine": 43,
+        "endChar": 22
+      },
+      "revId": "91f4cf1154ea4f39d1244c7cc8950b72685f14d5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_310f7832",
+        "filename": "internal_api/callbacks.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 40,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-12-09T12:55:45Z",
+      "side": 1,
+      "message": "canel",
+      "range": {
+        "startLine": 40,
+        "startChar": 17,
+        "endLine": 40,
+        "endChar": 22
+      },
+      "revId": "91f4cf1154ea4f39d1244c7cc8950b72685f14d5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_11007400",
+        "filename": "internal_api/tee_cancellation.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 24,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-12-09T12:55:45Z",
+      "side": 1,
+      "message": "canel",
+      "range": {
+        "startLine": 24,
+        "startChar": 19,
+        "endLine": 24,
+        "endChar": 24
+      },
+      "revId": "91f4cf1154ea4f39d1244c7cc8950b72685f14d5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_913aa4cb",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 745,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-12-09T12:55:45Z",
+      "side": 1,
+      "message": "Just to note, first value is the result of ternary expression when the first expression is true, so in practice this inverts the \"cancellation_mask\"\n\nApart from this, I\u0027m little concerned that does this match to spec?",
+      "range": {
+        "startLine": 745,
+        "startChar": 1,
+        "endLine": 745,
+        "endChar": 41
+      },
+      "revId": "91f4cf1154ea4f39d1244c7cc8950b72685f14d5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_b131a8ee",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 752,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-12-09T12:55:45Z",
+      "side": 1,
+      "message": "So false is used to represent the masked state?",
+      "range": {
+        "startLine": 752,
+        "startChar": 1,
+        "endLine": 752,
+        "endChar": 27
+      },
+      "revId": "91f4cf1154ea4f39d1244c7cc8950b72685f14d5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fafc7978_114eb46f",
+        "filename": "launcher/ta_process.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 70,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-12-09T12:55:45Z",
+      "side": 1,
+      "message": "Interal",
+      "range": {
+        "startLine": 70,
+        "startChar": 3,
+        "endLine": 70,
+        "endChar": 10
+      },
+      "revId": "91f4cf1154ea4f39d1244c7cc8950b72685f14d5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
