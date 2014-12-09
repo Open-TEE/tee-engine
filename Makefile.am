@@ -16,5 +16,5 @@ lib_LTLIBRARIES  =
 include core/Makemodule.am
 include common/Makemodule.am
 include manager/Makemodule.am
-include launcher/Makemodule.am
 include internal_api/Makemodule.am
+include launcher/Makemodule.am
