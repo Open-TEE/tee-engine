@@ -6,8 +6,10 @@ libInternalApi_la_includes = \
 	include/tee_internal_api.h \
 	include/tee_shared_data_types.h \
 	include/tee_logging.h \
+	internal_api/callbacks.h \
 	internal_api/openssl_1_0_2_beta_rsa_oaep.h \
 	internal_api/storage_key_apis_external_funcs.h \
+	internal_api/tee_bigint.h \
 	internal_api/tee_crypto_api.h \
 	internal_api/tee_data_types.h \
 	internal_api/tee_internal_client_api.h \
@@ -20,8 +22,10 @@ libInternalApi_la_includes = \
 	internal_api/tee_time_api.h
 
 libInternalApi_la_SOURCES = ${libInternalApi_la_includes} \
+	internal_api/callbacks.c \
 	internal_api/openssl_1_0_2_beta_rsa_oaep.c \
 	internal_api/storage_key_apis_external_funcs.c \
+	internal_api/tee_bigint.c \
 	internal_api/tee_crypto_api.c \
 	internal_api/tee_internal_client_api.c \
 	internal_api/tee_memory.c \
