@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fafc7978_7913a65c",
+        "filename": "launcher/launcher.qbs",
+        "patchSetId": 3
+      },
+      "lineNbr": 8,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-12-10T09:23:24Z",
+      "side": 1,
+      "message": "For some reason this doesn\u0027t sound like a good idea to link libtee (client api) into the launcher process.\n\n\nThe change is missing from autotools files as well.",
+      "range": {
+        "startLine": 8,
+        "startChar": 4,
+        "endLine": 8,
+        "endChar": 27
+      },
+      "revId": "43af46c6615e1b9e6b9d8655e601dc9cc000a3dd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
