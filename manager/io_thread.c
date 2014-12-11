@@ -196,6 +196,7 @@ static int create_uninitialized_client_proc(proc_t *proc, int sockfd)
 	(*proc)->content.process.status = proc_uninitialized;
 	(*proc)->sockfd = sockfd;
 	(*proc)->p_type = proc_t_CA;
+	INIT_LIST(&(*proc)->content.process.shm_mem.list);
 
 	return 0;
 }

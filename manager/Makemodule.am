@@ -10,13 +10,15 @@ libManagerApi_la_includes = \
 	manager/io_thread.h \
 	manager/logic_thread.h \
 	manager/ta_dir_watch.h \
-	manager/tee_ta_properties.h
+	manager/tee_ta_properties.h \
+	manager/shm_mem.h
 
 libManagerApi_la_SOURCES = ${libManagerApi_la_includes} \
 	manager/io_thread.c \
 	manager/logic_thread.c \
 	manager/mainloop.c \
-	manager/ta_dir_watch.c
+	manager/ta_dir_watch.c \
+	manager/shm_mem.c
 
 libManagerApi_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/include \

@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2014 Intel Corporation.                                    **
+** Copyright (C) 2014 Tanel Dettenborn                                      **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,10 +14,13 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __LOGIC_THREAD__
-#define __LOGIC_THREAD__
+#ifndef __SHM_MEM_H__
+#define __SHM_MEM_H__
 
-void *logic_thread_mainloop(void *arg);
-void add_msg_out_queue_and_notify(struct manager_msg *man_msg);
+#include "extern_resources.h"
 
-#endif /* __LOGIC_THREAD__ */
+void open_shm_region(struct manager_msg *man_msg);
+void unlink_shm_region(struct manager_msg *man_msg);
+void unlink_all_shm_region(proc_t proc);
+
+#endif /* __SHM_MEM_H__ */

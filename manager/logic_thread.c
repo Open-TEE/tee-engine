@@ -27,6 +27,7 @@
 #include "extern_resources.h"
 #include "h_table.h"
 #include "io_thread.h"
+#include "shm_mem.h"
 #include "socket_help.h"
 #include "ta_exit_states.h"
 #include "ta_dir_watch.h"
@@ -97,6 +98,9 @@ static void free_proc(proc_t del_proc)
 	if (!del_proc || del_proc->p_type == proc_t_session)
 		return;
 
+	/* Unlink all shared memorys */
+	unlink_all_shm_region(del_proc);
+
 	/* Free process sessions
 	 * Note: It is a programmer error, if he close session and there is session open */
 	h_table_init_stepper(del_proc->content.process.links);
@@ -142,7 +146,7 @@ skip:
 	del_proc = NULL;
 }
 
-static void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
+void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 {
 	const uint64_t event = 1;
 
@@ -446,6 +450,7 @@ static int create_uninitialized_ta_proc(proc_t *new_ta, TEE_UUID *ta_uuid)
 	(*new_ta)->p_type = proc_t_TA;
 	(*new_ta)->content.process.status = proc_uninitialized;
 	memcpy(&(*new_ta)->content.process.ta_uuid, ta_uuid, sizeof(TEE_UUID));
+	INIT_LIST(&(*new_ta)->content.process.shm_mem.list);
 
 	return 0;
 }
@@ -1528,6 +1533,14 @@ void *logic_thread_mainloop(void *arg)
 
 		case COM_MSG_NAME_REQUEST_CANCEL:
 			request_cancel(handled_msg);
+			break;
+
+		case COM_MSG_NAME_OPEN_SHM_REGION:
+			open_shm_region(handled_msg);
+			break;
+
+		case COM_MSG_NAME_UNLINK_SHM_REGION:
+			unlink_shm_region(handled_msg);
 			break;
 
 		default:

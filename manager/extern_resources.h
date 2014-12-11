@@ -20,6 +20,7 @@
 #include <pthread.h>
 #include <stdint.h>
 
+#include "com_protocol.h"
 #include "h_table.h"
 #include "tee_list.h"
 #include "tee_shared_data_types.h"
@@ -44,6 +45,12 @@ struct manager_msg {
 	void *msg;
 	int msg_len;
 	proc_t proc; /* Act as "sender/receiver" detail */
+};
+
+struct proc_shm_mem {
+	struct list_head list;
+	char name[SHM_MEM_NAME_LEN];
+	int size;
 };
 
 /* These are for tasks received from the caller going to the logic thread */
@@ -133,6 +140,7 @@ struct __proc {
 		struct {
 			TEE_UUID ta_uuid;
 			HASHTABLE links; /* Hashtable */
+			struct proc_shm_mem shm_mem;
 			pid_t pid;
 			enum proc_status status;
 		} process;
