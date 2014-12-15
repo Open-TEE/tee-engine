@@ -1694,7 +1694,7 @@ err_at_meta_or_init_data_write:
 	return TEE_ERROR_GENERIC;
 
 err_at_obj_alloc:
-	OT_LOG(LOG_ERR, "Cannot alloc adsfasdfasdfasdfadsf\n");
+	OT_LOG(LOG_ERR, "Cannot alloc object\n");
 	delete_file(NULL, obj_storage_file, objectID, objectIDLen);
 	(*object) = NULL;
 	if (ret_obj_alloc == TEE_ERROR_OUT_OF_MEMORY)
