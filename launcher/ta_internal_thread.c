@@ -29,6 +29,7 @@
 #include "ta_extern_resources.h"
 #include "ta_internal_thread.h"
 #include "tee_data_types.h"
+#include "tee_cancellation.h"
 #include "ta_io_thread.h"
 #include "tee_list.h"
 #include "tee_logging.h"
@@ -59,6 +60,11 @@ static bool set_exec_operation_id(uint64_t new_op_id)
 	if (pthread_mutex_lock(&executed_operation_id_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex")
 		return false;
+	}
+
+	if (new_op_id != 0) {
+		mask_cancellation();
+		cancellation_flag = false;
 	}
 
 	executed_operation_id = new_op_id;
@@ -421,16 +427,16 @@ static void open_session(struct ta_task *in_task)
 		return;
 	}
 
-	/* convert the paramaters from the message into TA format params */
-	if (copy_com_msg_op_to_param(&open_msg->operation, params, &paramTypes) == -1) {
-		OT_LOG(LOG_ERR, "Failed to copy operation");
-		open_msg->return_code_open_session = TEE_ERROR_NO_DATA;
+	if (!set_exec_operation_id(open_msg->operation.operation_id)) {
+		open_msg->return_code_open_session = TEE_ERROR_GENERIC;
 		open_msg->return_origin = TEE_ORIGIN_TEE;
 		goto out;
 	}
 
-	if (!set_exec_operation_id(open_msg->operation.operation_id)) {
-		open_msg->return_code_open_session = TEE_ERROR_GENERIC;
+	/* convert the paramaters from the message into TA format params */
+	if (copy_com_msg_op_to_param(&open_msg->operation, params, &paramTypes) == -1) {
+		OT_LOG(LOG_ERR, "Failed to copy operation");
+		open_msg->return_code_open_session = TEE_ERROR_NO_DATA;
 		open_msg->return_origin = TEE_ORIGIN_TEE;
 		goto out;
 	}
@@ -464,16 +470,16 @@ static void invoke_cmd(struct ta_task *in_task)
 		return;
 	}
 
-	/* convert the paramaters from the message into TA format params */
-	if (copy_com_msg_op_to_param(&invoke_msg->operation, params, &paramTypes)) {
-		OT_LOG(LOG_ERR, "Failed to copy operation");
-		invoke_msg->return_code = TEE_ERROR_NO_DATA;
+	if (!set_exec_operation_id(invoke_msg->operation.operation_id)) {
+		invoke_msg->return_code = TEE_ERROR_GENERIC;
 		invoke_msg->return_origin = TEE_ORIGIN_TEE;
 		goto out;
 	}
 
-	if (!set_exec_operation_id(invoke_msg->operation.operation_id)) {
-		invoke_msg->return_code = TEE_ERROR_GENERIC;
+	/* convert the paramaters from the message into TA format params */
+	if (copy_com_msg_op_to_param(&invoke_msg->operation, params, &paramTypes)) {
+		OT_LOG(LOG_ERR, "Failed to copy operation");
+		invoke_msg->return_code = TEE_ERROR_NO_DATA;
 		invoke_msg->return_origin = TEE_ORIGIN_TEE;
 		goto out;
 	}
@@ -632,7 +638,8 @@ TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationReques
 	}
 
 	/* Message header */
-	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.msg_name = COM_MSG_NAME_OPEN_SESSION;
+	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.msg_name =
+			COM_MSG_NAME_OPEN_SESSION;
 	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
 	((struct com_msg_open_session *)new_ta_task->msg)->msg_hdr.sess_id = 0;
 
@@ -733,6 +740,32 @@ err:
 	if (returnOrigin)
 		*returnOrigin = TEE_ORIGIN_TEE;
 	return TEE_ERROR_GENERIC;
+}
+
+bool get_cancellation_flag()
+{
+	if (!cancellation_mask)
+		return cancellation_flag;
+
+	return false;
+}
+
+bool mask_cancellation()
+{
+	bool ret = cancellation_mask;
+
+	cancellation_mask = true;
+
+	return ret;
+}
+
+bool unmask_cancellation()
+{
+	bool ret = cancellation_mask;
+
+	cancellation_mask = false;
+
+	return ret;
 }
 
 void *ta_internal_thread(void *arg)
