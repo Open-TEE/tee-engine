@@ -26,6 +26,8 @@ CppApplication {
     files: [
         "../include/core_control_resources.h",
         "../include/conf_parser.h",
+        "args.c",
+        "args.h",
         "conf_parser.c",
         "ini.c",
         "ini.h",

@@ -32,6 +32,7 @@
 #include "conf_parser.h"
 #include "core_control_resources.h"
 #include "tee_logging.h"
+#include "args.h"
 
 static struct core_control control_params;
 
@@ -172,8 +173,11 @@ int main(int argc, char **argv)
 	main_loop_cb main_loop;
 	char proc_name[MAX_PR_NAME];
 	int cmd_name_len = strnlen(argv[0], PATH_MAX);
-	argc = argc;
 	sigset_t sig_block_set;
+	struct arguments arguments = DEFAULT_ARGUMENTS;
+
+	/* Parse arguments */
+	args_parse(argc, argv, &arguments);
 
 	/* Block all signals */
 	if (sigfillset(&sig_block_set))
@@ -201,14 +205,16 @@ int main(int argc, char **argv)
 	 * TODO: we should probably implement some file locks to ensure only one instance of the
 	 * daemon is running at any one time.
 	 */
-	if (daemonize())
+
+	/* Daemonize if foreground was not requested */
+	if (!arguments.foreground && daemonize())
 		exit(1);
 
 	/* create a socket pair so the manager and launcher can communicate */
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1)
 		exit(1);
 
-	if (config_parser_get_config(&control_params.opentee_conf) == -1)
+	if (config_parser_get_config(&control_params.opentee_conf, arguments.config_file) == -1)
 		exit(1);
 
 	control_params.argv0 = argv[0];

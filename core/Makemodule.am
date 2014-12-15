@@ -5,9 +5,11 @@ bin_PROGRAMS += opentee_core
 opentee_core_includes = \
 	include/core_control_resources.h \
 	include/conf_parser.h \
+	core/args.h \
 	core/ini.h
 
 opentee_core_SOURCES = ${opentee_core_include} \
+	core/args.c \
 	core/conf_parser.c \
 	core/ini.c \
 	core/main.c

@@ -34,9 +34,10 @@ struct emulator_config {
  * Populates Emulator_config-struct. Should only be used if neccessary
  * steps have been taken. See more details in file description.
  * \param conf is allocated memory via malloc caller must free with config_parser_free_config
+ * \param config_file Filename where to parse configuration from
  * \return 1 on success, 0 on failure
  */
-int config_parser_get_config(struct emulator_config **conf);
+int config_parser_get_config(struct emulator_config **conf, char *config_file);
 
 /*!
  * \brief config_parser_free_config
