@@ -9,7 +9,10 @@ DynamicLibrary {
 
     cpp.dynamicLibraries: [
         "dl",
-        "pthread"
+        "pthread",
+        "uuid",
+        "crypt",
+        "rt",
     ]
 
     cpp.includePaths: [
@@ -26,6 +29,8 @@ DynamicLibrary {
         "logic_thread.h",
         "logic_thread.c",
         "mainloop.c",
+        "shm_mem.h",
+        "shm_mem.c",
         "ta_dir_watch.h",
         "ta_dir_watch.c",
         "tee_ta_properties.h",
