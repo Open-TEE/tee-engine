@@ -25,11 +25,6 @@
 #include <string.h>
 #include <stdio.h>
 
-/* Allow this to be sepecified on the compile line -D */
-#ifndef CONF_FILE_WITH_PATH
-#define CONF_FILE_WITH_PATH "/etc/opentee.conf"
-#endif
-
 /*!
  * \brief ini_handler
  * The callback handler that is registered with the ini parser
@@ -84,7 +79,7 @@ out:
 	return ret;
 }
 
-int config_parser_get_config(struct emulator_config **conf)
+int config_parser_get_config(struct emulator_config **conf, char *config_file)
 {
 	struct emulator_config *tmp_conf;
 
@@ -94,7 +89,7 @@ int config_parser_get_config(struct emulator_config **conf)
 		return -1;
 	}
 
-	if (ini_parse(CONF_FILE_WITH_PATH, ini_handler, tmp_conf) < 0)
+	if (ini_parse(config_file, ini_handler, tmp_conf) < 0)
 		goto err_out;
 
 	if (fixup_lib_path(tmp_conf->core_lib_path, &tmp_conf->subprocess_manager))
