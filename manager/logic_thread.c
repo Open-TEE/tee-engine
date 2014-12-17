@@ -1443,6 +1443,38 @@ discard_msg:
 	free_manager_msg(man_msg);
 }
 
+static void manager_termination(struct manager_msg *man_msg)
+{
+	proc_t proc;
+
+	free_manager_msg(man_msg); /* No information */
+
+	/* NOTE: This is only partial cleaning up function. It is only releasing resources, which
+	 * would be left "open" after process terminaiton. This are shared memorys and file locks */
+
+	/* Unlink all TAs shm and release file locks */
+	h_table_init_stepper(trustedApps);
+	while(1) {
+		proc = h_table_step(trustedApps);
+		if (!proc)
+			break;
+
+		unlink_all_shm_region(proc);
+		release_ta_file_locks(proc);
+	}
+
+	/* Unlink all CAs shm */
+	h_table_init_stepper(clientApps);
+	while(1) {
+		proc = h_table_step(clientApps);
+		if (!proc)
+			break;
+
+		unlink_all_shm_region(proc);
+	}
+
+	exit(0); /* Manager termination */
+}
 
 void *logic_thread_mainloop(void *arg)
 {
@@ -1485,7 +1517,8 @@ void *logic_thread_mainloop(void *arg)
 
 		if (com_msg_name == COM_MSG_NAME_PROC_STATUS_CHANGE ||
 		    com_msg_name == COM_MSG_NAME_FD_ERR ||
-		    com_msg_name == COM_MSG_NAME_TA_REM_FROM_DIR) {
+		    com_msg_name == COM_MSG_NAME_TA_REM_FROM_DIR ||
+		    com_msg_name == COM_MSG_NAME_MANAGER_TERMINATION) {
 
 			/* Empty: No need sender details */
 
@@ -1541,6 +1574,10 @@ void *logic_thread_mainloop(void *arg)
 
 		case COM_MSG_NAME_UNLINK_SHM_REGION:
 			unlink_shm_region(handled_msg);
+			break;
+
+		case COM_MSG_NAME_MANAGER_TERMINATION:
+			manager_termination(handled_msg);
 			break;
 
 		default:

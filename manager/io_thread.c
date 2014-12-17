@@ -447,6 +447,34 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 			free_manager_msg(new_man_msg);
 		}
 	}
+
+	if (cpy_sig_vec & (TEE_SIG_TERM | TEE_SIG_INT)) {
+
+		/* Possible defect: If we can not signal to logic thread about SIGCHLD,
+		 * process is not reapet. It might get reapet when TA proc causes FD event */
+		new_man_msg = calloc(1, sizeof(struct manager_msg));
+		if (!new_man_msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			return;
+		}
+
+		new_man_msg->msg = calloc(1, sizeof(struct com_msg_manager_termination));
+		if (!new_man_msg->msg) {
+			OT_LOG(LOG_ERR, "Out of memory\n");
+			free(new_man_msg);
+			return;
+		}
+
+		/* Note: No message len needed, because this is not send out */
+
+		((struct com_msg_proc_status_change *)new_man_msg->msg)->msg_hdr.msg_name =
+				COM_MSG_NAME_MANAGER_TERMINATION;
+
+		if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
+			OT_LOG(LOG_ERR, "Failed to add inbound queue")
+			free_manager_msg(new_man_msg);
+		}
+	}
 }
 
 int add_man_msg_todo_queue_and_notify(struct manager_msg *msg)
