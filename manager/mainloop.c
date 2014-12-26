@@ -27,6 +27,7 @@
 #include "epoll_wrapper.h"
 #include "extern_resources.h"
 #include "io_thread.h"
+#include "io_thread_tui.h"
 #include "logic_thread.h"
 #include "ta_dir_watch.h"
 #include "tee_logging.h"
@@ -77,9 +78,8 @@ int event_close_sock;
  * \param pub_sockfd The main socket to which clients connect
  * \return 0 on success -1 otherwise
  */
-static int init_sock(int *pub_sockfd)
+static int init_sock(const char *sock_path, int *pub_sockfd)
 {
-	const char *sock_path = "/tmp/open_tee_sock";
 	struct sockaddr_un sock_addr;
 
 	if (remove(sock_path) == -1 && errno != ENOENT) {
@@ -161,7 +161,11 @@ err_1:
 
 int lib_main_loop(struct core_control *control_params)
 {
-	int public_sockfd, i, event_count, event_ta_dir_watch_fd;
+	int public_sockfd;
+	int tui_display_sockfd;
+	int i;
+	int event_count;
+	int event_ta_dir_watch_fd;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
 	pthread_t logic_thread;
 	pthread_attr_t attr;
@@ -181,11 +185,18 @@ int lib_main_loop(struct core_control *control_params)
 	if (ta_dir_watch_init(control_params, &event_ta_dir_watch_fd))
 		return -1; /* err msg logged */
 
-	if (init_sock(&public_sockfd))
+	if (init_sock("/tmp/open_tee_sock", &public_sockfd))
+		return -1; /* err msg logged */
+
+	if (init_sock("/tmp/open_tee_tui_display", &tui_display_sockfd))
 		return -1; /* err msg logged */
 
 	/* listen to inbound connections from userspace clients */
 	if (epoll_reg_fd(public_sockfd, EPOLLIN))
+		return -1; /* err msg logged */
+
+	/* listen to inbound connections from Trusted UI Virtual Display */
+	if (epoll_reg_fd(tui_display_sockfd, EPOLLIN))
 		return -1; /* err msg logged */
 
 	/* Done queue event fd */
@@ -248,6 +259,9 @@ int lib_main_loop(struct core_control *control_params)
 			if (cur_events[i].data.fd == public_sockfd) {
 				handle_public_fd(&cur_events[i]);
 
+			} else if (cur_events[i].data.fd == tui_display_sockfd) {
+				accept_tui_display_fd(&cur_events[i]);
+
 			} else if (cur_events[i].data.fd == event_out_queue_fd) {
 				handle_out_queue(&cur_events[i]);
 
@@ -260,7 +274,12 @@ int lib_main_loop(struct core_control *control_params)
 			} else if(cur_events[i].data.fd == event_ta_dir_watch_fd) {
 				ta_dir_watch_event(&cur_events[i], &event_ta_dir_watch_fd);
 
+			} else if(is_tui_socket_fd(cur_events[i].data.fd)) {
+				OT_LOG(LOG_ERR, "TUI Socket");
+				handle_tui_display_data(&cur_events[i]);
+
 			} else {
+				OT_LOG(LOG_ERR, "Elseness");
 				read_fd_and_add_todo_queue(&cur_events[i]);
 			}
 		}

@@ -1476,6 +1476,13 @@ static void manager_termination(struct manager_msg *man_msg)
 	exit(0); /* Manager termination */
 }
 
+static void tui_display_msg(struct manager_msg *man_msg)
+{
+	OT_LOG(LOG_ERR, "Trusted UI Display Message hnandling not implemented\n");
+
+	free_manager_msg(man_msg);
+}
+
 void *logic_thread_mainloop(void *arg)
 {
 	arg = arg; /* ignored */
@@ -1518,7 +1525,8 @@ void *logic_thread_mainloop(void *arg)
 		if (com_msg_name == COM_MSG_NAME_PROC_STATUS_CHANGE ||
 		    com_msg_name == COM_MSG_NAME_FD_ERR ||
 		    com_msg_name == COM_MSG_NAME_TA_REM_FROM_DIR ||
-		    com_msg_name == COM_MSG_NAME_MANAGER_TERMINATION) {
+		    com_msg_name == COM_MSG_NAME_MANAGER_TERMINATION ||
+            com_msg_name == COM_MSG_NAME_TUI_DISPLAY_MSG) {
 
 			/* Empty: No need sender details */
 
@@ -1579,6 +1587,9 @@ void *logic_thread_mainloop(void *arg)
 		case COM_MSG_NAME_MANAGER_TERMINATION:
 			manager_termination(handled_msg);
 			break;
+
+		case COM_MSG_NAME_TUI_DISPLAY_MSG:
+			tui_display_msg(handled_msg);
 
 		default:
 			/* Just logging an error and message will be ignored */
