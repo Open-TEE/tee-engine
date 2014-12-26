@@ -54,6 +54,7 @@ uint64_t executed_operation_id;
 /* Not creating own message queue for response messages, because only one message can be
  * at time. So only one response message can be received */
 void *response_msg;
+size_t response_msg_len;
 
 /* Interface TA funcitons */
 struct ta_interface *interface;

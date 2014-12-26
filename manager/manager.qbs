@@ -33,6 +33,8 @@ DynamicLibrary {
         "extern_resources.h",
         "io_thread.h",
         "io_thread.c",
+        "io_thread_tui.h",
+        "io_thread_tui.c",
         "logic_thread.h",
         "logic_thread.c",
         "mainloop.c",

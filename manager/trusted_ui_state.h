@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2014 Intel Corporation.                                    **
+** Copyright (C) 2015 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,31 +14,32 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TA_INTERNAL_THREAD_H__
-#define __TA_INTERNAL_THREAD_H__
+#ifndef __TRUSTED_UI_STATE_H__
+#define __TRUSTED_UI_STATE_H__
 
-#include "tee_internal_api.h"
-#include "ta_extern_resources.h"
+/* TODO: Move proc_t definition from extern_resources to its own file */
+/* define an opaque structure to handle the process related information */
+typedef struct __proc *proc_t;
 
-void add_msg_done_queue_and_notify(struct ta_task *out_task);
+/*
+ * TUI state machine
+ *
+ * disconnected -> connected -> session on going
+ *        ^-__________/_____________/
+ */
+enum trusted_ui_connection_state {
+	TUI_DISCONNECTED = 0,
+	TUI_CONNECTED,
+	TUI_SESSION
+};
 
-bool wait_response_msg();
+struct trusted_ui_state {
+	proc_t proc;
+	enum trusted_ui_connection_state state;
 
-void *ta_internal_thread(void *arg);
+        /* Table to hold TUI requests from TAs */
+        HASHTABLE requests;
 
-TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
-				     uint32_t paramTypes, TEE_Param *params,
-				     TEE_TASessionHandle *session, uint32_t *returnOrigin);
+};
 
-void ta_close_ta_session(TEE_TASessionHandle session);
-
-TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
-				       uint32_t cancellationRequestTimeout,
-				       uint32_t commandID, uint32_t paramTypes, TEE_Param *params,
-				       uint32_t *returnOrigin);
-
-bool get_cancellation_flag();
-bool mask_cancellation();
-bool unmask_cancellation();
-
-#endif /* __TA_INTERNAL_THREAD_H__ */
+#endif /* __TRUSTED_UI_STATE_H__ */
