@@ -26,6 +26,8 @@ DynamicLibrary {
     files: [
         "../include/tee_internal_api.h",
         "../include/tee_shared_data_types.h",
+        "../include/tee_tui_api.h",
+        "../include/tee_tui_data_types.h",
         "../include/tee_logging.h",
         "callbacks.h",
         "callbacks.c",
@@ -53,6 +55,7 @@ DynamicLibrary {
         "tee_ta_interface.h",
         "tee_time_api.h",
         "tee_time_api.c",
+        "tee_tui_api.c",
     ]
 }
 
