@@ -94,6 +94,7 @@ extern int event_close_sock;
 enum proc_type {
 	proc_t_CA,
 	proc_t_TA,
+    proc_t_TUI_Display,
 	proc_t_session,
 	proc_t_last, /* Used for "looping" through enumerator */
 };
