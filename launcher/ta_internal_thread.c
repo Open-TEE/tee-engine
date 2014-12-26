@@ -96,7 +96,7 @@ static bool set_exec_operation_id(uint64_t new_op_id)
 	return true;
 }
 
-static void add_msg_done_queue_and_notify(struct ta_task *out_task)
+void add_msg_done_queue_and_notify(struct ta_task *out_task)
 {
 	const uint64_t event = 1;
 

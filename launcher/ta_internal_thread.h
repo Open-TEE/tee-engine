@@ -18,6 +18,9 @@
 #define __TA_INTERNAL_THREAD_H__
 
 #include "tee_internal_api.h"
+#include "ta_extern_resources.h"
+
+void add_msg_done_queue_and_notify(struct ta_task *out_task);
 
 void *ta_internal_thread(void *arg);
 
