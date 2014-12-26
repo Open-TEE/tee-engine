@@ -34,8 +34,12 @@ DynamicLibrary {
         "extern_resources.h",
         "io_thread.h",
         "io_thread.c",
+        "io_thread_tui.h",
+        "io_thread_tui.c",
         "logic_thread.h",
         "logic_thread.c",
+        "logic_thread_tui.h",
+        "logic_thread_tui.c",
         "mainloop.c",
         "opentee_manager_storage_api.h",
         "opentee_manager_storage_api.c",
@@ -45,6 +49,8 @@ DynamicLibrary {
         "shm_mem.c",
         "ta_dir_watch.h",
         "ta_dir_watch.c",
-        "tee_ta_properties.h",
+	"tee_ta_properties.h",
+	"tui_timeout.h",
+	"tui_timeout.c",
     ]
 }

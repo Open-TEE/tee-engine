@@ -225,6 +225,7 @@ void receive_from_manager(struct epoll_event *event, int man_sockfd)
 
 	if (msg_type == COM_TYPE_RESPONSE) {
 		response_msg = new_ta_task->msg;
+		response_msg_len = new_ta_task->msg_len;
 		free(new_ta_task);
 
 		/* Inform the TA thread that we have a task to be completed */

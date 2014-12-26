@@ -14,36 +14,34 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TA_INTERNAL_THREAD_H__
-#define __TA_INTERNAL_THREAD_H__
+#ifndef __IO_THREAD_TUI__
+#define __IO_THREAD_TUI__
 
-#include "tee_internal_api.h"
-#include "opentee_internal_api.h"
-#include "ta_extern_resources.h"
+//#include "core_control_resources.h"
+#include "epoll_wrapper.h"
+#include "extern_resources.h"
+#include <stdbool.h>
 
-void add_msg_done_queue_and_notify(struct ta_task *out_task);
 
-bool wait_response_msg();
+/*!
+ * \brief is_tui_socket_fd
+ * Tells if given socket is a trusted ui socket
+ * \param socketfd File descriptor to be tested
+ */
+bool is_tui_socket_fd(int socketfd);
 
-void *ta_internal_thread(void *arg);
+/*!
+ * \brief accept_tui_display_fd
+ * Handle new connection to Trusted UI Display socket.
+ * \param event
+ */
+void accept_tui_display_fd(struct epoll_event *event);
 
-TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
-				     uint32_t paramTypes, TEE_Param *params,
-				     TEE_TASessionHandle *session, uint32_t *returnOrigin);
+/*!
+ * \brief accept_tui_display_fd
+ * Handle data from Trusted UI Display socket.
+ * \param event
+ */
+void handle_tui_display_data(struct epoll_event *event);
 
-void ta_close_ta_session(TEE_TASessionHandle session);
-
-TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
-				       uint32_t cancellationRequestTimeout,
-				       uint32_t commandID, uint32_t paramTypes, TEE_Param *params,
-				       uint32_t *returnOrigin);
-
-TEE_Result ta_invoke_mgr_command(uint32_t cancellationRequestTimeout, uint32_t commandID,
-				 struct com_mgr_invoke_cmd_payload *sendPayload,
-				 struct com_mgr_invoke_cmd_payload *returnPayload);
-
-bool get_cancellation_flag();
-bool mask_cancellation();
-bool unmask_cancellation();
-
-#endif /* __TA_INTERNAL_THREAD_H__ */
+#endif /* __IO_THREAD_TUI__ */
