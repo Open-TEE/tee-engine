@@ -14,45 +14,34 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __CALLBACKS_H__
-#define __CALLBACKS_H__
+#ifndef __IO_THREAD_TUI__
+#define __IO_THREAD_TUI__
 
-struct internal_api_callbacks {
-	/* Internal Client API needed callbacks */
-	void *fn_ptr_open_ta_session;
-	void *fn_ptr_close_ta_session;
-	void *fn_ptr_invoke_ta_command;
+//#include "core_control_resources.h"
+#include "epoll_wrapper.h"
+#include "extern_resources.h"
+#include <stdbool.h>
 
-	/* Cancellation API */
-	void *fn_ptr_get_cancel_flag;
-	void *fn_ptr_mask_cancellation;
-	void *fn_ptr_unmask_cancellation;
 
-	/* Trusted User Interface API */
-	void *fn_ptr_tui_check_text_format;
-	void *fn_ptr_tui_get_screen_info;
-	void *fn_ptr_tui_init_session;
-	void *fn_ptr_tui_close_session;
-	void *fn_ptr_tui_display_screen;
-};
+/*!
+ * \brief is_tui_socket_fd
+ * Tells if given socket is a trusted ui socket
+ * \param socketfd File descriptor to be tested
+ */
+bool is_tui_socket_fd(int socketfd);
 
-void reg_internal_api_callbacks(struct internal_api_callbacks *calls);
+/*!
+ * \brief accept_tui_display_fd
+ * Handle new connection to Trusted UI Display socket.
+ * \param event
+ */
+void accept_tui_display_fd(struct epoll_event *event);
 
-/* Internal Client API needed callbacks */
-void *fn_ptr_open_ta_session();
-void *fn_ptr_close_ta_session();
-void *fn_ptr_invoke_ta_command();
+/*!
+ * \brief accept_tui_display_fd
+ * Handle data from Trusted UI Display socket.
+ * \param event
+ */
+void handle_tui_display_data(struct epoll_event *event);
 
-/* Cancellation API */
-void *fn_ptr_get_cancel_flag();
-void *fn_ptr_mask_cancellation();
-void *fn_ptr_unmask_cancellation();
-
-/* Trusted User Interface API */
-void *fn_ptr_tui_check_text_format();
-void *fn_ptr_tui_get_screen_info();
-void *fn_ptr_tui_init_session();
-void *fn_ptr_tui_close_session();
-void *fn_ptr_tui_display_screen();
-
-#endif /* __CALLBACKS_H__ */
+#endif /* __IO_THREAD_TUI__ */

@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2014 Intel Corporation.                                    **
+** Copyright (C) 2015 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,31 +14,28 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TA_INTERNAL_THREAD_H__
-#define __TA_INTERNAL_THREAD_H__
+#ifndef __TEE_TUI_API_H__
+#define __TEE_TUI_API_H__
 
-#include "tee_internal_api.h"
-#include "ta_extern_resources.h"
+#include "tee_tui_data_types.h"
+#include "tee_shared_data_types.h"
 
-void add_msg_done_queue_and_notify(struct ta_task *out_task);
+TEE_Result TEE_TUICheckTextFormat(char *text,
+				  uint32_t *width,
+				  uint32_t *height,
+				  uint32_t *lastIndex);
 
-bool wait_response_msg();
+TEE_Result TEE_TUIGetScreenInfo(TEE_TUIScreenOrientation screenOrientation,
+				uint32_t nbEntryFields,
+				TEE_TUIScreenInfo *screenInfo);
 
-void *ta_internal_thread(void *arg);
+TEE_Result TEE_TUIInitSession();
 
-TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
-				     uint32_t paramTypes, TEE_Param *params,
-				     TEE_TASessionHandle *session, uint32_t *returnOrigin);
+TEE_Result TEE_TUICloseSession();
 
-void ta_close_ta_session(TEE_TASessionHandle session);
-
-TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
-				       uint32_t cancellationRequestTimeout,
-				       uint32_t commandID, uint32_t paramTypes, TEE_Param *params,
-				       uint32_t *returnOrigin);
-
-bool get_cancellation_flag();
-bool mask_cancellation();
-bool unmask_cancellation();
-
-#endif /* __TA_INTERNAL_THREAD_H__ */
+TEE_Result TEE_TUIDisplayScreen(TEE_TUIScreenConfiguration *screenConfiguration,
+				bool closeTUISession,
+				TEE_TUIEntryField *entryFields,
+				uint32_t entryFieldCount,
+				TEE_TUIButtonType *selectedButton);
+#endif /* __TEE_TUI_API_H__ */

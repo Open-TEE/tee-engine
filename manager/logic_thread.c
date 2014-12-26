@@ -1476,6 +1476,54 @@ static void manager_termination(struct manager_msg *man_msg)
 	exit(0); /* Manager termination */
 }
 
+static void tui_display_msg(struct manager_msg *man_msg)
+{
+	OT_LOG(LOG_ERR, "Trusted UI Display Message handling not implemented\n");
+
+	OT_LOG(LOG_ERR, "%s", ((struct com_msg_tui_display_init *) man_msg->msg)->test);
+
+	free_manager_msg(man_msg);
+}
+
+static void tui_display_ta_msg(struct manager_msg *man_msg)
+{
+	OT_LOG(LOG_ERR, "TUI TA MSG");
+	uint8_t msg_type;
+
+	if (pthread_mutex_lock(&tui_state_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		return;
+	}
+
+	/* TODO: Implement manager process TUI logic */
+	struct com_msg_tui_ta2display *msg = man_msg->msg;
+
+	com_get_msg_type(msg, &msg_type);
+	if (msg_type == COM_TYPE_RESPONSE) {
+		OT_LOG(LOG_ERR, "Response message, routing to TA");
+
+		man_msg->proc = h_table_get(tui_state.requests, "aa", 2);
+		h_table_remove(tui_state.requests, "aa", 2);
+		add_msg_out_queue_and_notify(man_msg);
+
+	} else if (tui_state.state == TUI_CONNECTED) {
+		h_table_insert(tui_state.requests, "aa", 2, man_msg->proc);
+		man_msg->proc = tui_state.proc;
+
+		OT_LOG(LOG_ERR, "Routing message to TUI Display");
+
+		add_msg_out_queue_and_notify(man_msg);
+	} else {
+		OT_LOG(LOG_ERR, "Trusted UI Display not connected, dropping");
+		/* TODO: Implement error reply to TA */
+
+		free_manager_msg(man_msg);
+	}
+
+	if (pthread_mutex_unlock(&tui_state_mutex))
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+}
+
 void *logic_thread_mainloop(void *arg)
 {
 	arg = arg; /* ignored */
@@ -1518,7 +1566,8 @@ void *logic_thread_mainloop(void *arg)
 		if (com_msg_name == COM_MSG_NAME_PROC_STATUS_CHANGE ||
 		    com_msg_name == COM_MSG_NAME_FD_ERR ||
 		    com_msg_name == COM_MSG_NAME_TA_REM_FROM_DIR ||
-		    com_msg_name == COM_MSG_NAME_MANAGER_TERMINATION) {
+		    com_msg_name == COM_MSG_NAME_MANAGER_TERMINATION ||
+		    com_msg_name == COM_MSG_NAME_TUI_DISPLAY_MSG) {
 
 			/* Empty: No need sender details */
 
@@ -1578,6 +1627,18 @@ void *logic_thread_mainloop(void *arg)
 
 		case COM_MSG_NAME_MANAGER_TERMINATION:
 			manager_termination(handled_msg);
+			break;
+
+		case COM_MSG_NAME_TUI_DISPLAY_MSG:
+			tui_display_msg(handled_msg);
+			break;
+
+		case COM_MSG_NAME_TUI_CHECK_TEXT_FORMAT:
+		case COM_MSG_NAME_TUI_GET_SCREEN_INFO:
+		case COM_MSG_NAME_TUI_INIT_SESSION:
+		case COM_MSG_NAME_TUI_CLOSE_SESSION:
+		case COM_MSG_NAME_TUI_DISPLAY_SCREEN:
+			tui_display_ta_msg(handled_msg);
 			break;
 
 		default:

@@ -56,6 +56,7 @@ extern uint64_t executed_operation_id;
 /* Not creating own message queue for response messages, because only one message can be
  * at time. So only one response message can be received */
 extern void *response_msg;
+extern size_t response_msg_len;
 
 /* Use eventfd to notify the io_thread that the TA thread has finished processing a task */
 extern int event_fd;

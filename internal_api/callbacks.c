@@ -54,3 +54,28 @@ void *fn_ptr_unmask_cancellation()
 {
 	return callbacks.fn_ptr_unmask_cancellation;
 }
+
+void *fn_ptr_tui_check_text_format()
+{
+	return callbacks.fn_ptr_tui_check_text_format;
+}
+
+void *fn_ptr_tui_get_screen_info()
+{
+	return callbacks.fn_ptr_tui_get_screen_info;
+}
+
+void *fn_ptr_tui_init_session()
+{
+	return callbacks.fn_ptr_tui_init_session;
+}
+
+void *fn_ptr_tui_close_session()
+{
+	return callbacks.fn_ptr_tui_close_session;
+}
+
+void *fn_ptr_tui_display_screen()
+{
+	return callbacks.fn_ptr_tui_display_screen;
+}
