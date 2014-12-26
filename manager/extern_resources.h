@@ -24,6 +24,7 @@
 #include "h_table.h"
 #include "tee_list.h"
 #include "tee_shared_data_types.h"
+#include "trusted_ui_state.h"
 
 #define WAIT_NO_MSG_OUT		1
 #define WAIT_OPEN_SESSION_MSG	2
@@ -75,6 +76,12 @@ extern pthread_mutex_t todo_queue_mutex;
 extern pthread_mutex_t done_queue_mutex;
 extern pthread_mutex_t socks_to_close_mutex;
 
+/* Trusted UI state */
+extern struct trusted_ui_state tui_state;
+
+/* Trusted UI state mutex */
+extern pthread_mutex_t tui_state_mutex;
+
 /* IO thead "signaling": wake up logic thread */
 extern pthread_cond_t todo_queue_cond;
 
@@ -94,6 +101,7 @@ extern int event_close_sock;
 enum proc_type {
 	proc_t_CA,
 	proc_t_TA,
+	proc_t_TUI_Display,
 	proc_t_session,
 	proc_t_last, /* Used for "looping" through enumerator */
 };

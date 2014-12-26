@@ -5,6 +5,7 @@ DynamicLibrary {
     Depends { name: "cpp" }
     Depends { name: "CommonApi" }
     Depends { name: "InternalApi" }
+    Depends { name: "cmp" }
 
     Export {
         Depends { name: "cpp" }
@@ -30,6 +31,8 @@ DynamicLibrary {
         "ta_extern_resources.h",
         "ta_internal_thread.h",
         "ta_internal_thread.c",
+        "ta_internal_thread_tui.h",
+        "ta_internal_thread_tui.c",
         "ta_io_thread.h",
         "ta_io_thread.c",
         "ta_process.h",
