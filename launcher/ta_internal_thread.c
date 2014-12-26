@@ -99,7 +99,7 @@ static bool set_exec_operation_id(uint64_t new_op_id)
 	return true;
 }
 
-static void add_msg_done_queue_and_notify(struct ta_task *out_task)
+void add_msg_done_queue_and_notify(struct ta_task *out_task)
 {
 	const uint64_t event = 1;
 
@@ -125,7 +125,7 @@ static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 	}
 }
 
-static bool wait_response_msg()
+bool wait_response_msg()
 {
 	if (pthread_mutex_lock(&block_internal_thread_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");

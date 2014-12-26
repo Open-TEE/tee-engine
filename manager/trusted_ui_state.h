@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2014 Intel Corporation.                                    **
+** Copyright (C) 2015 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,31 +14,43 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TA_INTERNAL_THREAD_H__
-#define __TA_INTERNAL_THREAD_H__
+#ifndef __TRUSTED_UI_STATE_H__
+#define __TRUSTED_UI_STATE_H__
 
-#include "tee_internal_api.h"
-#include "ta_extern_resources.h"
+#include "tee_tui_data_types.h"
+#include "com_protocol.h"
 
-void add_msg_done_queue_and_notify(struct ta_task *out_task);
+/* TODO: Move proc_t definition from extern_resources to its own file */
+/* define an opaque structure to handle the process related information */
+typedef struct __proc *proc_t;
 
-bool wait_response_msg();
+/*
+ * TUI state machine
+ *
+ */
+enum trusted_ui_connection_state {
+	TUI_DISCONNECTED = 0,
+	TUI_CONNECTED,
+        TUI_INITIALIZED,
+	TUI_SESSION,
+        TUI_DISPLAY
+};
 
-void *ta_internal_thread(void *arg);
+struct trusted_ui_state {
+	proc_t proc;
+	enum trusted_ui_connection_state state;
 
-TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
-				     uint32_t paramTypes, TEE_Param *params,
-				     TEE_TASessionHandle *session, uint32_t *returnOrigin);
+        /* Table to hold TUI requests from TAs */
+        HASHTABLE requests;
 
-void ta_close_ta_session(TEE_TASessionHandle session);
+        uint64_t request_id_counter;
 
-TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
-				       uint32_t cancellationRequestTimeout,
-				       uint32_t commandID, uint32_t paramTypes, TEE_Param *params,
-				       uint32_t *returnOrigin);
+        /* Remember which TA has the locked session */
+        proc_t TA_session_lock;
 
-bool get_cancellation_flag();
-bool mask_cancellation();
-bool unmask_cancellation();
+        /* Cached screen info data */
+        void *screen_info_data;
+        size_t screen_info_data_size;
+};
 
-#endif /* __TA_INTERNAL_THREAD_H__ */
+#endif /* __TRUSTED_UI_STATE_H__ */

@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2014 Intel Corporation.                                    **
+** Copyright (C) 2015 Intel Corporation.                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,31 +14,21 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TA_INTERNAL_THREAD_H__
-#define __TA_INTERNAL_THREAD_H__
+#ifndef __LOGIC_THREAD_TUI_H__
+#define __LOGIC_THREAD_TUI_H__
 
-#include "tee_internal_api.h"
-#include "ta_extern_resources.h"
+#include "extern_resources.h"
 
-void add_msg_done_queue_and_notify(struct ta_task *out_task);
+void tui_send_error_msg(uint32_t ret, proc_t destination);
 
-bool wait_response_msg();
+void tui_display_init(struct manager_msg *man_msg);
+void tui_check_text_format(struct manager_msg *man_msg);
+void tui_get_screen_info(struct manager_msg *man_msg);
+void tui_init_session(struct manager_msg *man_msg);
+void tui_close_session(struct manager_msg *man_msg);
+void tui_display_screen(struct manager_msg *man_msg);
 
-void *ta_internal_thread(void *arg);
+/* TODO: Remove */
+void tui_display_ta_msg(struct manager_msg *man_msg);
 
-TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
-				     uint32_t paramTypes, TEE_Param *params,
-				     TEE_TASessionHandle *session, uint32_t *returnOrigin);
-
-void ta_close_ta_session(TEE_TASessionHandle session);
-
-TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
-				       uint32_t cancellationRequestTimeout,
-				       uint32_t commandID, uint32_t paramTypes, TEE_Param *params,
-				       uint32_t *returnOrigin);
-
-bool get_cancellation_flag();
-bool mask_cancellation();
-bool unmask_cancellation();
-
-#endif /* __TA_INTERNAL_THREAD_H__ */
+#endif /* __LOGIC_THREAD_TUI_H__ */

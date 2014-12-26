@@ -34,6 +34,7 @@
 #include "tee_list.h"
 #include "tee_logging.h"
 #include "logic_thread.h"
+#include "logic_thread_tui.h"
 
 /* Used for hashtable init */
 #define TA_SESS_COUNT_EST 50
@@ -1578,6 +1579,30 @@ void *logic_thread_mainloop(void *arg)
 
 		case COM_MSG_NAME_MANAGER_TERMINATION:
 			manager_termination(handled_msg);
+			break;
+
+		case COM_MSG_NAME_TUI_DISPLAY_INIT:
+			tui_display_init(handled_msg);
+			break;
+
+		case COM_MSG_NAME_TUI_CHECK_TEXT_FORMAT:
+			tui_check_text_format(handled_msg);
+			break;
+
+		case COM_MSG_NAME_TUI_GET_SCREEN_INFO:
+			tui_get_screen_info(handled_msg);
+			break;
+
+		case COM_MSG_NAME_TUI_INIT_SESSION:
+			tui_init_session(handled_msg);
+			break;
+
+		case COM_MSG_NAME_TUI_CLOSE_SESSION:
+			tui_close_session(handled_msg);
+			break;
+
+		case COM_MSG_NAME_TUI_DISPLAY_SCREEN:
+			tui_display_screen(handled_msg);
 			break;
 
 		default:
