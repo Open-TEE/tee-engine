@@ -19,6 +19,7 @@
 #include "conf_parser.h"
 #include "core_control_resources.h"
 #include "ta_internal_thread.h"
+#include "ta_internal_thread_tui.h"
 #include "tee_logging.h"
 
 #include <dlfcn.h>
@@ -37,6 +38,13 @@ static void fill_internal_api_callbacks(struct internal_api_callbacks *calls)
 	calls->fn_ptr_get_cancel_flag = get_cancellation_flag;
 	calls->fn_ptr_mask_cancellation = mask_cancellation;
 	calls->fn_ptr_unmask_cancellation = unmask_cancellation;
+
+	/* Trusted User Interface API */
+	calls->fn_ptr_tui_check_text_format = tui_check_text_format;
+	calls->fn_ptr_tui_get_screen_info = tui_get_screen_info;
+	calls->fn_ptr_tui_init_session = tui_init_session;
+	calls->fn_ptr_tui_close_session = tui_close_session;
+	calls->fn_ptr_tui_display_screen = tui_display_screen;
 }
 
 TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
