@@ -100,7 +100,7 @@ void open_shm_region(struct manager_msg *man_msg)
 	if (!new_shm) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		open_shm->return_code = TEEC_ERROR_OUT_OF_MEMORY;
-		goto err;
+		goto err_1;
 	}
 
 	/* The name of the shm object files should be in the format "/somename\0"
@@ -108,20 +108,25 @@ void open_shm_region(struct manager_msg *man_msg)
 	 * a UUID */
 	if (generate_random_path(open_shm->name, SHM_MEM_NAME_LEN)) {
 		open_shm->return_code = TEEC_ERROR_GENERIC;
-		goto err;
+		goto err_1;
 	}
+
+	/* Store shm uuid to manager. This will be needed if CA/TA process crashes unexpectedly */
+	memcpy(new_shm->name, open_shm->name, SHM_MEM_NAME_LEN);
+	new_shm->size = open_shm->size;
 
 	fd = shm_open(open_shm->name, (O_RDWR | O_CREAT | O_EXCL),
 		      (S_IRUSR | S_IRGRP | S_IWUSR | S_IWGRP));
 	if (fd == -1) {
 		OT_LOG(LOG_ERR, "Failed to open the shared memory");
 		open_shm->return_code = TEEC_ERROR_GENERIC;
-		goto err;
+		goto err_1;
 	}
 
 	if (ftruncate(fd, open_shm->size) == -1) {
 		OT_LOG(LOG_ERR, "Failed to truncate: %d", errno);
 		open_shm->return_code = TEEC_ERROR_GENERIC;
+		goto err_2;
 	}
 
 	/* We have finished with the file handle as it has been mapped so don't leak it */
@@ -133,7 +138,10 @@ out:
 	add_msg_out_queue_and_notify(man_msg);
 	return;
 
-err:
+err_2:
+	shm_unlink(open_shm->name);
+	close(fd);
+err_1:
 	free(new_shm);
 	add_msg_out_queue_and_notify(man_msg);
 }
