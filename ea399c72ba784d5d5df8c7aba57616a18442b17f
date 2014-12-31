@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1af78d9a_d7672fe9",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 579,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2014-12-31T14:26:17Z",
+      "side": 1,
+      "message": "One could question if this really makes code more readable, instead of just adding a comment on top of the for-loop.",
+      "range": {
+        "startLine": 579,
+        "startChar": 1,
+        "endLine": 579,
+        "endChar": 21
+      },
+      "revId": "ea399c72ba784d5d5df8c7aba57616a18442b17f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
