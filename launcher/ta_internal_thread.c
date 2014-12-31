@@ -592,10 +592,12 @@ static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_P
 			   TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_MEMREF_OUTPUT ||
 			   TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_MEMREF_INOUT) {
 
-			/* unmap the shared memory regions as they are no longer valid for the TA
-			 */
+			/* Unmap the shared memory regions as they are no longer valid for the TA.
+			 * Will be using original size. Original size is size which was used in
+			 * mmap-command. If TA will change size parameter, we might end up with
+			 * memory leak */
 			if (params[i].memref.buffer)
-				munmap(params[i].memref.buffer, params[i].memref.size);
+				munmap(params[i].memref.buffer, operation->params[i].memref.size);
 		}
 	}
 
@@ -639,8 +641,7 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 				isOutput = false;
 			}
 
-			/* if there is some failure opening the shared memory just
-			 * fail graefully */
+			/* if there is some failure opening the shared memory just fail graefully */
 			if (open_shared_mem(operation->params[i].memref.shm_area,
 					    &params[i].memref.buffer,
 					    operation->params[i].memref.size,
