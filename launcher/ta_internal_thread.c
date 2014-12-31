@@ -69,6 +69,12 @@ struct ta_shared_mem {
 
 #define FOR_EACH_TA_SHM(i) for (i = 0; i < 4; ++i)
 
+/*!
+ *  \brief Iterate over TA parameters
+ *  \param i interger
+ */
+#define FOR_EACH_TA_PARAM(i) for (i = 0; i < 4; ++i)
+
 static bool set_exec_operation_id(uint64_t new_op_id)
 {
 	/* Lock task queue from logic thread */
@@ -570,7 +576,8 @@ static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_P
 	int i;
 	bool ret = true;
 
-	for (i = 0; i < 4; i++) {
+	FOR_EACH_TA_PARAM(i) {
+
 		if (TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_VALUE_OUTPUT ||
 		    TEE_PARAM_TYPE_GET(tee_param_types, i) == TEE_PARAM_TYPE_VALUE_INOUT) {
 
@@ -606,7 +613,7 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 
 	memset(params, 0, 4 * sizeof(TEE_Param));
 
-	for (i = 0; i < 4; i++) {
+	FOR_EACH_TA_PARAM(i) {
 
 		if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_NONE ||
 		    TEE_PARAM_TYPE_GET(param_types, i) == TEEC_VALUE_OUTPUT ||
