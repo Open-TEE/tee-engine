@@ -16,6 +16,7 @@ LT_INIT
 # Checks for libraries.
 AC_CHECK_LIB([pthread], [pthread_create])
 AC_CHECK_LIB([ssl], [OPENSSL_malloc])
+AC_CHECK_LIB(crypto, [ENGINE_cleanup])
 AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([libelf], [elf_version])
 
