@@ -17,5 +17,31 @@
 *.out
 *.app
 
+# Autotools generated files
+Makefile
+Makefile.in
+aclocal.m4
+ar-lib
+autom4te.cache
+confdefs.h
+config.guess
+config.h
+config.h.in
+config.status
+config.sub
+configure
+configure.scan
+compile
+depcomp
+install-sh
+ltmain.sh
+libtool
+m4
+missing
+stamp-h1
+.deps
+.dirstamp
+.libs
+
 TAs/*
 *.qbs.user
