@@ -39,8 +39,8 @@ libInternalApi_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/include \
 	-iquote $(top_srcdir)/internal_api
 
-libInternalApi_la_LDFLAGS = ${AM_LDFLAGS} \
-	-lssl
+libInternalApi_la_LDFLAGS = ${AM_LDFLAGS}_\
+	-lssl -lcrypto
 
 libInternalApi_la_LIBADD =
 
