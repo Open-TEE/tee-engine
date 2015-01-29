@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1969be_435ed9ea",
+        "filename": "internal_api/storage_key_apis_external_funcs.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 50,
+      "author": {
+        "id": 1000798
+      },
+      "writtenOn": "2015-01-29T12:13:02Z",
+      "side": 1,
+      "message": "Is this really a good idea? Even the current __attributes__ which are being used cause pain.",
+      "range": {
+        "startLine": 50,
+        "startChar": 12,
+        "endLine": 50,
+        "endChar": 40
+      },
+      "revId": "9e8ab729b2cce377993b52b905e85d9fd45c484b",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
