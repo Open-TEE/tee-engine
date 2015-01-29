@@ -33,11 +33,11 @@
 #include "storage_key_apis_external_funcs.h"
 #include "tee_logging.h"
 
-#define SECURE_STORAGE_PATH "/home/dettenbo/TEE_secure_storage/"
 #define TEE_OBJ_ID_LEN_HEX TEE_OBJECT_ID_MAX_LEN * 2 + 1
 #define TEE_UUID_LEN_HEX sizeof(TEE_UUID) * 2 + 1
 #define ADD_NULL_CHAR_END_TO_HEX(obj_id_len) ((obj_id_len * 2) + 1)
 static uint32_t next_enum_ID = 0; /* provide unique ID for enumerators */
+static char *secure_storage_path;
 
 static struct storage_enumerator *enumerators_head;
 
@@ -46,6 +46,23 @@ struct storage_enumerator {
 	DIR *dir;
 	uint32_t ID;
 };
+
+static bool __attribute__((constructor)) storage_ext_init()
+{
+	char *home = getenv("HOME");
+
+	if (asprintf(&secure_storage_path, "%s/%s/", home, ".TEE_secure_storage/") == -1) {
+		OT_LOG(LOG_ERR, "Failed to malloc secure storage path\n");
+		return false;
+	}
+
+	return true;
+}
+
+static void __attribute__((destructor))storage_ext_cleanup()
+{
+	free(secure_storage_path);
+}
 
 /*!
  * \brief get_uuid
@@ -114,7 +131,7 @@ void ext_delete_file(FILE *object_file, void *objectID, size_t objectIDLen)
 	for (i = 0; i < objectIDLen; ++i)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
-	if (asprintf(&dir_path, "%s%s/", SECURE_STORAGE_PATH, UUID) == -1) {
+	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1) {
 		return; // TEE_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -196,7 +213,7 @@ FILE *ext_request_for_open(void *objectID, size_t objectIDLen, size_t request_ac
 	for (i = 0; i < objectIDLen; ++i)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
-	if (asprintf(&dir_path, "%s%s/", SECURE_STORAGE_PATH, UUID) == -1) {
+	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1) {
 		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -234,7 +251,7 @@ FILE *ext_request_for_create(void *objectID, size_t objectIDLen, size_t request_
 	for (i = 0; i < objectIDLen; ++i)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
-	if (asprintf(&dir_path, "%s%s/", SECURE_STORAGE_PATH, UUID) == -1) {
+	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1) {
 		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -248,7 +265,7 @@ FILE *ext_request_for_create(void *objectID, size_t objectIDLen, size_t request_
 		goto ret;
 	}
 
-	ret_mkdir = mkdir(SECURE_STORAGE_PATH, 0777);
+	ret_mkdir = mkdir(secure_storage_path, 0777);
 	if (ret_mkdir != 0 && errno != EEXIST) {
 		OT_LOG(LOG_ERR, "Cannot create Secure Storage directory: %s\n", strerror(errno));
 		goto ret;
@@ -289,11 +306,11 @@ bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID
 	for (i = 0; i < new_objectIDLen; ++i)
 		sprintf(new_hex_ID + i * 2, "%02x", *((unsigned char *)new_objectID + i));
 
-	if (asprintf(&name_with_dir_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, hex_ID) == -1) {
+	if (asprintf(&name_with_dir_path, "%s%s/%s", secure_storage_path, UUID, hex_ID) == -1) {
 		return false; // TEE_ERROR_OUT_OF_MEMORY;
 	}
 
-	if (asprintf(&new_name_with_dir_path, "%s%s/%s", SECURE_STORAGE_PATH, UUID, new_hex_ID) ==
+	if (asprintf(&new_name_with_dir_path, "%s%s/%s", secure_storage_path, UUID, new_hex_ID) ==
 	    -1) {
 		free(name_with_dir_path);
 		return false; // TEE_ERROR_OUT_OF_MEMORY;
@@ -429,7 +446,7 @@ bool ext_start_enumerator(uint32_t start_enum_ID)
 	if (!get_uuid(UUID))
 		return false;
 
-	if (asprintf(&dir_path, "%s%s/", SECURE_STORAGE_PATH, UUID) == -1) {
+	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1) {
 		return false; // TEE_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -497,7 +514,7 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 		}
 
 		if (asprintf(&name_with_path, "%s%s/%s",
-			     SECURE_STORAGE_PATH, UUID, entry->d_name) == -1) {
+			     secure_storage_path, UUID, entry->d_name) == -1) {
 			OT_LOG(LOG_ERR, "Enumerator: Out of memory\n");
 			TEE_Panic(TEE_ERROR_GENERIC);
 		}
