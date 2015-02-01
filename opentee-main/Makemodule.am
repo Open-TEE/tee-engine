@@ -1,0 +1,28 @@
+# opentee-engine executable
+
+bin_PROGRAMS += opentee-engine
+
+opentee_engine_includes = \
+	include/core_control_resources.h \
+	include/conf_parser.h \
+	opentee-main/args.h \
+	opentee-main/ini.h
+
+opentee_engine_SOURCES = ${opentee_engine_include} \
+	opentee-main/args.c \
+	opentee-main/conf_parser.c \
+	opentee-main/ini.c \
+	opentee-main/main.c
+
+opentee_engine_CFLAGS = ${AM_CFLAGS} \
+	-iquote $(top_srcdir)/include \
+	-iquote $(top_srcdir)/opentee-main
+
+opentee_engine_LDFLAGS = ${AM_LDFLAGS} \
+	-rdynamic \
+	-lpthread \
+	-ldl
+
+opentee_engine_LDADD = \
+	libCommonApi.la
+

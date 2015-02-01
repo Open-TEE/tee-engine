@@ -18,7 +18,7 @@
 *.exe
 *.out
 *.app
-opentee_core
+opentee-engine
 
 # Autotools generated files
 Makefile

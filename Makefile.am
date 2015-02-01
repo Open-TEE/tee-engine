@@ -13,7 +13,7 @@ bin_PROGRAMS =
 lib_LTLIBRARIES  =
 
 # Include module-specific Makefiles
-include core/Makemodule.am
+include opentee-main/Makemodule.am
 include common/Makemodule.am
 include manager/Makemodule.am
 include internal_api/Makemodule.am

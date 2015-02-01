@@ -1,7 +1,7 @@
 import qbs
 
 CppApplication {
-    name: "TEE_Core_Process"
+    name: "opentee-engine"
     type: "application"
     Depends { name: "CommonApi" }
 
