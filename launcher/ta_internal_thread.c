@@ -596,8 +596,10 @@ static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_P
 			 * Will be using original size. Original size is size which was used in
 			 * mmap-command. If TA will change size parameter, we might end up with
 			 * memory leak */
-			if (params[i].memref.buffer)
+			if (params[i].memref.buffer) {
 				munmap(params[i].memref.buffer, operation->params[i].memref.size);
+				operation->params[i].memref.size = params[i].memref.size;
+			}
 		}
 	}
 
