@@ -1,10 +1,12 @@
 # Object files
 *.o
 *.ko
+*.lo
 
 # Libraries
 *.lib
 *.a
+*.la
 
 # Shared objects (inc. Windows DLLs)
 *.dll
@@ -16,6 +18,7 @@
 *.exe
 *.out
 *.app
+opentee_core
 
 # Autotools generated files
 Makefile
