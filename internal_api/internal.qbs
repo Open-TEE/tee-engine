@@ -3,8 +3,9 @@ import qbs
 DynamicLibrary {
     name: "InternalApi"
     Group {
+        name: "project-install"
         fileTagsFilter: "dynamiclibrary"
-        qbs.install: true
+        qbs.install: false
         qbs.installDir: "lib"
     }
 

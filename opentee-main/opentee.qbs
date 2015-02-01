@@ -3,8 +3,9 @@ import qbs
 CppApplication {
     name: "opentee-engine"
     Group {
+        name: "project-install"
         fileTagsFilter: "application"
-        qbs.install: true
+        qbs.install: false
         qbs.installDir: "bin"
     }
 
