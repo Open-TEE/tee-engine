@@ -2,6 +2,12 @@ import qbs
 
 CppApplication {
     name: "opentee-engine"
+    Group {
+        fileTagsFilter: "application"
+        qbs.install: true
+        qbs.installDir: "bin"
+    }
+
     type: "application"
     Depends { name: "CommonApi" }
 

@@ -2,6 +2,12 @@ import qbs
 
 DynamicLibrary {
     name: "InternalApi"
+    Group {
+        fileTagsFilter: "dynamiclibrary"
+        qbs.install: true
+        qbs.installDir: "lib"
+    }
+
     Depends { name: "cpp" }
     Depends { name: "OpenSSL" }
 

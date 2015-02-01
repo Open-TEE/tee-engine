@@ -2,6 +2,12 @@ import qbs
 
 DynamicLibrary {
     name: "CommonApi"
+    Group {
+        fileTagsFilter: "dynamiclibrary"
+        qbs.install: true
+        qbs.installDir: "lib"
+    }
+
     Depends { name: "cpp" }
 
     Export {
