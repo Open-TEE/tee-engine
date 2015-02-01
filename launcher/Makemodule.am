@@ -26,7 +26,8 @@ libLauncherApi_la_CFLAGS = ${AM_CFLAGS} \
 
 libLauncherApi_la_LDFLAGS = ${AM_LDFLAGS} \
 	-lpthread \
-	-ldl
+	-ldl \
+	-lrt
 
 libLauncherApi_la_LIBADD =\
 	libInternalApi.la \

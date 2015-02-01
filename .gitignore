@@ -27,6 +27,7 @@ confdefs.h
 config.guess
 config.h
 config.h.in
+config.log
 config.status
 config.sub
 configure
