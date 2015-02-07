@@ -528,6 +528,9 @@ static int open_shared_mem(const char *name, void **buffer, uint32_t size, bool 
 		goto errorExit;
 	}
 
+	if (size == 0)
+		return 0;
+
 	if (isOutput)
 		flag |= O_RDONLY; /* It is an outbuffer only so we just need read access */
 	else
@@ -599,11 +602,11 @@ static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_P
 			 * Will be using original size. Original size is size which was used in
 			 * mmap-command. If TA will change size parameter, we might end up with
 			 * memory leak */
-			if (params[i].memref.buffer) {
+			if (operation->params[i].param.memref.size != 0 && params[i].memref.buffer)
 				munmap(params[i].memref.buffer,
 				       operation->params[i].param.memref.size);
-				operation->params[i].param.memref.size = params[i].memref.size;
-			}
+
+			operation->params[i].param.memref.size = params[i].memref.size;
 		}
 	}
 
@@ -695,15 +698,14 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 				isOutput = false;
 			}
 
+			params[i].memref.size = operation->params[i].param.memref.size;
+
 			/* if there is some failure opening the shared memory just fail graefully */
 			if (open_shared_mem(operation->params[i].param.memref.shm_area,
 					    &params[i].memref.buffer,
 					    operation->params[i].param.memref.size,
-					    isOutput) == -1) {
+					    isOutput) == -1)
 				ret = -1;
-			}
-
-			params[i].memref.size = operation->params[i].param.memref.size;
 		}
 	}
 
