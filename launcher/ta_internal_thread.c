@@ -46,6 +46,9 @@
 #define TEEC_MEMREF_PARTIAL_INPUT	0x0000000D
 #define TEEC_MEMREF_PARTIAL_OUTPUT	0x0000000E
 #define TEEC_MEMREF_PARTIAL_INOUT	0x0000000F
+#define TEEC_MEM_INPUT			0x00000001
+#define TEEC_MEM_OUTPUT			0x00000002
+
 
 #define SESSION_STATE_ACTIVE		0x000000F0
 
@@ -227,13 +230,13 @@ static void ta2ta_com_msg_op_to_params(uint32_t paramTypes, TEE_Param *params,
 
 		if (TEE_PARAM_TYPE_GET(paramTypes, i) == TEE_PARAM_TYPE_VALUE_INOUT ||
 		    TEE_PARAM_TYPE_GET(paramTypes, i) == TEE_PARAM_TYPE_VALUE_OUTPUT) {
-			memcpy(&params[i].value, &operation->params[i].value,
+			memcpy(&params[i].value, &operation->params[i].param.value,
 			       sizeof(sizeof(params[i].value)));
 
 		} else if (TEE_PARAM_TYPE_GET(paramTypes, i) == TEE_PARAM_TYPE_MEMREF_INOUT ||
 			   TEE_PARAM_TYPE_GET(paramTypes, i) == TEE_PARAM_TYPE_MEMREF_OUTPUT) {
 
-			params[i].memref.size = operation->params[i].memref.size;
+			params[i].memref.size = operation->params[i].param.memref.size;
 
 			/* Special case. If original size has been zero,
 			 * no shm aquired or data trasnfered*/
@@ -340,7 +343,7 @@ static TEE_Result map_and_cpy_parameters(uint32_t paramTypes, TEE_Param *params,
 		if (TEE_PARAM_TYPE_GET(paramTypes, i) == TEE_PARAM_TYPE_VALUE_INOUT ||
 		    TEE_PARAM_TYPE_GET(paramTypes, i) == TEE_PARAM_TYPE_VALUE_INPUT ||
 		    TEE_PARAM_TYPE_GET(paramTypes, i) == TEE_PARAM_TYPE_VALUE_OUTPUT) {
-			memcpy(&operation->params[i].value,
+			memcpy(&operation->params[i].param.value,
 			       &params[i].value, sizeof(params[i].value));
 			continue;
 		}
@@ -364,7 +367,7 @@ static TEE_Result map_and_cpy_parameters(uint32_t paramTypes, TEE_Param *params,
 
 		/* Zero size is special case */
 		if (!params[i].memref.size) {
-			operation->params[i].memref.size = params->memref.size;
+			operation->params[i].param.memref.size = params->memref.size;
 			continue;
 		}
 
@@ -374,10 +377,10 @@ static TEE_Result map_and_cpy_parameters(uint32_t paramTypes, TEE_Param *params,
 
 		/* Copy parameter buffer */
 		memcpy(ta_shm_mems[i].addr, params[i].memref.buffer, params[i].memref.size);
-		operation->params[i].memref.size = params[i].memref.size;
+		operation->params[i].param.memref.size = params[i].memref.size;
 
 		/* Copy shm uuid to operation */
-		memcpy(operation->params[i].memref.shm_area,
+		memcpy(operation->params[i].param.memref.shm_area,
 		       ta_shm_mems[i].shm_uuid, SHM_MEM_NAME_LEN);
 	}
 
@@ -584,7 +587,7 @@ static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_P
 			/* We only have to copy back the output values, because the memory
 			 * types point to shared memory so they are updated directly in place.
 			 */
-			memcpy(&operation->params[i].value,
+			memcpy(&operation->params[i].param.value,
 			       &params[i].value,
 			       sizeof(params[i].value));
 
@@ -597,8 +600,9 @@ static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_P
 			 * mmap-command. If TA will change size parameter, we might end up with
 			 * memory leak */
 			if (params[i].memref.buffer) {
-				munmap(params[i].memref.buffer, operation->params[i].memref.size);
-				operation->params[i].memref.size = params[i].memref.size;
+				munmap(params[i].memref.buffer,
+				       operation->params[i].param.memref.size);
+				operation->params[i].param.memref.size = params[i].memref.size;
 			}
 		}
 	}
@@ -606,14 +610,62 @@ static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_P
 	return ret;
 }
 
+static void map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uint32_t *TEE_types)
+{
+	int types[4] = {0}, i;
+
+	FOR_EACH_TA_PARAM(i) {
+
+		/* convert the TEEC types to the TEE internal types */
+		if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_NONE ) {
+			continue;
+
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_PARTIAL_INOUT ||
+			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_TEMP_INOUT ||
+			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INOUT ||
+			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEE_PARAM_TYPE_MEMREF_INOUT) {
+
+			types[i] = TEE_PARAM_TYPE_MEMREF_INOUT;
+
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_PARTIAL_INPUT ||
+			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_TEMP_INPUT ||
+			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INPUT ||
+			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEE_PARAM_TYPE_MEMREF_INPUT) {
+
+			types[i] = TEE_PARAM_TYPE_MEMREF_INPUT;
+
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_PARTIAL_OUTPUT ||
+			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_TEMP_OUTPUT ||
+			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_OUTPUT ||
+			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEE_PARAM_TYPE_MEMREF_OUTPUT) {
+
+			types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
+
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_WHOLE) {
+
+			if (operation->params[i].flags & TEEC_MEM_INPUT)
+				types[i] = TEE_PARAM_TYPE_MEMREF_INPUT;
+			else if (operation->params[i].flags & TEEC_MEM_OUTPUT)
+				types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
+			else if (operation->params[i].flags & (TEEC_MEM_INPUT | TEEC_MEM_OUTPUT))
+				types[i] = TEE_PARAM_TYPE_MEMREF_INOUT;
+			else
+				OT_LOG(LOG_ERR, "Warning: Memory flags is NULL!")
+
+		} else {
+			OT_LOG(LOG_ERR, "Warning: Unknow parameter type")
+		}
+	}
+
+	*TEE_types = TEE_PARAM_TYPES(types[0], types[1], types[2], types[3]);
+}
+
 static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Param *params,
 				    uint32_t *tee_param_types)
 {
-	int i;
-	int types[4] = {0};
-	bool isOutput;
 	uint32_t param_types = operation->paramTypes;
-	int ret = 0;
+	bool isOutput;
+	int ret = 0, i;
 
 	memset(params, 0, 4 * sizeof(TEE_Param));
 
@@ -630,7 +682,7 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 			   TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_VALUE_INPUT) {
 
 			memcpy(&params[i].value,
-			       &operation->params[i].value, sizeof(params[i].value));
+			       &operation->params[i].param.value, sizeof(params[i].value));
 
 		} else {
 
@@ -644,36 +696,18 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 			}
 
 			/* if there is some failure opening the shared memory just fail graefully */
-			if (open_shared_mem(operation->params[i].memref.shm_area,
+			if (open_shared_mem(operation->params[i].param.memref.shm_area,
 					    &params[i].memref.buffer,
-					    operation->params[i].memref.size,
+					    operation->params[i].param.memref.size,
 					    isOutput) == -1) {
 				ret = -1;
 			}
 
-			params[i].memref.size = operation->params[i].memref.size;
-		}
-
-		/* convert the TEEC types to the TEE internal types */
-		if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_WHOLE ||
-		    TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_PARTIAL_INOUT) {
-
-			types[i] = TEE_PARAM_TYPE_MEMREF_INOUT;
-
-		} else if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_PARTIAL_INPUT) {
-
-			types[i] = TEE_PARAM_TYPE_MEMREF_INPUT;
-
-		} else if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_PARTIAL_OUTPUT) {
-
-			types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
-
-		} else {
-			types[i] = TEE_PARAM_TYPE_GET(param_types, i);
+			params[i].memref.size = operation->params[i].param.memref.size;
 		}
 	}
 
-	*tee_param_types = TEE_PARAM_TYPES(types[0], types[1], types[2], types[3]);
+	map_TEEC_param_types_to_TEE(operation, tee_param_types);
 
 	if (ret == -1) /* clean up all memory that has been mmaped because of the error */
 		copy_params_to_com_msg_op(operation, params, *tee_param_types);
