@@ -573,11 +573,11 @@ errorExit:
 	return -1;
 }
 
-static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_Param *params,
-				      int32_t tee_param_types)
+static TEE_Result copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_Param *params,
+					    int32_t tee_param_types)
 {
+	TEE_Result ret = TEE_SUCCESS;
 	int i;
-	bool ret = true;
 
 	FOR_EACH_TA_PARAM(i) {
 
@@ -604,6 +604,10 @@ static bool copy_params_to_com_msg_op(struct com_msg_operation *operation, TEE_P
 				       operation->params[i].param.memref.size);
 
 			operation->params[i].param.memref.size = params[i].memref.size;
+
+			/* If TA is not crashed due over writing a buffer, return short buffer */
+			if (params[i].memref.size > operation->params[i].param.memref.size)
+				ret = TEE_ERROR_SHORT_BUFFER;
 		}
 	}
 
@@ -751,14 +755,10 @@ static void open_session(struct ta_task *in_task)
 	set_exec_operation_id(0);
 
 	/* Copy the data back from the TA to the client */
-	if (!copy_params_to_com_msg_op(&open_msg->operation, params, paramTypes)) {
-		open_msg->return_code_open_session = TEE_ERROR_GENERIC;
-		open_msg->return_origin = TEE_ORIGIN_TEE;
-		goto out;
-	}
+	open_msg->return_code_open_session =
+			copy_params_to_com_msg_op(&open_msg->operation, params, paramTypes);
 
 	open_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
-
 out:
 	open_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 	add_msg_done_queue_and_notify(in_task);
@@ -798,11 +798,8 @@ static void invoke_cmd(struct ta_task *in_task)
 	set_exec_operation_id(0);
 
 	/* Copy the data back from the TA to the client */
-	if (!copy_params_to_com_msg_op(&invoke_msg->operation, params, paramTypes)) {
-		invoke_msg->return_code = TEE_ERROR_GENERIC;
-		invoke_msg->return_origin = TEE_ORIGIN_TEE;
-		goto out;
-	}
+	invoke_msg->return_code =
+			copy_params_to_com_msg_op(&invoke_msg->operation, params, paramTypes);
 
 	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 out:
