@@ -353,10 +353,15 @@ static TEE_Result map_and_cpy_parameters(uint32_t paramTypes, TEE_Param *params,
 		 */
 
 		/* Check parameters */
-		if ((!params[i].memref.size && params[i].memref.buffer) ||
-		    (!params[i].memref.buffer && params[i].memref.size)) {
-			OT_LOG(LOG_ERR, "Buffer NULL and size is not zero or "
-			       "size is zero and buffer not NULL");
+		if (!params[i].memref.size && params[i].memref.buffer) {
+			OT_LOG(LOG_ERR, "Error: Buffer size-param is ZERO and "
+			       "buffer-param is not NULL");
+			ret = TEE_ERROR_BAD_PARAMETERS;
+			break;
+		}
+
+		if (!params[i].memref.buffer && params[i].memref.size) {
+			OT_LOG(LOG_ERR, "Error: Buffer-param is NULL and size-param is not NULL");
 			ret = TEE_ERROR_BAD_PARAMETERS;
 			break;
 		}
