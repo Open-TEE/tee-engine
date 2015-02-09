@@ -634,23 +634,29 @@ static void map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uin
 		if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_NONE ) {
 			continue;
 
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INOUT) {
+			types[i] = TEE_PARAM_TYPE_VALUE_INOUT;
+
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_OUTPUT) {
+			types[i] = TEE_PARAM_TYPE_VALUE_OUTPUT;
+
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INPUT) {
+			types[i] = TEE_PARAM_TYPE_VALUE_INPUT;
+
 		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_PARTIAL_INOUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_TEMP_INOUT ||
-			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INOUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEE_PARAM_TYPE_MEMREF_INOUT) {
 
 			types[i] = TEE_PARAM_TYPE_MEMREF_INOUT;
 
 		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_PARTIAL_INPUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_TEMP_INPUT ||
-			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INPUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEE_PARAM_TYPE_MEMREF_INPUT) {
 
 			types[i] = TEE_PARAM_TYPE_MEMREF_INPUT;
 
 		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_PARTIAL_OUTPUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_TEMP_OUTPUT ||
-			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_OUTPUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEE_PARAM_TYPE_MEMREF_OUTPUT) {
 
 			types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
@@ -659,12 +665,10 @@ static void map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uin
 
 			if (operation->params[i].flags & TEEC_MEM_INPUT)
 				types[i] = TEE_PARAM_TYPE_MEMREF_INPUT;
-			else if (operation->params[i].flags & TEEC_MEM_OUTPUT)
+			if (operation->params[i].flags & TEEC_MEM_OUTPUT)
 				types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
-			else if (operation->params[i].flags & (TEEC_MEM_INPUT | TEEC_MEM_OUTPUT))
+			if (operation->params[i].flags & (TEEC_MEM_INPUT | TEEC_MEM_OUTPUT))
 				types[i] = TEE_PARAM_TYPE_MEMREF_INOUT;
-			else
-				OT_LOG(LOG_ERR, "Warning: Memory flags is NULL!")
 
 		} else {
 			OT_LOG(LOG_ERR, "Warning: Unknow parameter type")
@@ -733,6 +737,7 @@ static void open_session(struct ta_task *in_task)
 	struct com_msg_open_session *open_msg = in_task->msg;
 	uint32_t paramTypes;
 	TEE_Param params[4];
+	TEE_Result ret;
 
 	if (open_msg->msg_hdr.msg_name != COM_MSG_NAME_OPEN_SESSION ||
 	    open_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
@@ -762,8 +767,9 @@ static void open_session(struct ta_task *in_task)
 	set_exec_operation_id(0);
 
 	/* Copy the data back from the TA to the client */
-	open_msg->return_code_open_session =
-			copy_params_to_com_msg_op(&open_msg->operation, params, paramTypes);
+	ret = copy_params_to_com_msg_op(&open_msg->operation, params, paramTypes);
+	if  (ret != TEEC_SUCCESS)
+		open_msg->return_code_open_session = ret;
 
 	open_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 out:
@@ -776,6 +782,7 @@ static void invoke_cmd(struct ta_task *in_task)
 	struct com_msg_invoke_cmd *invoke_msg = in_task->msg;
 	uint32_t paramTypes;
 	TEE_Param params[4];
+	TEE_Result ret;
 
 	if (invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_CMD ||
 	    invoke_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
@@ -805,8 +812,9 @@ static void invoke_cmd(struct ta_task *in_task)
 	set_exec_operation_id(0);
 
 	/* Copy the data back from the TA to the client */
-	invoke_msg->return_code =
-			copy_params_to_com_msg_op(&invoke_msg->operation, params, paramTypes);
+	ret = copy_params_to_com_msg_op(&invoke_msg->operation, params, paramTypes);
+	if (ret != TEEC_SUCCESS)
+		invoke_msg->return_code = ret;
 
 	invoke_msg->return_origin = TEE_ORIGIN_TRUSTED_APP;
 out:
