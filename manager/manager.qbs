@@ -25,6 +25,7 @@ DynamicLibrary {
     cpp.includePaths: [
         "../core",
         "../include",
+        "../internal_api",
     ]
 
     files: [
@@ -36,6 +37,10 @@ DynamicLibrary {
         "logic_thread.h",
         "logic_thread.c",
         "mainloop.c",
+        "opentee_manager_storage_api.h",
+        "opentee_manager_storage_api.c",
+        "../internal_api/opentee_storage_common.h",
+        "../internal_api/opentee_storage_common.c",
         "shm_mem.h",
         "shm_mem.c",
         "ta_dir_watch.h",

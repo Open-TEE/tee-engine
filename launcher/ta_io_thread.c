@@ -174,7 +174,7 @@ static void send_msg(int to_fd, void *msg, int msg_len)
 	if (msg_len == 0)
 		return;
 
-	if (com_send_msg(to_fd, msg, msg_len) == -1) {
+	if (com_send_msg(to_fd, msg, msg_len) < 0) {
 		OT_LOG(LOG_ERR, "Message sending failed: %s", strerror(errno));
 		/* Note: Function may return -1 for out of memory, but fd_error will not
 		 * react this error. Lets hope this will clear it self or OOM killer act */
