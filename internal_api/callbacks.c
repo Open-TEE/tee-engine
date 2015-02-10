@@ -40,6 +40,11 @@ void *fn_ptr_invoke_ta_command()
 	return callbacks.fn_ptr_invoke_ta_command;
 }
 
+void *fn_ptr_invoke_mgr_command()
+{
+	return callbacks.fn_ptr_invoke_mgr_command;
+}
+
 void *fn_ptr_get_cancel_flag()
 {
 	return callbacks.fn_ptr_get_cancel_flag;

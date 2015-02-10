@@ -18,6 +18,7 @@
 #define __TA_INTERNAL_THREAD_H__
 
 #include "tee_internal_api.h"
+#include "opentee_internal_api.h"
 
 void *ta_internal_thread(void *arg);
 
@@ -31,6 +32,10 @@ TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
 				       uint32_t cancellationRequestTimeout,
 				       uint32_t commandID, uint32_t paramTypes, TEE_Param *params,
 				       uint32_t *returnOrigin);
+
+TEE_Result ta_invoke_mgr_command(uint32_t cancellationRequestTimeout, uint32_t commandID,
+				 struct com_mgr_invoke_cmd_payload *sendPayload,
+				 struct com_mgr_invoke_cmd_payload *returnPayload);
 
 bool get_cancellation_flag();
 bool mask_cancellation();

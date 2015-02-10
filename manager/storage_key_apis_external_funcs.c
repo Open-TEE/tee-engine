@@ -33,10 +33,10 @@
 #include "storage_key_apis_external_funcs.h"
 #include "tee_logging.h"
 
-#define TEE_OBJ_ID_LEN_HEX TEE_OBJECT_ID_MAX_LEN * 2 + 1
-#define TEE_UUID_LEN_HEX sizeof(TEE_UUID) * 2 + 1
+#define TEE_OBJ_ID_LEN_HEX (TEE_OBJECT_ID_MAX_LEN * 2 + 1)
+#define TEE_UUID_LEN_HEX (sizeof(TEE_UUID) * 2 + 1)
 #define ADD_NULL_CHAR_END_TO_HEX(obj_id_len) ((obj_id_len * 2) + 1)
-static uint32_t next_enum_ID = 0; /* provide unique ID for enumerators */
+static uint32_t next_enum_ID; /* provide unique ID for enumerators */
 static char *secure_storage_path;
 
 static struct storage_enumerator *enumerators_head;
@@ -59,7 +59,7 @@ static bool __attribute__((constructor)) storage_ext_init()
 	return true;
 }
 
-static void __attribute__((destructor))storage_ext_cleanup()
+static void __attribute__((destructor)) storage_ext_cleanup()
 {
 	free(secure_storage_path);
 }
@@ -77,7 +77,7 @@ static bool get_uuid(char *uuid)
 	char UUID_test[] = "1234567890123456789012345678901234567890";
 	size_t i;
 
-	// TODO: name should end with NULL character!
+	/* TODO: name should end with NULL character! */
 	if (uuid == NULL)
 		return false;
 
@@ -132,19 +132,19 @@ void ext_delete_file(FILE *object_file, void *objectID, size_t objectIDLen)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
 	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1) {
-		return; // TEE_ERROR_OUT_OF_MEMORY;
+		return; /* TEE_ERROR_OUT_OF_MEMORY */
 	}
 
 	if (asprintf(&name_with_dir_path, "%s%s", dir_path, hex_ID) == -1) {
 		free(dir_path);
-		return; // TEE_ERROR_OUT_OF_MEMORY;
+		return; /* TEE_ERROR_OUT_OF_MEMORY */
 	}
 
 	/* TODO: Check that correct file is closed and removed! FILE == objectID */
 
 	if (fclose(object_file) != 0) {
 		OT_LOG(LOG_ERR, "Something went wrong with file closening\n");
-		TEE_Panic(TEE_ERROR_GENERIC); /* Kill TA */
+		return;
 	}
 
 	if (remove(name_with_dir_path) < 0)
@@ -160,7 +160,7 @@ void ext_delete_file(FILE *object_file, void *objectID, size_t objectIDLen)
 
 void ext_release_file(FILE *object_file, void *objectID, size_t objectIDLen)
 {
-	// xattr
+	/* xattr */
 	objectID = objectID;
 	objectIDLen = objectIDLen;
 
@@ -171,7 +171,7 @@ void ext_release_file(FILE *object_file, void *objectID, size_t objectIDLen)
 
 	if (fclose(object_file) != 0) {
 		OT_LOG(LOG_ERR, "Something went wrong with file closening\n");
-		TEE_Panic(TEE_ERROR_GENERIC);
+		return;
 	}
 }
 
@@ -214,12 +214,12 @@ FILE *ext_request_for_open(void *objectID, size_t objectIDLen, size_t request_ac
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
 	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1) {
-		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
+		return NULL; /* TEE_ERROR_OUT_OF_MEMORY */
 	}
 
 	if (asprintf(&name_with_dir_path, "%s%s", dir_path, hex_ID) == -1) {
 		free(dir_path);
-		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
+		return NULL; /* TEE_ERROR_OUT_OF_MEMORY */
 	}
 
 	if (access(name_with_dir_path, F_OK) != 0) {
@@ -252,12 +252,12 @@ FILE *ext_request_for_create(void *objectID, size_t objectIDLen, size_t request_
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
 	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1) {
-		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
+		return NULL; /* TEE_ERROR_OUT_OF_MEMORY */
 	}
 
 	if (asprintf(&name_with_dir_path, "%s%s", dir_path, hex_ID) == -1) {
 		free(dir_path);
-		return NULL; // TEE_ERROR_OUT_OF_MEMORY;
+		return NULL; /* TEE_ERROR_OUT_OF_MEMORY */
 	}
 
 	if ((request_access & TEE_DATA_FLAG_EXCLUSIVE) && (access(name_with_dir_path, F_OK) == 0)) {
@@ -307,13 +307,13 @@ bool ext_change_object_ID(void *objectID, size_t objectIDLen, void *new_objectID
 		sprintf(new_hex_ID + i * 2, "%02x", *((unsigned char *)new_objectID + i));
 
 	if (asprintf(&name_with_dir_path, "%s%s/%s", secure_storage_path, UUID, hex_ID) == -1) {
-		return false; // TEE_ERROR_OUT_OF_MEMORY;
+		return false; /* TEE_ERROR_OUT_OF_MEMORY */
 	}
 
 	if (asprintf(&new_name_with_dir_path, "%s%s/%s", secure_storage_path, UUID, new_hex_ID) ==
 	    -1) {
 		free(name_with_dir_path);
-		return false; // TEE_ERROR_OUT_OF_MEMORY;
+		return false; /* TEE_ERROR_OUT_OF_MEMORY */
 	}
 
 	/* TODO: Check if TA can change object ID */
@@ -341,7 +341,7 @@ bool ext_alloc_for_enumerator(uint32_t *ID)
 		return false;
 
 	/* MAlloc for handle and fill */
-	new_enumerator = TEE_Malloc(sizeof(struct storage_enumerator), 0);
+	new_enumerator = calloc(sizeof(struct storage_enumerator), 1);
 	if (new_enumerator == NULL) {
 		OT_LOG(LOG_ERR, "Cannot malloc for enumerator: Out of memory\n");
 		return false;
@@ -368,7 +368,8 @@ void ext_free_enumerator(uint32_t free_enum_ID)
 
 	if (enumerators_head == NULL) {
 		OT_LOG(LOG_ERR, "Enumerator: Not a valid enumerator\n");
-		TEE_Panic(TEE_ERROR_GENERIC);
+		/*TEE_Panic(TEE_ERROR_GENERIC)*/
+		return;
 	}
 
 	del_enum = enumerators_head;
@@ -391,7 +392,7 @@ void ext_free_enumerator(uint32_t free_enum_ID)
 
 	/* should never end up here */
 	OT_LOG(LOG_ERR, "Enumerator: Something went wrong with file closening\n");
-	TEE_Panic(TEE_ERROR_GENERIC);
+	return;
 
 free_and_close:
 	if (del_enum->dir != NULL)
@@ -419,13 +420,13 @@ void ext_reset_enumerator(uint32_t reset_enum_ID)
 
 	if (enumerators_head == NULL) {
 		OT_LOG(LOG_ERR, "Enumerator: Not a valid enumerator\n");
-		TEE_Panic(TEE_ERROR_GENERIC);
+		return /*TEE_ERROR_GENERIC*/;
 	}
 
 	reset_enum = get_enum(reset_enum_ID);
 	if (reset_enum == NULL) {
 		OT_LOG(LOG_ERR, "Enumerator: Enumerator not valid\n");
-		TEE_Panic(TEE_ERROR_GENERIC);
+		return; /*(TEE_ERROR_GENERIC);*/
 	}
 
 	/* stop enumeration if needed */
@@ -447,13 +448,14 @@ bool ext_start_enumerator(uint32_t start_enum_ID)
 		return false;
 
 	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1) {
-		return false; // TEE_ERROR_OUT_OF_MEMORY;
+		/* TEE_ERROR_OUT_OF_MEMORY */
+		return false;
 	}
 
 	start_enum = get_enum(start_enum_ID);
 	if (start_enum == NULL) {
 		OT_LOG(LOG_ERR, "Enumerator: Enumerator not valid\n");
-		TEE_Panic(TEE_ERROR_GENERIC);
+		return false;
 	}
 
 	if (start_enum->dir != NULL)
@@ -490,7 +492,7 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 	get_from_enum = get_enum(get_next_ID);
 	if (get_from_enum == NULL) {
 		OT_LOG(LOG_ERR, "Enumerator: Enumerator not valid\n");
-		TEE_Panic(TEE_ERROR_GENERIC);
+		return false;
 	}
 
 	if (get_from_enum->dir == NULL)
@@ -513,10 +515,10 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 			return false;
 		}
 
-		if (asprintf(&name_with_path, "%s%s/%s",
-			     secure_storage_path, UUID, entry->d_name) == -1) {
+		if (asprintf(&name_with_path, "%s%s/%s", secure_storage_path, UUID,
+			     entry->d_name) == -1) {
 			OT_LOG(LOG_ERR, "Enumerator: Out of memory\n");
-			TEE_Panic(TEE_ERROR_GENERIC);
+			return false; /* TEE_ERROR_GENERIC */
 		}
 
 		next_object = fopen(name_with_path, "rb");
@@ -526,8 +528,8 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 		if (next_object == NULL)
 			continue;
 
-		if (fread(recv_data_to_caller,
-			  sizeof(struct storage_obj_meta_data), 1, next_object) != 1) {
+		if (fread(recv_data_to_caller, sizeof(struct storage_obj_meta_data), 1,
+			  next_object) != 1) {
 			OT_LOG(LOG_ERR, "Error at read file (enumeration); errno: %i\n", errno);
 			memset(recv_data_to_caller, 0, sizeof(struct storage_obj_meta_data));
 			fclose(next_object); /* Skip to next object */
