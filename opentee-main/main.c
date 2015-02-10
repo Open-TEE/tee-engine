@@ -146,7 +146,7 @@ int load_lib(char *path, main_loop_cb *callback)
 
 	dlerror();
 
-	lib = dlopen(path, RTLD_LAZY | RTLD_GLOBAL);
+	lib = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
 	if (lib == NULL) {
 		OT_LOG(LOG_DEBUG, "Failed to load library, %s : %s", path, dlerror());
 		return -1;

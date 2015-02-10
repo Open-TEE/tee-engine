@@ -22,6 +22,7 @@ struct internal_api_callbacks {
 	void *fn_ptr_open_ta_session;
 	void *fn_ptr_close_ta_session;
 	void *fn_ptr_invoke_ta_command;
+	void *fn_ptr_invoke_mgr_command;
 
 	/* Cancellation API */
 	void *fn_ptr_get_cancel_flag;
@@ -35,6 +36,7 @@ void reg_internal_api_callbacks(struct internal_api_callbacks *calls);
 void *fn_ptr_open_ta_session();
 void *fn_ptr_close_ta_session();
 void *fn_ptr_invoke_ta_command();
+void *fn_ptr_invoke_mgr_command();
 
 /* Cancellation API */
 void *fn_ptr_get_cancel_flag();
