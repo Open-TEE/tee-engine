@@ -18,6 +18,7 @@
 #define __TEE_OBJECT_HANDLE_H__
 
 #include <stdio.h>
+#include "tee_storage_api.h"
 
 struct persistant_object_info {
 	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];

@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <stddef.h> /*offsetof*/
 
 #include "com_protocol.h"
 #include "extern_resources.h"
@@ -34,6 +35,10 @@
 #include "tee_list.h"
 #include "tee_logging.h"
 #include "logic_thread.h"
+#include "tee_storage_api.h"
+#include "opentee_internal_api.h"
+#include "opentee_manager_storage_api.h"
+#include "opentee_storage_common.h"
 
 /* Used for hashtable init */
 #define TA_SESS_COUNT_EST 50
@@ -875,6 +880,486 @@ discard_msg:
 	free_manager_msg(man_msg);
 }
 
+static TEE_Result mgr_cmd_test(struct com_mgr_invoke_cmd_payload *in,
+			       struct com_mgr_invoke_cmd_payload *out)
+{
+	TEE_Result ret = TEE_ERROR_BAD_PARAMETERS;
+
+	out->size = in->size;
+	if (out->size > 0)
+		out->size += sizeof(struct com_mgr_invoke_cmd_payload);
+	out->data = calloc(1, out->size);
+
+	if (out->data) {
+		unsigned int n;
+		char *s = in->data;
+		char *r = out->data;
+		for (n = 0; n < in->size; n++)
+			r[n] = s[in->size-1-n];
+
+		ret = TEE_SUCCESS;
+	}
+
+	return ret;
+}
+
+static TEE_Result mgr_cmd_open_persistent(struct com_mgr_invoke_cmd_payload *in,
+					  struct com_mgr_invoke_cmd_payload *out)
+{
+	struct com_mrg_open_persistent *createMessage = in->data;
+	TEE_ObjectHandle returnHandle = NULL;
+	TEE_Result ret;
+
+	ret = MGR_TEE_OpenPersistentObject(createMessage->storageID, createMessage->objectID,
+					   createMessage->objectIDLen, createMessage->flags,
+					   &returnHandle);
+
+	if (ret == TEE_SUCCESS && returnHandle) {
+		out->size = calculate_object_handle_size(returnHandle);
+		out->data = calloc(1, out->size);
+
+		pack_object_handle(returnHandle, out->data);
+		free_object(returnHandle);
+	}
+
+	return ret;
+}
+
+static TEE_Result mgr_cmd_close_object(struct com_mgr_invoke_cmd_payload *in,
+				       struct com_mgr_invoke_cmd_payload *out)
+{
+	struct com_mrg_close_persistent *closeObject = in->data;
+	TEE_ObjectHandle handle = NULL;
+
+	out = out;
+
+	if (in->size > offsetof(struct com_mrg_close_persistent, openHandleOffset)) {
+		unpack_and_alloc_object_handle(&handle, &closeObject->openHandleOffset);
+		MGR_TEE_CloseObject(handle);
+	}
+
+	return TEE_SUCCESS;
+}
+
+/* brief! wrapper to create persistent object here
+ * in - is the payload coming in, and memory is handled by caller
+ * out - is the payload to be returned, if out->data is allocated here, calling function
+ *  (invoke_mgr_cmd) will free it
+ */
+
+static TEE_Result mgr_cmd_create_persistent(struct com_mgr_invoke_cmd_payload *in,
+					    struct com_mgr_invoke_cmd_payload *out)
+{
+
+	struct com_mrg_create_persistent *createMessage = in->data;
+	TEE_ObjectHandle handle = NULL;
+	TEE_ObjectHandle returnHandle = NULL;
+	TEE_Result ret;
+
+	if (in->size > offsetof(struct com_mrg_create_persistent, attributeHandleOffset))
+		unpack_and_alloc_object_handle(&handle, &createMessage->attributeHandleOffset);
+
+	ret = MGR_TEE_CreatePersistentObject(createMessage->storageID, createMessage->objectID,
+					     createMessage->objectIDLen, createMessage->flags,
+					     handle, NULL, 0, &returnHandle);
+
+	if (ret == TEE_SUCCESS && returnHandle) {
+		out->size = calculate_object_handle_size(returnHandle);
+		out->data = calloc(1, out->size);
+
+		pack_object_handle(returnHandle, out->data);
+		free_object(returnHandle);
+	}
+
+	free_object(handle);
+
+	return ret;
+}
+
+static TEE_Result mgr_cmd_rename_persistent(struct com_mgr_invoke_cmd_payload *in,
+					    struct com_mgr_invoke_cmd_payload *out)
+{
+
+	struct com_mrg_rename_persistent *renameMessage = in->data;
+	TEE_ObjectHandle object = NULL;
+	TEE_Result ret = TEE_ERROR_BAD_PARAMETERS;
+
+	out = out;
+
+	if (in->size > offsetof(struct com_mrg_rename_persistent, objectHandleOffset)) {
+		unpack_and_alloc_object_handle(&object, &renameMessage->objectHandleOffset);
+
+		ret = MGR_TEE_RenamePersistentObject(object, renameMessage->newObjectID,
+						     renameMessage->newObjectIDLen);
+
+		free_object(object);
+	}
+
+	return ret;
+}
+
+static TEE_Result mgr_cmd_close_and_delete_persistent(struct com_mgr_invoke_cmd_payload *in,
+						      struct com_mgr_invoke_cmd_payload *out)
+{
+
+	struct com_mrg_close_persistent *closeAndDeleteMessage = in->data;
+	TEE_ObjectHandle object = NULL;
+
+	out = out;
+
+	if (in->size > offsetof(struct com_mrg_close_persistent, openHandleOffset)) {
+		unpack_and_alloc_object_handle(&object, &closeAndDeleteMessage->openHandleOffset);
+
+		MGR_TEE_CloseAndDeletePersistentObject(object);
+	}
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result mgr_cmd_allocate_persist_obj_enum(struct com_mgr_invoke_cmd_payload *in,
+						    struct com_mgr_invoke_cmd_payload *out)
+{
+
+	struct com_mrg_enum_command *enumCommand;
+	TEE_ObjectEnumHandle enumHandle = NULL;
+	TEE_Result ret = TEE_ERROR_BAD_PARAMETERS;
+
+	in = in;
+
+	ret = MGR_TEE_AllocatePersistentObjectEnumerator(&enumHandle);
+
+	if (ret == TEE_SUCCESS) {
+		out->size = sizeof(struct com_mrg_enum_command);
+		out->data = calloc(1, out->size);
+		enumCommand = out->data;
+		enumCommand->ID = enumHandle->ID;
+		free(enumHandle);
+	}
+
+	return ret;
+}
+
+static TEE_Result mgr_cmd_free_persist_obj_enum(struct com_mgr_invoke_cmd_payload *in,
+						struct com_mgr_invoke_cmd_payload *out)
+{
+
+	struct com_mrg_enum_command *enumCommand = in->data;
+	TEE_ObjectEnumHandle enumHandle = calloc(1, sizeof(struct __TEE_ObjectEnumHandle));
+
+	out = out;
+
+	if (!enumHandle)
+		return TEE_ERROR_OUT_OF_MEMORY;
+
+	enumHandle->ID = enumCommand->ID;
+
+	MGR_TEE_FreePersistentObjectEnumerator(enumHandle);
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result mgr_cmd_reset_persist_obj_enum(struct com_mgr_invoke_cmd_payload *in,
+						 struct com_mgr_invoke_cmd_payload *out)
+{
+	struct com_mrg_enum_command *enumCommand = in->data;
+	TEE_ObjectEnumHandle enumHandle = calloc(1, sizeof(struct __TEE_ObjectEnumHandle));
+
+	out = out;
+
+	if (!enumHandle)
+		return TEE_ERROR_OUT_OF_MEMORY;
+
+	enumHandle->ID = enumCommand->ID;
+
+	MGR_TEE_ResetPersistentObjectEnumerator(enumHandle);
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result mgr_cmd_start_persist_obj_enum(struct com_mgr_invoke_cmd_payload *in,
+						 struct com_mgr_invoke_cmd_payload *out)
+{
+	struct com_mrg_enum_command *enumCommand = in->data;
+	TEE_ObjectEnumHandle enumHandle = calloc(1, sizeof(struct __TEE_ObjectEnumHandle));
+	uint32_t storageID;
+	TEE_Result ret = TEE_ERROR_BAD_PARAMETERS;
+
+	out = out;
+
+	if (in->size == (sizeof(struct com_mrg_enum_command) + sizeof(storageID))) {
+		memcpy(&storageID, in->data + sizeof(struct com_mrg_enum_command),
+		       sizeof(storageID));
+
+		enumHandle->ID = enumCommand->ID;
+
+		ret = MGR_TEE_StartPersistentObjectEnumerator(enumHandle, storageID);
+	}
+
+	free(enumHandle);
+
+	return ret;
+}
+
+static TEE_Result mgr_cmd_get_next_persist_obj_enum(struct com_mgr_invoke_cmd_payload *in,
+						    struct com_mgr_invoke_cmd_payload *out)
+{
+	struct com_mrg_enum_command_next *enumNext = in->data;
+	TEE_ObjectEnumHandle enumHandle = calloc(1, sizeof(struct __TEE_ObjectEnumHandle));
+	uint32_t storageID;
+	TEE_Result ret = TEE_ERROR_BAD_PARAMETERS;
+
+	if (!enumHandle)
+		return TEE_ERROR_OUT_OF_MEMORY;
+
+	if (in->size == sizeof(struct com_mrg_enum_command_next)) {
+		memcpy(&storageID, in->data + sizeof(struct com_mrg_enum_command),
+		       sizeof(storageID));
+
+		enumHandle->ID = enumNext->ID;
+
+		ret = MGR_TEE_GetNextPersistentObject(enumHandle, &enumNext->info,
+						      enumNext->objectID, &enumNext->objectIDLen);
+
+		if (ret == TEE_SUCCESS) {
+			out->size = in->size;
+			out->data = calloc(1, out->size);
+			memcpy(out->data, in->data, out->size);
+		}
+	}
+
+	free(enumHandle);
+
+	return ret;
+}
+
+static TEE_Result mgr_cmd_read_obj_data(struct com_mgr_invoke_cmd_payload *in,
+					struct com_mgr_invoke_cmd_payload *out)
+{
+	TEE_ObjectHandle handle = NULL;
+	TEE_Result ret = TEE_ERROR_BAD_PARAMETERS;
+	size_t size;
+	void *writePtr = in->data;
+
+	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
+
+	memcpy(&size, writePtr, sizeof(size_t));
+
+	out->size = sizeof(size_t) + size;
+	out->data = calloc(1, out->size);
+
+	ret =
+	    MGR_TEE_ReadObjectData(handle, out->data + sizeof(size_t), size, (uint32_t *)out->data);
+
+	size = *((uint32_t *)out->data);
+
+	if (ret == TEE_SUCCESS)
+		out->size = size + sizeof(size_t);
+
+	free_object(handle);
+	return ret;
+}
+
+static TEE_Result mgr_cmd_write_obj_data(struct com_mgr_invoke_cmd_payload *in,
+					 struct com_mgr_invoke_cmd_payload *out)
+{
+	TEE_ObjectHandle handle = NULL;
+	TEE_Result ret = TEE_ERROR_BAD_PARAMETERS;
+	size_t size;
+	void *writePtr = in->data;
+
+	out = out;
+
+	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
+
+	memcpy(&size, writePtr, sizeof(size_t));
+	writePtr += sizeof(size_t);
+
+	ret = MGR_TEE_WriteObjectData(handle, writePtr, size);
+
+	free_object(handle);
+
+	return ret;
+}
+
+static TEE_Result mgr_cmd_truncate_obj_data(struct com_mgr_invoke_cmd_payload *in,
+					    struct com_mgr_invoke_cmd_payload *out)
+{
+	TEE_ObjectHandle object = NULL;
+	TEE_Result ret = TEE_ERROR_BAD_PARAMETERS;
+	size_t size;
+	void *writePtr = in->data;
+
+	out = out;
+
+	writePtr = unpack_and_alloc_object_handle(&object, writePtr);
+	memcpy(&size, writePtr, sizeof(size_t));
+
+	ret = MGR_TEE_TruncateObjectData(object, size);
+
+	if (ret == TEE_SUCCESS) {
+		out->size = sizeof(object->per_object.data_position) +
+				   sizeof(object->per_object.data_size);
+		out->data = calloc(1, out->size);
+
+		memcpy(out->data, &object->per_object.data_position,
+		       sizeof(object->per_object.data_position));
+
+		memcpy(out->data + sizeof(object->per_object.data_position),
+		       &object->per_object.data_size,
+		       sizeof(object->per_object.data_size));
+	}
+	free_object(object);
+
+	return ret;
+}
+
+static TEE_Result mgr_cmd_seek_obj_data(struct com_mgr_invoke_cmd_payload *in,
+					struct com_mgr_invoke_cmd_payload *out)
+{
+	TEE_ObjectHandle object = NULL;
+	TEE_Result ret = TEE_ERROR_BAD_PARAMETERS;
+	int32_t offset;
+	uint32_t copyWhence;
+	void *writePtr = in->data;
+
+	out = out;
+
+	writePtr = unpack_and_alloc_object_handle(&object, writePtr);
+	memcpy(&offset, writePtr, sizeof(int32_t));
+	writePtr += sizeof(int32_t);
+	memcpy(&copyWhence, writePtr, sizeof(uint32_t));
+
+	ret = MGR_TEE_SeekObjectData(object, offset, copyWhence);
+
+	if (ret == TEE_SUCCESS) {
+		out->size = sizeof(object->per_object.data_position);
+		out->data = calloc(1, out->size);
+		memcpy(out->data, &object->per_object.data_position,
+		       sizeof(object->per_object.data_position));
+	}
+
+	free_object(object);
+
+	return ret;
+}
+
+static void invoke_mgr_cmd(struct manager_msg *man_msg)
+{
+	struct com_msg_invoke_mgr_cmd *invoke_msg = man_msg->msg;
+	struct com_mgr_invoke_cmd_payload in = {0, 0}, out = {0, 0};
+	TEE_Result retVal;
+
+	/* Valid open session message */
+	if (invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_MGR_CMD) {
+		OT_LOG(LOG_ERR, "Invalid message");
+		goto discard_msg;
+	}
+
+	/* Function is only valid for proc FDs */
+	if (man_msg->proc->p_type == proc_t_session ||
+	    man_msg->proc->content.process.status != proc_active) {
+		OT_LOG(LOG_ERR, "Invalid sender or senders status");
+		goto discard_msg;
+	}
+
+	/* REsponse to invoke to command can be received only from TA */
+	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE &&
+	    man_msg->proc->p_type != proc_t_TA) {
+		OT_LOG(LOG_ERR, "Invalid sender");
+		goto discard_msg;
+	}
+
+	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY)
+		invoke_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
+
+	in.data = &invoke_msg->payload.data;
+	in.size = invoke_msg->payload.size;
+
+	switch (invoke_msg->cmd_id) {
+	case COM_MGR_CMD_ID_TEST_COMM:
+		retVal = mgr_cmd_test(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_OPEN_PERSISTENT:
+		retVal = mgr_cmd_open_persistent(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_CREATE_PERSISTENT:
+		retVal = mgr_cmd_create_persistent(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_RENAME_PERSISTENT:
+		retVal = mgr_cmd_rename_persistent(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_CLOSE_OBJECT:
+		retVal = mgr_cmd_close_object(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_CLOSE_AND_DELETE_PERSISTENT:
+		retVal = mgr_cmd_close_and_delete_persistent(&in, &out);
+		break;
+
+	case COM_MGR_CMD_ID_OBJ_ENUM_ALLOCATE_PERSIST:
+		retVal = mgr_cmd_allocate_persist_obj_enum(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_OBJ_ENUM_FREE_PERSIST:
+		retVal = mgr_cmd_free_persist_obj_enum(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_OBJ_ENUM_RESET_PERSIST:
+		retVal = mgr_cmd_reset_persist_obj_enum(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_OBJ_ENUM_START:
+		retVal = mgr_cmd_start_persist_obj_enum(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_OBJ_ENUM_GET_NEXT:
+		retVal = mgr_cmd_get_next_persist_obj_enum(&in, &out);
+		break;
+
+	case COM_MGR_CMD_ID_READ_OBJ_DATA:
+		retVal = mgr_cmd_read_obj_data(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_WRITE_OBJ_DATA:
+		retVal = mgr_cmd_write_obj_data(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_TRUNCATE_OBJ_DATA:
+		retVal = mgr_cmd_truncate_obj_data(&in, &out);
+		break;
+	case COM_MGR_CMD_ID_SEEK_OBJ_DATA:
+		retVal = mgr_cmd_seek_obj_data(&in, &out);
+		break;
+
+	default:
+		retVal = TEE_ERROR_NOT_SUPPORTED;
+	}
+
+	/* prepare the message for return, return payload copy and possible realloc*/
+	/* make size 0 means that there is no payload return, and must be marked to 0 */
+	invoke_msg->payload.size = 0;
+
+	if (in.size < out.size) {
+		uint32_t sizeDiff = out.size - in.size;
+		man_msg->msg_len += sizeDiff;
+		invoke_msg = realloc(invoke_msg, man_msg->msg_len);
+		man_msg->msg = invoke_msg;
+		if (!invoke_msg)
+			man_msg->msg_len = 0;
+	}
+
+	/* copy return data and free out.data */
+	if (invoke_msg && out.data) {
+		void *payloadData = &invoke_msg->payload.data;
+		invoke_msg->payload.size = out.size;
+		memcpy(payloadData, out.data, out.size);
+		free(out.data);
+		out.data = 0;
+	}
+
+	invoke_msg->result = retVal;
+
+	add_msg_out_queue_and_notify(man_msg);
+
+	return;
+
+discard_msg:
+	free_manager_msg(man_msg);
+}
+
 static void ca_finalize_context(struct manager_msg *man_msg)
 {
 	struct com_msg_ca_finalize_constex *fin_con_msg = man_msg->msg;
@@ -1550,6 +2035,10 @@ void *logic_thread_mainloop(void *arg)
 
 		case COM_MSG_NAME_INVOKE_CMD:
 			invoke_cmd(handled_msg);
+			break;
+
+		case COM_MSG_NAME_INVOKE_MGR_CMD:
+			invoke_mgr_cmd(handled_msg);
 			break;
 
 		case COM_MSG_NAME_CLOSE_SESSION:
