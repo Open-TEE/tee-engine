@@ -11,6 +11,7 @@ DynamicLibrary {
 
     Depends { name: "cpp" }
     Depends { name: "CommonApi" }
+    Depends { name: "InternalApi" }
 
     destinationDirectory: '.'
 

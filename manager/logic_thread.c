@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <stddef.h> /*offsetof*/
 
 #include "com_protocol.h"
 #include "extern_resources.h"
@@ -34,9 +35,11 @@
 #include "tee_list.h"
 #include "tee_logging.h"
 #include "logic_thread.h"
+#include "tee_storage_api.h"
 
 /* Used for hashtable init */
 #define TA_SESS_COUNT_EST 50
+
 
 static void release_ta_file_locks(proc_t ta)
 {
@@ -875,6 +878,114 @@ discard_msg:
 	free_manager_msg(man_msg);
 }
 
+/* brief! wrapper to create persisten object here
+ * in - is the payload coming in, and memory is handled by caller
+ * out - is the payload to be returned, if out->data is allocated here, calling function
+ *  (invoke_mgr_cmd) will free it
+ */
+
+static TEE_Result mgr_cmd_create_persistent(MGR_Payload *in, MGR_Payload *out)
+{
+
+	struct com_mrg_create_persistent *createMessage = in->data;
+	TEE_ObjectHandle handle = NULL;
+	TEE_ObjectHandle returnHandle = NULL;
+	TEE_Result ret;
+
+	if (in->size > offsetof(struct com_mrg_create_persistent, attributeHandleOffset))
+		unpack_and_alloc_object_handle(&handle, &createMessage->attributeHandleOffset);
+
+	ret = MGR_TEE_CreatePersistentObject(
+			createMessage->storageID,
+			createMessage->objectID,
+			createMessage->objectIDLen,
+			createMessage->flags,
+			handle,
+			NULL, 0,
+			&returnHandle);
+
+	if (ret == TEE_SUCCESS && returnHandle)	{
+		out->size = calculate_object_handle_size(returnHandle);
+		out->data = malloc(out->size);
+
+		pack_object_handle(returnHandle, out->data);
+	}
+	return ret;
+}
+
+static void invoke_mgr_cmd(struct manager_msg *man_msg)
+{
+	struct com_msg_invoke_mgr_cmd *invoke_msg = man_msg->msg;
+	MGR_Payload in = {0, 0}, out = {0, 0};
+	TEE_Result retVal;
+
+	/* Valid open session message */
+	if (invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_MGR_CMD) {
+		OT_LOG(LOG_ERR, "Invalid message");
+		goto discard_msg;
+	}
+
+	/* Function is only valid for proc FDs */
+	if (man_msg->proc->p_type == proc_t_session ||
+			man_msg->proc->content.process.status != proc_active) {
+		OT_LOG(LOG_ERR, "Invalid sender or senders status");
+		goto discard_msg;
+	}
+
+	/* REsponse to invoke to command can be received only from TA */
+	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE &&
+			man_msg->proc->p_type != proc_t_TA) {
+		OT_LOG(LOG_ERR, "Invalid sender");
+		goto discard_msg;
+	}
+
+	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY)
+		invoke_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
+
+	in.data = &invoke_msg->payload.data;
+	in.size = invoke_msg->payload.size;
+
+	switch (invoke_msg->cmd_id)	{
+	case COM_MGR_CMD_ID_CREATE_PERSISTENT:
+		retVal = mgr_cmd_create_persistent(&in, &out);
+		break;
+
+	default:
+		retVal = TEE_ERROR_NOT_SUPPORTED;
+	}
+
+	/* prepare the message for return, return payload copy and possible realloc*/
+	/* make size 0 means that there is no payload return, and must be marked to 0 */
+	invoke_msg->payload.size = 0;
+
+	if (in.size < out.size)	{
+		uint32_t sizeDiff = out.size - in.size;
+		man_msg->msg_len += sizeDiff;
+		invoke_msg = realloc(invoke_msg, man_msg->msg_len);
+		man_msg->msg = invoke_msg;
+		if (!invoke_msg)
+			man_msg->msg_len = 0;
+	}
+
+	/* copy return data and free out.data */
+	if (invoke_msg && out.data)	{
+		void *payloadData = &invoke_msg->payload.data;
+		invoke_msg->payload.size = out.size;
+		memcpy(payloadData, out.data, out.size);
+		free(out.data);
+		out.data = 0;
+	}
+
+	invoke_msg->returnOrigin = retVal;
+
+	add_msg_out_queue_and_notify(man_msg);
+
+	return;
+
+discard_msg:
+	free_manager_msg(man_msg);
+}
+
 static void ca_finalize_context(struct manager_msg *man_msg)
 {
 	struct com_msg_ca_finalize_constex *fin_con_msg = man_msg->msg;
@@ -1552,6 +1663,10 @@ void *logic_thread_mainloop(void *arg)
 			invoke_cmd(handled_msg);
 			break;
 
+		case COM_MSG_NAME_INVOKE_MGR_CMD:
+			invoke_mgr_cmd(handled_msg);
+			break;
+
 		case COM_MSG_NAME_CLOSE_SESSION:
 			close_session(handled_msg);
 			break;
@@ -1579,6 +1694,7 @@ void *logic_thread_mainloop(void *arg)
 		case COM_MSG_NAME_MANAGER_TERMINATION:
 			manager_termination(handled_msg);
 			break;
+
 
 		default:
 			/* Just logging an error and message will be ignored */

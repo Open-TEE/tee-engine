@@ -254,6 +254,11 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t
 				      void *initialData, size_t initialDataLen,
 				      TEE_ObjectHandle *object);
 
+TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
+				      uint32_t flags, TEE_ObjectHandle attributes,
+				      void *initialData, size_t initialDataLen,
+				      TEE_ObjectHandle *object);
+
 /*!
  * \brief TEE_CloseAndDeletePersistentObject
  * \param object
@@ -353,5 +358,12 @@ TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size);
  * \return
  */
 TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whence whence);
+
+/* declarations for storage_api functions not exported trough header */
+void pack_object_handle(TEE_ObjectHandle, void*);
+void unpack_and_alloc_object_handle(TEE_ObjectHandle*, void*);
+size_t calculate_object_handle_size(TEE_ObjectHandle);
+
+
 
 #endif /* __TEE_STORAGE_API_H__ */

@@ -30,6 +30,7 @@ static void fill_internal_api_callbacks(struct internal_api_callbacks *calls)
 	/* Internal Client API needed callbacks */
 	calls->fn_ptr_open_ta_session = ta_open_ta_session;
 	calls->fn_ptr_invoke_ta_command = ta_invoke_ta_command;
+	calls->fn_ptr_invoke_mgr_command = ta_invoke_mgr_command;
 	calls->fn_ptr_close_ta_session = ta_close_ta_session;
 
 	/* Cancellation API */
