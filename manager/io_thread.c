@@ -136,7 +136,7 @@ static int check_event_fd_epoll_status(struct epoll_event *event)
 	return 0;
 }
 
-static void send_msg(proc_t send_to, void *msg, int msg_len)
+static void send_msg(proc_t send_to, void *msg, unsigned int msg_len)
 {
 	if (msg_len == 0)
 		return; /* Not an error */
@@ -178,7 +178,7 @@ static void send_new_conn_err(int fd)
 	com_send_msg(fd, &err_msg, sizeof(struct com_msg_ca_init_tee_conn));
 }
 
-static int create_uninitialized_client_proc(proc_t *proc, int sockfd)
+static int create_uninitialized_client_proc(proc_t *proc, unsigned int sockfd)
 {
 	*proc = calloc(1, sizeof(struct __proc));
 	if (!*proc) {

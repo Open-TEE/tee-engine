@@ -52,3 +52,5 @@ TEE_Result TEE_InvokeTACommand(TEE_TASessionHandle session, uint32_t cancellatio
 	return invoke_ta_command(session, cancellationRequestTimeout, commandID,
 				 paramTypes, params, returnOrigin);
 }
+
+

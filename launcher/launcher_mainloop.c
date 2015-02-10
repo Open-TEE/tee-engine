@@ -94,6 +94,8 @@ int lib_main_loop(struct core_control *ctl_params)
 	char *child_stack = NULL;
 	struct ta_loop_arg ta_loop_args;
 
+	memset(&new_ta_info, 0, sizeof(struct com_msg_ta_created));
+
 	child_stack = calloc(1, CHILD_STACK_SIZE);
 	if (!child_stack) {
 		OT_LOG(LOG_ERR, "Sigempty set failed");

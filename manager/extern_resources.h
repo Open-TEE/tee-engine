@@ -43,7 +43,7 @@ struct sock_to_close {
 struct manager_msg {
 	struct list_head list;
 	void *msg;
-	int msg_len;
+	unsigned int msg_len;
 	proc_t proc; /* Act as "sender/receiver" detail */
 };
 
