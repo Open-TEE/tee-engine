@@ -18,6 +18,7 @@
 #define __TEE_INTERNAL_CLIENT_API_H__
 
 #include "tee_data_types.h"
+#include "com_protocol.h" /* MRG_Payload */
 
 TEE_Result TEE_OpenTASession(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
 			     uint32_t paramTypes, TEE_Param params[4],
@@ -28,5 +29,20 @@ void TEE_CloseTASession(TEE_TASessionHandle session);
 TEE_Result TEE_InvokeTACommand(TEE_TASessionHandle session, uint32_t cancellationRequestTimeout,
 			       uint32_t commandID, uint32_t paramTypes, TEE_Param params[4],
 			       uint32_t *returnOrigin);
+
+/* brief!
+ * makes call to manager, with payloads to send and receive
+ *
+ * commandID - command to manager
+ * payload - data to pass to command
+ * returnPayload - if payload is returned, caller of this function need to free returnPayload->data
+ * returnOrigin - error status from the command executed by manager
+ */
+
+TEE_Result TEE_InvokeMGRCommand(uint32_t cancellationRequestTimeout,
+			       uint32_t commandID,
+				   MGR_Payload *payload,
+				   MGR_Payload *returnPayload,
+				   TEE_Result *returnOrigin);
 
 #endif /* __TEE_INTERNAL_CLIENT_API_H__ */

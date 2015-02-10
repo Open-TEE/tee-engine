@@ -521,6 +521,63 @@ err_msg:
 	return ret;
 }
 
+/*
+ *
+ * returnPayload - returnPayload->data needs to be free by the caller if it is assigned
+ */
+
+static TEE_Result wait_and_handle_invoke_mgr_cmd_resp(
+							MGR_Payload *returnPayload,
+							TEE_Result *returnOrigin)
+{
+	struct com_msg_invoke_mgr_cmd *resp_invoke_msg = NULL;
+	TEE_Result ret;
+
+	if (!wait_response_msg())
+		goto err_com;
+
+	resp_invoke_msg = response_msg;
+	response_msg = NULL;
+
+	if (resp_invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_MGR_CMD) {
+
+		if (!get_vals_from_err_msg(response_msg, &ret, returnOrigin)) {
+			OT_LOG(LOG_ERR, "Received unknown message")
+			goto err_com;
+		}
+
+		goto err_msg;
+	}
+
+	if (returnOrigin)
+		*returnOrigin = resp_invoke_msg->returnOrigin;
+
+	if (returnPayload && resp_invoke_msg->payload.size > 0) {
+		returnPayload->size = resp_invoke_msg->payload.size;
+
+		returnPayload->data = TEE_Malloc(returnPayload->size, 0);
+		void *from = &resp_invoke_msg->payload.data;
+		/* copy from data offset, resp_msg + payload offset + data offset */
+		memcpy(returnPayload->data,
+				from,
+				returnPayload->size);
+
+	}
+
+	free(resp_invoke_msg);
+
+	return TEE_SUCCESS;
+
+err_com:
+	if (returnOrigin)
+		*returnOrigin = TEE_ORIGIN_COMMS;
+	ret = TEEC_ERROR_COMMUNICATION;
+
+err_msg:
+	free(resp_invoke_msg);
+	return ret;
+}
+
 static int open_shared_mem(const char *name, void **buffer, uint32_t size, bool isOutput)
 {
 	int flag = 0;
@@ -1100,6 +1157,79 @@ err_1:
 		*returnOrigin = TEE_ORIGIN_TEE;
 	return TEE_ERROR_GENERIC;
 }
+
+
+TEE_Result ta_invoke_mgr_command(
+				       uint32_t cancellationRequestTimeout,
+					   uint32_t commandID,
+					   MGR_Payload *sendPayload,
+					   MGR_Payload *returnPayload,
+					   TEE_Result *returnOrigin)
+{
+	struct ta_task *new_ta_task = NULL;
+	struct com_msg_invoke_mgr_cmd *invoke_msg = NULL;
+	TEE_Result ret = TEE_ERROR_GENERIC;
+
+	/* TODO: cancel timeout */
+	if (cancellationRequestTimeout != TEE_TIMEOUT_INFINITE) {
+		OT_LOG(LOG_ERR, "Timeout not implemented. Must be TEE_TIMEOUT_INFINITE");
+		return TEE_ERROR_NOT_IMPLEMENTED;
+	}
+
+	new_ta_task = calloc(1, sizeof(struct ta_task));
+	if (!new_ta_task) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		goto err_1;
+	}
+
+	new_ta_task->msg_len = sizeof(struct com_msg_invoke_mgr_cmd);
+
+	/* add payload to msg size and allocation if exists */
+	if (sendPayload)
+		new_ta_task->msg_len += sendPayload->size;
+
+	new_ta_task->msg = calloc(1, new_ta_task->msg_len);
+	if (!new_ta_task->msg) {
+		OT_LOG(LOG_ERR, "Out of memory");
+		goto err_1;
+	}
+
+	invoke_msg = new_ta_task->msg;
+
+	/* Message header */
+	invoke_msg->msg_hdr.msg_name = COM_MSG_NAME_INVOKE_MGR_CMD;
+	invoke_msg->msg_hdr.msg_type = COM_TYPE_QUERY;
+	invoke_msg->msg_hdr.sess_id = 0;
+	invoke_msg->cmd_id = commandID;
+	invoke_msg->payload.size = sendPayload->size;
+	if (invoke_msg->payload.size > 0) {
+		/* copy payload to pointer offset: invoke_msg + payload offset + data offset */
+		invoke_msg->payload.data = invoke_msg;
+		uintptr_t offset = offsetof(struct com_msg_invoke_mgr_cmd, payload);
+		invoke_msg->payload.data += offset;
+		offset = offsetof(MGR_Payload, data);
+		invoke_msg->payload.data += offset;
+		memcpy(invoke_msg->payload.data,
+				sendPayload->data,
+				invoke_msg->payload.size);
+	}
+
+	add_msg_done_queue_and_notify(new_ta_task);
+
+	ret = wait_and_handle_invoke_mgr_cmd_resp(returnPayload, returnOrigin);
+
+
+
+	return ret;
+err_2:
+	free_task(new_ta_task);
+err_1:
+	free(new_ta_task);
+	if (returnOrigin)
+		*returnOrigin = TEE_ORIGIN_TEE;
+	return TEE_ERROR_GENERIC;
+}
+
 
 bool get_cancellation_flag()
 {

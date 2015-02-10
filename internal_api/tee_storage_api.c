@@ -40,6 +40,9 @@
 #include "tee_storage_common.h"
 #include "tee_object_handle.h"
 #include "tee_logging.h"
+#include "tee_time_api.h" /*TEE_TIMEOUT_INFINITE*/
+#include "com_protocol.h" /*MGR CMD IDs*/
+#include "tee_internal_client_api.h"
 
 struct __TEE_ObjectEnumHandle {
 	uint32_t ID;
@@ -162,6 +165,120 @@ static bool is_value_attribute(uint32_t attr_ID)
 	 * TEE_ATTR_FLAG_VALUE == 0x20000000
 	 */
 	return (attr_ID & TEE_ATTR_FLAG_VALUE);
+}
+
+size_t calculate_object_handle_size(TEE_ObjectHandle object_handle)
+{
+	uint32_t n = 0;
+	size_t size = sizeof(struct __TEE_ObjectHandle);
+	size += object_handle->attrs_count * sizeof(TEE_Attribute);
+	for (n = 0; n < object_handle->attrs_count; ++n) {
+		TEE_Attribute *attribute = &object_handle->attrs[n];
+		if (!is_value_attribute(attribute->attributeID)) {
+			/* make allocation size of arrays align with pointer size */
+			uint32_t padding = attribute->content.ref.length % sizeof(uintptr_t);
+			size += attribute->content.ref.length;
+			if (padding > 0)
+				size += sizeof(uintptr_t) - padding;
+
+			/* utilizing the pointer size in packing */
+			size -= sizeof(uintptr_t);
+		}
+	}
+
+	return size;
+}
+
+void pack_object_handle(TEE_ObjectHandle handle, void *mem)
+{
+	uint32_t count = handle->attrs_count;
+	uint32_t n = 0;
+
+	memcpy(mem, &handle->per_object, sizeof(handle->per_object));
+	mem += sizeof(handle->per_object);
+
+	memcpy(mem, &handle->objectInfo, sizeof(handle->objectInfo));
+	mem += sizeof(handle->objectInfo);
+
+	memcpy(mem, &handle->attrs_count, sizeof(handle->attrs_count));
+	mem += sizeof(handle->attrs_count);
+
+	memcpy(mem, &handle->maxObjSizeBytes, sizeof(handle->maxObjSizeBytes));
+	mem += sizeof(handle->maxObjSizeBytes);
+
+	for (; n < count; --n) {
+		TEE_Attribute *attribute = &handle->attrs[n];
+		if (is_value_attribute(attribute->attributeID))	{
+			memcpy(mem, attribute, sizeof(TEE_Attribute));
+			mem += sizeof(TEE_Attribute);
+		} else {
+			memcpy(mem, &attribute->attributeID, sizeof(attribute->attributeID));
+			mem += sizeof(attribute->attributeID);
+
+			memcpy(mem,
+					&attribute->content.ref.length,
+					sizeof(attribute->content.ref.length));
+			mem += sizeof(attribute->content.ref.length);
+
+			memcpy(mem, attribute->content.ref.buffer, attribute->content.ref.length);
+			mem += attribute->content.ref.length;
+			uint32_t padding = attribute->content.ref.length%sizeof(uintptr_t);
+			if (padding > 0)
+				mem += sizeof(uintptr_t)-padding;
+		}
+	}
+}
+
+void unpack_and_alloc_object_handle(TEE_ObjectHandle *returnHandle, void *mem)
+{
+	*returnHandle = TEE_Malloc(sizeof(struct __TEE_ObjectHandle), 0);
+	TEE_ObjectHandle handle = *returnHandle;
+	uint32_t count = 0;
+	uint32_t n = 0;
+
+	memcpy(&handle->per_object, mem, sizeof(handle->per_object));
+	mem += sizeof(handle->per_object);
+
+	memcpy(&handle->objectInfo, mem, sizeof(handle->objectInfo));
+	mem += sizeof(handle->objectInfo);
+
+	memcpy(&handle->attrs_count, mem, sizeof(handle->attrs_count));
+	mem += sizeof(handle->attrs_count);
+
+	memcpy(&handle->maxObjSizeBytes, mem, sizeof(handle->maxObjSizeBytes));
+	mem += sizeof(handle->maxObjSizeBytes);
+
+	count = handle->attrs_count;
+	if (count > 0) {
+		handle->attrs = TEE_Malloc(sizeof(TEE_Attribute)*count, 0);
+		while (count-- > 0) {
+			TEE_Attribute *attribute = &handle->attrs[n];
+			TEE_Attribute *attributePipe = mem;
+			if (is_value_attribute(attributePipe->attributeID)) {
+				memcpy(attribute,
+						mem,
+						sizeof(TEE_Attribute));
+				mem += sizeof(TEE_Attribute);
+			} else {
+				memcpy(&attribute->attributeID,
+						mem,
+						sizeof(attribute->attributeID));
+				mem += sizeof(attribute->attributeID);
+
+				memcpy(&attribute->content.ref.length,
+						mem,
+						sizeof(attribute->content.ref.length));
+				mem += sizeof(attribute->content.ref.length);
+
+				memcpy(attribute->content.ref.buffer,
+						mem, attribute->content.ref.length);
+				mem += attribute->content.ref.length;
+				uint32_t padding = attribute->content.ref.length%sizeof(uintptr_t);
+				if (padding > 0)
+					mem += sizeof(uintptr_t)-padding;
+			}
+		}
+	}
 }
 
 static void free_attrs(TEE_ObjectHandle object)
@@ -1588,6 +1705,68 @@ err:
 }
 
 TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
+				      uint32_t flags, TEE_ObjectHandle attributeHandle,
+				      void *initialData, size_t initialDataLen,
+				      TEE_ObjectHandle *object)
+{
+	/* serialize to manager */
+	size_t messageSize = offsetof(struct com_mrg_create_persistent, attributeHandleOffset);
+	TEE_Result retVal, resultOrigin;
+	MGR_Payload payload, returnPayload;
+
+	if (storageID != TEE_STORAGE_PRIVATE)
+		return TEE_ERROR_ITEM_NOT_FOUND;
+
+	if (objectID == NULL) {
+		OT_LOG(LOG_ERR, "ObjectID buffer is NULL\n");
+		return TEE_ERROR_GENERIC;
+	}
+
+	if (objectIDLen > TEE_OBJECT_ID_MAX_LEN) {
+		OT_LOG(LOG_ERR, "ObjectID length too big\n");
+		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+	}
+
+	if (attributeHandle != NULL) {
+		if (!(attributeHandle->objectInfo.handleFlags &
+				TEE_HANDLE_FLAG_INITIALIZED)) {
+			OT_LOG(LOG_ERR,
+					"CAnnot create a persistant object from unitialized object\n");
+			TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+		}
+		messageSize = calculate_object_handle_size(attributeHandle);
+	}
+
+	payload.size = messageSize;
+	payload.data = TEE_Malloc(payload.size, 0);
+
+	struct com_mrg_create_persistent *createParams = payload.data;
+	createParams->storageID = storageID;
+	createParams->flags = flags;
+	memcpy(createParams->objectID, objectID, objectIDLen);
+	createParams->objectIDLen = objectIDLen;
+
+	if (attributeHandle != NULL)
+		pack_object_handle(attributeHandle, &createParams->attributeHandleOffset);
+
+	retVal = TEE_InvokeMGRCommand(TEE_TIMEOUT_INFINITE,
+								   COM_MGR_CMD_ID_CREATE_PERSISTENT,
+								   &payload,
+								   &returnPayload,
+								   &resultOrigin);
+
+	if (retVal != TEE_SUCCESS)
+		return retVal;
+
+	if (resultOrigin == TEE_SUCCESS && returnPayload.size > 0) {
+		unpack_and_alloc_object_handle(object, returnPayload.data);
+		TEE_Free(returnPayload.data);
+	}
+
+	return resultOrigin;
+}
+
+TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
 				      uint32_t flags, TEE_ObjectHandle attributes,
 				      void *initialData, size_t initialDataLen,
 				      TEE_ObjectHandle *object)

@@ -18,6 +18,7 @@
 
 #include "callbacks.h"
 #include "tee_internal_client_api.h"
+#include "com_protocol.h"
 
 TEE_Result TEE_OpenTASession(TEE_UUID *destination, uint32_t cancellationRequestTimeout,
 			     uint32_t paramTypes, TEE_Param params[4],
@@ -28,7 +29,7 @@ TEE_Result TEE_OpenTASession(TEE_UUID *destination, uint32_t cancellationRequest
 				      TEE_TASessionHandle *session,
 				      uint32_t *returnOrigin) = fn_ptr_open_ta_session();
 
-	return open_ta_session(destination, cancellationRequestTimeout, paramTypes,
+	return opevn_ta_session(destination, cancellationRequestTimeout, paramTypes,
 			       params, session, returnOrigin);
 }
 
@@ -51,4 +52,22 @@ TEE_Result TEE_InvokeTACommand(TEE_TASessionHandle session, uint32_t cancellatio
 
 	return invoke_ta_command(session, cancellationRequestTimeout, commandID,
 				 paramTypes, params, returnOrigin);
+}
+
+TEE_Result TEE_InvokeMGRCommand(uint32_t cancellationRequestTimeout,
+			       uint32_t commandID,
+				   MGR_Payload *payload,
+				   MGR_Payload *returnPayload,
+				   TEE_Result *returnOrigin)
+{
+
+	TEE_Result (*invoke_mgr_command)(
+					uint32_t cancellationRequestTimeout,
+					uint32_t commandID,
+					MGR_Payload *payload,
+					MGR_Payload *returnPayload,
+					TEE_Result *returnOrigin) = fn_ptr_invoke_mgr_command();
+
+	return invoke_mgr_command(cancellationRequestTimeout, commandID,
+				payload, returnPayload, returnOrigin);
 }
