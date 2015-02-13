@@ -1,0 +1,242 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1969be_3273feea",
+        "filename": "internal_api/tee_internal_client_api.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 57,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "Move this to own module. This module is for \"TEE intenal API\" (one subsection from TEE Core API).",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_927752d4",
+        "filename": "internal_api/tee_internal_client_api.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 42,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "See comment in c-file.",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_2d0f1f32",
+        "filename": "internal_api/tee_storage_api.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 1741,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "memory leak",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_4d0a5b22",
+        "filename": "internal_api/tee_storage_api.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 1743,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "Move to up",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_8d13b35b",
+        "filename": "internal_api/tee_storage_api.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 1766,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "No need result origin. Return value in retVal.",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_4d21bb9e",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 559,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "move to memcpy",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_ad1aef6b",
+        "filename": "launcher/ta_internal_thread.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 41,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "uint32_t *returnOrigin : no need",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_2dab9fd9",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 898,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "Move these to mgr",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_4da6db11",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 909,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "missing if",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_6d3757e4",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 929,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "Remove",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_8d3a93cb",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 936,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "change to invoke_msg-\u003emsg_hdr.msg_type !\u003d COM_TYPE_QUERY -\u003e error",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_ad314fee",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 942,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "if not needed",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_8d41f33b",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 962,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "declare at beginning",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_cd4beb57",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 966,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-13T11:30:02Z",
+      "side": 1,
+      "message": "Send closesession message",
+      "revId": "c2df3d7f4cc9c6061c2a701a6b9cf73ecdaa7b27",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
