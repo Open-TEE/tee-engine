@@ -632,25 +632,35 @@ static void map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uin
 
 		/* convert the TEEC types to the TEE internal types */
 		if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_NONE ) {
-			continue;
+
+			types[i] = TEE_PARAM_TYPE_NONE;
+
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INOUT) {
+
+			types[i] = TEE_PARAM_TYPE_VALUE_INOUT;
+
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INPUT) {
+
+			types[i] = TEE_PARAM_TYPE_VALUE_INPUT;
+
+		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_OUTPUT) {
+
+			types[i] = TEE_PARAM_TYPE_VALUE_OUTPUT;
 
 		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_PARTIAL_INOUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_TEMP_INOUT ||
-			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INOUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEE_PARAM_TYPE_MEMREF_INOUT) {
 
 			types[i] = TEE_PARAM_TYPE_MEMREF_INOUT;
 
 		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_PARTIAL_INPUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_TEMP_INPUT ||
-			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_INPUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEE_PARAM_TYPE_MEMREF_INPUT) {
 
 			types[i] = TEE_PARAM_TYPE_MEMREF_INPUT;
 
 		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_PARTIAL_OUTPUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_TEMP_OUTPUT ||
-			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_VALUE_OUTPUT ||
 			   TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEE_PARAM_TYPE_MEMREF_OUTPUT) {
 
 			types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
