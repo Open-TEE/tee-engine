@@ -386,6 +386,9 @@ static void open_session_response(struct manager_msg *man_msg)
 
 	/* Check received message answer and proceed according to that */
 
+	/* Take session ctx pointer */
+	ta_session->content.sesLink.sess_ctx = open_resp_msg->sess_ctx;
+
 	if (open_resp_msg->return_code_open_session != TEE_SUCCESS) {
 
 		/* Although session will be removed, it is marked as closed. It is done,
@@ -408,9 +411,6 @@ static void open_session_response(struct manager_msg *man_msg)
 
 		/* Proc can be set active if TA create entry point func is executed */
 		ta_session->content.sesLink.owner->content.process.status = proc_active;
-
-		/* Take session ctx pointer */
-		ta_session->content.sesLink.sess_ctx = open_resp_msg->sess_ctx;
 	}
 
 	/* Send message to its initial sender
