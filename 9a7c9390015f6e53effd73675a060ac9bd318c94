@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1969be_e5718245",
+        "filename": "manager/opentee_manager_storage_api.c",
+        "patchSetId": 5
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-23T14:12:13Z",
+      "side": 1,
+      "message": "intel corporation",
+      "revId": "9a7c9390015f6e53effd73675a060ac9bd318c94",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_85d24ed0",
+        "filename": "manager/storage_key_apis_external_funcs.c",
+        "patchSetId": 5
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-02-23T14:12:13Z",
+      "side": 1,
+      "message": "Merge this file into opentee_manger_storage_api -\u003e Then this file can removed.",
+      "revId": "9a7c9390015f6e53effd73675a060ac9bd318c94",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
