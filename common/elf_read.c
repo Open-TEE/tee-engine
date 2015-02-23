@@ -14,7 +14,7 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <gelf.h>
+#include <libelf.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -30,13 +30,16 @@ bool get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, si
 {
 	int fd;
 	bool is_sec_found = false;
-	Elf *e;
+	Elf *file;
 	char *name;
 	Elf_Scn *scn = NULL;
 	Elf_Data *data = NULL;
-	GElf_Shdr shdr;
 	size_t shstrndx;
-
+#if __WORDSIZE == 32
+	Elf32_Shdr *elf_hdr;
+#else
+	Elf64_Shdr *elf_hdr;
+#endif
 	if (elf_version(EV_CURRENT) == EV_NONE) {
 		OT_LOG(LOG_ERR, "Elf version");
 		return false;
@@ -48,32 +51,43 @@ bool get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, si
 		return false;
 	}
 
-	e = elf_begin(fd, ELF_C_READ, NULL);
-	if (!e) {
+	file = elf_begin(fd, ELF_C_READ, NULL);
+	if (!file) {
 		OT_LOG(LOG_ERR, "Elf begin failed : %s", elf_errmsg(elf_errno()));
 		goto end;
 	}
 
-	if (elf_kind(e) != ELF_K_ELF)
+	if (elf_kind(file) != ELF_K_ELF)
 		goto end; /* No error message, this might cause log fill */
 
-	if (elf_getshdrstrndx(e, &shstrndx) != 0) {
+
+	if (elf_getshdrstrndx(file, &shstrndx) != 0) {
 		OT_LOG(LOG_ERR, "elf getshdrstrndx : %s", elf_errmsg(elf_errno()));
 		goto end;
 	}
 
 	while (!is_sec_found) {
 
-		scn = elf_nextscn(e, scn);
+		scn = elf_nextscn(file, scn);
 		if (!scn)
 			break;
 
-		if (gelf_getshdr(scn, &shdr) != &shdr) {
-			OT_LOG(LOG_ERR, "gelf getshdr : %s", elf_errmsg(elf_errno()));
+#if __WORDSIZE == 32
+		elf_hdr = elf32_getshdr(scn);
+		if (!elf_hdr) {
+			OT_LOG(LOG_ERR, "elf getshdr : %s", elf_errmsg(elf_errno()));
 			goto end;
 		}
+#else
 
-		name = elf_strptr(e, shstrndx, shdr.sh_name);
+		elf_hdr = elf64_getshdr(scn);
+		if (!elf_hdr) {
+			OT_LOG(LOG_ERR, "elf getshdr : %s", elf_errmsg(elf_errno()));
+			goto end;
+		}
+#endif
+
+		name = elf_strptr(file, shstrndx, elf_hdr->sh_name);
 		if (!name) {
 			OT_LOG(LOG_ERR, "elf_strptr : %s", elf_errmsg(elf_errno()));
 			goto end;
@@ -100,7 +114,7 @@ bool get_data_from_elf(const char *elf_file, const char *sec_name, void *buf, si
 	}
 
 end:
-	elf_end(e);
+	elf_end(file);
 	close(fd);
 	return is_sec_found;
 }
