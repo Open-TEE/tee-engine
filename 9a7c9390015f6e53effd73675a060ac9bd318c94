@@ -2,6 +2,46 @@
   "comments": [
     {
       "key": {
+        "uuid": "7a1969be_65d592b8",
+        "filename": "internal_api/opentee_storage_common.h",
+        "patchSetId": 5
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-02-23T14:30:42Z",
+      "side": 1,
+      "message": "would be far more readable if there was a line between the functions",
+      "revId": "9a7c9390015f6e53effd73675a060ac9bd318c94",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1969be_45321611",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 5
+      },
+      "lineNbr": 884,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-02-23T14:30:42Z",
+      "side": 1,
+      "message": "alignment under the first param",
+      "range": {
+        "startLine": 884,
+        "startChar": 8,
+        "endLine": 884,
+        "endChar": 9
+      },
+      "revId": "9a7c9390015f6e53effd73675a060ac9bd318c94",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "7a1969be_e5718245",
         "filename": "manager/opentee_manager_storage_api.c",
         "patchSetId": 5
