@@ -1987,7 +1987,7 @@ TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whenc
 	object->per_object.data_position = pos;
 
 	/* TODO: If fseek fail -> kabum, so some solution is needed */
-	if (fseek(object->per_object.object_file, pos, TEE_DATA_SEEK_SET) != 0)
+	if (fseek(object->per_object.object_file, pos, SEEK_SET) != 0)
 		OT_LOG(LOG_ERR, "Fseek failed at seek data\n");
 
 	return TEE_SUCCESS;
