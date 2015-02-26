@@ -1866,7 +1866,8 @@ TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t siz
 	if (object == NULL || buffer == NULL)
 		return TEE_ERROR_GENERIC;
 
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE)) {
+	if (!(object->objectInfo.handleFlags & (TEE_DATA_FLAG_ACCESS_WRITE |
+						TEE_DATA_FLAG_ACCESS_WRITE_META))) {
 		OT_LOG(LOG_ERR, "Can not write persistant object data: Not proper access rights\n");
 		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
 	}
