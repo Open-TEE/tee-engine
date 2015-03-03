@@ -130,8 +130,10 @@ void open_shm_region(struct manager_msg *man_msg)
 	}
 
 	/* We have finished with the file handle as it has been mapped so don't leak it */
-	close(fd);
 	list_add_after(&new_shm->list, &man_msg->proc->shm_mem.list);
+	open_shm->msg_hdr.shareable_fd[0] = fd;
+	open_shm->msg_hdr.shareable_fd_count = 1;
+	new_shm->fd = fd;
 
 out:
 	open_shm->msg_hdr.msg_type = COM_TYPE_RESPONSE;

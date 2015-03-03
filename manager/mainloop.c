@@ -31,6 +31,10 @@
 #include "ta_dir_watch.h"
 #include "tee_logging.h"
 
+#ifdef ANDROID
+#include "android_defines.h"
+#endif
+
 /* Maximum epoll events */
 #define MAX_CURR_EVENTS 5
 

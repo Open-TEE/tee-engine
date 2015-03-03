@@ -23,6 +23,11 @@
 #include <sys/eventfd.h>
 #include <sys/prctl.h>
 #include <stdio.h>
+#include <syslog.h>
+
+#ifdef ANDROID
+#include "android_defines.h"
+#endif
 
 #include "com_protocol.h"
 #include "conf_parser.h"

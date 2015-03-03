@@ -34,6 +34,7 @@ DynamicLibrary {
         "../include/core_control_resources.h",
         "../include/ta_exit_states.h",
         "../common/tee_list.c",
+        "../common/socket_help.c",
         "extern_resources.h",
         "io_thread.h",
         "io_thread.c",

@@ -256,7 +256,6 @@ static TEE_Result get_shm_from_manager_and_map_region(struct ta_shared_mem *ta_s
 	struct com_msg_open_shm_region *open_shm = NULL;
 	struct ta_task *new_ta_task = NULL;
 	TEE_Result ret = TEE_SUCCESS;
-	int fd;
 
 	/* Unregister shared memory */
 	new_ta_task = calloc(1, sizeof(struct ta_task));
@@ -304,22 +303,13 @@ static TEE_Result get_shm_from_manager_and_map_region(struct ta_shared_mem *ta_s
 
 	memcpy(ta_shm_mem->shm_uuid, open_shm->name, SHM_MEM_NAME_LEN);
 
-	fd = shm_open(ta_shm_mem->shm_uuid, (O_RDWR | O_RDONLY), 0);
-	if (fd == -1) {
-		OT_LOG(LOG_ERR, "Failed to open the shared memory area : %d", errno);
-		ret = TEEC_ERROR_GENERIC;
-		goto err;
-	}
-
 	ta_shm_mem->addr = mmap(NULL, ta_shm_mem->original_size,
-			       (PROT_WRITE | PROT_READ), MAP_SHARED, fd, 0);
+			       (PROT_WRITE | PROT_READ), MAP_SHARED, open_shm->msg_hdr.shareable_fd[0], 0);
 	if (ta_shm_mem->addr == MAP_FAILED) {
 		OT_LOG(LOG_ERR, "Failed to MMAP");
 		ret = TEEC_ERROR_OUT_OF_MEMORY;
 		free_shm_and_from_manager(ta_shm_mem);
 	}
-
-	close(fd);
 
 err:
 	free(response_msg);
@@ -572,14 +562,13 @@ err_msg:
 	return ret;
 }
 
-static int open_shared_mem(const char *name, void **buffer, uint32_t size, bool isOutput)
+static int open_shared_mem(int fd, void **buffer, uint32_t size, bool isOutput)
 {
 	int flag = 0;
-	int fd;
 	void *address = NULL;
 	struct stat file_stat;
 
-	if (!name || !buffer) {
+	if (!fd || !buffer) {
 		OT_LOG(LOG_ERR, "Invalid pointer");
 		goto errorExit;
 	}
@@ -591,12 +580,6 @@ static int open_shared_mem(const char *name, void **buffer, uint32_t size, bool 
 		flag |= O_RDONLY; /* It is an outbuffer only so we just need read access */
 	else
 		flag |= O_RDWR;
-
-	fd = shm_open(name, flag, 0);
-	if (fd == -1) {
-		OT_LOG(LOG_ERR, "Failed to open the shared memory area : %d", errno);
-		goto errorExit;
-	}
 
 	if (fstat(fd, &file_stat) == -1) {
 		OT_LOG(LOG_ERR, "Failed to stat the shared memory region");
@@ -743,11 +726,11 @@ static void map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uin
 }
 
 static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Param *params,
-				    uint32_t *tee_param_types)
+				    uint32_t *tee_param_types, int *fds)
 {
 	uint32_t param_types = operation->paramTypes;
 	bool isOutput;
-	int ret = 0, i;
+	int ret = 0, i, n=0;
 
 	memset(params, 0, 4 * sizeof(TEE_Param));
 
@@ -780,7 +763,7 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 			params[i].memref.size = operation->params[i].param.memref.size;
 
 			/* if there is some failure opening the shared memory just fail graefully */
-			if (open_shared_mem(operation->params[i].param.memref.shm_area,
+			if (open_shared_mem(fds[n++],
 					    &params[i].memref.buffer,
 					    operation->params[i].param.memref.size,
 					    isOutput) == -1)
@@ -817,7 +800,8 @@ static void open_session(struct ta_task *in_task)
 	}
 
 	/* convert the paramaters from the message into TA format params */
-	if (copy_com_msg_op_to_param(&open_msg->operation, params, &paramTypes) == -1) {
+	if (copy_com_msg_op_to_param(&open_msg->operation, params, &paramTypes,
+		open_msg->msg_hdr.shareable_fd) == -1) {
 		OT_LOG(LOG_ERR, "Failed to copy operation");
 		open_msg->return_code_open_session = TEE_ERROR_NO_DATA;
 		open_msg->return_origin = TEE_ORIGIN_TEE;
@@ -862,7 +846,8 @@ static void invoke_cmd(struct ta_task *in_task)
 	}
 
 	/* convert the paramaters from the message into TA format params */
-	if (copy_com_msg_op_to_param(&invoke_msg->operation, params, &paramTypes)) {
+	if (copy_com_msg_op_to_param(&invoke_msg->operation, params, &paramTypes, 
+			invoke_msg->msg_hdr.shareable_fd)) {
 		OT_LOG(LOG_ERR, "Failed to copy operation");
 		invoke_msg->return_code = TEE_ERROR_NO_DATA;
 		invoke_msg->return_origin = TEE_ORIGIN_TEE;
