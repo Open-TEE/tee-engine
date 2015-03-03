@@ -18,6 +18,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <sys/select.h>
 
 #include "tee_time_api.h"
 

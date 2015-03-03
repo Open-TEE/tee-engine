@@ -402,7 +402,7 @@ struct trusted_app_propertie *ta_dir_watch_props(TEE_UUID *get_ta_uuid)
 	struct list_head *pos;
 
 	if (!get_ta_uuid)
-		return NULL;
+		goto end;
 
 	if (list_is_empty(&ta_dir_table.list))
 		goto end;
@@ -416,7 +416,7 @@ struct trusted_app_propertie *ta_dir_watch_props(TEE_UUID *get_ta_uuid)
 	}
 
 end:
-	return &ta->ta;
+	return NULL;
 }
 
 int ta_dir_watch_lock_mutex()

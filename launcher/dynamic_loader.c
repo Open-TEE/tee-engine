@@ -95,7 +95,7 @@ TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 		goto err_cleanup;
 	}
 
-	*callbacks = TEE_Malloc(sizeof(struct ta_interface), 0);
+	*callbacks = calloc(1, sizeof(struct ta_interface));
 	if (!*callbacks) {
 		OT_LOG(LOG_DEBUG, "Out of memory");
 		goto err_cleanup;
