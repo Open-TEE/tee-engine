@@ -92,7 +92,7 @@ static BUCKET *get_bucket(BUCKET *bucket_head, BUCKET **pre_buck, unsigned char 
 
 	while (bucket_head) {
 
-		if (bucket_head->key_len == key_len && !bcmp(bucket_head->key, key, key_len))
+		if (bucket_head->key_len == key_len && !memcmp(bucket_head->key, key, key_len))
 			return bucket_head;
 
 		if (pre_buck)
