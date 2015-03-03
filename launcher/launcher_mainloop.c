@@ -36,10 +36,12 @@
 #include <signal.h>
 #include <sys/prctl.h>
 #include <sched.h>
-#include <syscall.h>
+#include <sys/syscall.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <pthread.h>
 
 #include "subprocess.h"
-#include "socket_help.h"
 #include "ta_process.h"
 #include "ta_exit_states.h"
 #include "core_control_resources.h"
@@ -88,7 +90,7 @@ static void send_err_msg_to_manager(int man_fd, struct com_msg_ta_created *msg)
 	/* No special error message. PID -1 is signaling error */
 	msg->pid = -1; /* TA not created */
 
-	if (com_send_msg(man_fd, msg, sizeof(struct com_msg_ta_created)) !=
+	if (com_send_msg(man_fd, msg, sizeof(struct com_msg_ta_created), NULL, 0) !=
 	    sizeof(struct com_msg_ta_created)) {
 		OT_LOG(LOG_ERR, "Failed report fail");
 	}
@@ -104,6 +106,8 @@ int lib_main_loop(struct core_control *ctl_params)
 	sigset_t sig_empty_set, sig_block_set;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
 	struct ta_loop_arg ta_loop_args;
+	int shm_fds[4];
+	int shm_fd_count;
 
 	child_stack = calloc(1, CHILD_STACK_SIZE);
 	if (!child_stack) {
@@ -188,7 +192,9 @@ int lib_main_loop(struct core_control *ctl_params)
 				exit(EXIT_FAILURE);
 			}
 
-			ret = com_recv_msg(ctl_params->comm_sock_fd, (void **)&recv_open_msg, NULL);
+			ret = com_recv_msg(ctl_params->comm_sock_fd, (void **)&recv_open_msg, NULL,
+					   shm_fds, &shm_fd_count);
+
 			if (ret == -1) {
 				free(recv_open_msg);
 				/* TODO: Figur out why -1, but for now lets
@@ -201,12 +207,18 @@ int lib_main_loop(struct core_control *ctl_params)
 				continue;
 			}
 
+			recv_open_msg->msg_hdr.shareable_fd_count = 0;
+			if (shm_fd_count > 0 && shm_fd_count <= 4) {
+				recv_open_msg->msg_hdr.shareable_fd_count = shm_fd_count;
+				memcpy(recv_open_msg->msg_hdr.shareable_fd, shm_fds,
+				       sizeof(int)*shm_fd_count);
+			}
+
 			/* Extrac info from message */
 			if (recv_open_msg->msg_hdr.msg_name != COM_MSG_NAME_OPEN_SESSION ||
 			    recv_open_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
 				OT_LOG(LOG_ERR, "Invalid message");
-				free(recv_open_msg);
-				continue; /* ignore */
+				goto close_fd;
 			}
 
 			/* Received correct mesage from manager. Prepare response message.
@@ -219,8 +231,7 @@ int lib_main_loop(struct core_control *ctl_params)
 			if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockfd) == -1) {
 				OT_LOG(LOG_ERR, "failed to create a socket pair");
 				send_err_msg_to_manager(ctl_params->comm_sock_fd, &new_ta_info);
-				free(recv_open_msg);
-				continue;
+				goto close_fd;
 			}
 
 			/*
@@ -234,21 +245,22 @@ int lib_main_loop(struct core_control *ctl_params)
 
 			new_proc_pid = clone(ta_process_loop, child_stack + CHILD_STACK_SIZE,
 					     SIGCHLD | CLONE_PARENT, &ta_loop_args);
+
 			if (new_proc_pid == -1) {
 				send_err_msg_to_manager(ctl_params->comm_sock_fd, &new_ta_info);
-				free(recv_open_msg);
-				continue;
+				goto close_pair;
 
 			}
 
 			new_ta_info.pid = new_proc_pid;
 
 			ret = com_send_msg(ctl_params->comm_sock_fd, &new_ta_info,
-					   sizeof(struct com_msg_ta_created));
+					   sizeof(struct com_msg_ta_created), NULL, 0);
 
 			if (ret == sizeof(struct com_msg_ta_created)) {
 
-				if (send_fd(ctl_params->comm_sock_fd, sockfd[0]) == -1) {
+				if (send_fd(ctl_params->comm_sock_fd, &sockfd[0], 1, NULL, 0)
+				    == -1) {
 					OT_LOG(LOG_ERR, "Failed to send TA sock");
 					kill(new_proc_pid, SIGKILL);
 					/* TODO: Check what is causing error, but for now
@@ -261,10 +273,17 @@ int lib_main_loop(struct core_control *ctl_params)
 				/* TODO: Check what is causing error, but for now lets
 					 *  hope the error clears itself*/
 			}
-
+close_pair:
 			/* parent process will stay as the launcher */
 			close(sockfd[0]);
 			close(sockfd[1]);
+close_fd:
+			/* close possibly forwarded file descriptors */
+			while (recv_open_msg->msg_hdr.shareable_fd_count > 0) {
+				recv_open_msg->msg_hdr.shareable_fd_count--;
+				close(recv_open_msg->msg_hdr.shareable_fd
+						[recv_open_msg->msg_hdr.shareable_fd_count]);
+			}
 			free(recv_open_msg);
 
 		}

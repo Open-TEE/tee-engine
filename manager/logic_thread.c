@@ -23,12 +23,12 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <stddef.h> /*offsetof*/
+#include <stdlib.h>
 
 #include "com_protocol.h"
 #include "extern_resources.h"
 #include "io_thread.h"
 #include "shm_mem.h"
-#include "socket_help.h"
 #include "ta_exit_states.h"
 #include "ta_dir_watch.h"
 #include "tee_list.h"
@@ -38,9 +38,64 @@
 #include "opentee_internal_api.h"
 #include "opentee_manager_storage_api.h"
 #include "opentee_storage_common.h"
+#include "tee_data_types.h"
 
 /* Used for hashtable init */
 #define TA_SESS_COUNT_EST 50
+
+
+/* Paramater Types */
+#define TEEC_NONE			0x00000000
+#define TEEC_VALUE_INPUT		0x00000001
+#define TEEC_VALUE_OUTPUT		0x00000002
+#define TEEC_VALUE_INOUT		0x00000003
+#define TEEC_MEMREF_TEMP_INPUT		0x00000005
+#define TEEC_MEMREF_TEMP_OUTPUT		0x00000006
+#define TEEC_MEMREF_TEMP_INOUT		0x00000007
+#define TEEC_MEMREF_WHOLE		0x0000000C
+#define TEEC_MEMREF_PARTIAL_INPUT	0x0000000D
+#define TEEC_MEMREF_PARTIAL_OUTPUT	0x0000000E
+#define TEEC_MEMREF_PARTIAL_INOUT	0x0000000F
+
+static void invoke_cmd_add_fds(struct com_msg_operation *operation,
+			       struct com_msg_hdr *msg_hdr,
+			       struct proc_shm_mem *proc_shm_mem)
+{
+	uint32_t param_types = operation->paramTypes;
+	int i, n = 0;
+	TEE_Param params[4];
+	struct list_head *pos;
+	struct proc_shm_mem *current_shm;
+
+	memset(params, 0, 4 * sizeof(TEE_Param));
+	msg_hdr->shareable_fd_count = 0;
+
+	for (i = 0; i < 4; ++i) {
+
+		if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_NONE ||
+		    TEE_PARAM_TYPE_GET(param_types, i) == TEEC_VALUE_OUTPUT ||
+		    TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_VALUE_OUTPUT ||
+		    TEE_PARAM_TYPE_GET(param_types, i) == TEEC_VALUE_INPUT ||
+		    TEE_PARAM_TYPE_GET(param_types, i) == TEEC_VALUE_INOUT ||
+		    TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_VALUE_INOUT ||
+		    TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_VALUE_INPUT) {
+
+			continue;
+
+		} else {
+
+
+			LIST_FOR_EACH(pos, &proc_shm_mem->list) {
+				current_shm = LIST_ENTRY(pos, struct proc_shm_mem, list);
+				if (strcmp(current_shm->name,
+					   operation->params[i].param.memref.shm_area) == 0) {
+					msg_hdr->shareable_fd[n++] = current_shm->fd;
+					msg_hdr->shareable_fd_count++;
+				}
+			}
+		}
+	}
+}
 
 static void release_ta_file_locks(proc_t ta)
 {
@@ -493,12 +548,15 @@ static int comm_launcher_to_launch_ta(struct manager_msg *man_msg, int *new_ta_f
 				      pid_t *new_ta_pid)
 {
 	struct com_msg_ta_created *recv_created_msg = NULL;
+	struct com_msg_hdr *header_for_fds = man_msg->msg;
 
 	/* Initialize new ta pid -1 in purpose of error handling in this function */
 	*new_ta_pid = -1;
 
 	/* Communicating directly to launcher */
-	if (com_send_msg(launcher_fd, man_msg->msg, man_msg->msg_len) != man_msg->msg_len) {
+	if (com_send_msg(launcher_fd, man_msg->msg, man_msg->msg_len,
+			header_for_fds->shareable_fd, header_for_fds->shareable_fd_count)
+	    != man_msg->msg_len) {
 		/* TODO: Why socket failing */
 		OT_LOG(LOG_ERR, "Communication proble to launcher");
 		goto err;
@@ -507,11 +565,13 @@ static int comm_launcher_to_launch_ta(struct manager_msg *man_msg, int *new_ta_f
 	/* Note: After this point we might receive signal SIGCHLD */
 
 	/* Receive launcer msg. In case of error, abort TA initialization */
-	if (com_recv_msg(launcher_fd, (void **)(&recv_created_msg), NULL)) {
+	if (com_recv_msg(launcher_fd, (void **)(&recv_created_msg), NULL, NULL, NULL)) {
 		/* TODO: Why socket failing */
 		OT_LOG(LOG_ERR, "failed to receive ta create message");
 		goto err;
 	}
+
+	recv_created_msg->msg_hdr.shareable_fd_count = 0;
 
 	if (recv_created_msg->msg_hdr.msg_name != COM_MSG_NAME_CREATED_TA ||
 	    recv_created_msg->msg_hdr.msg_type != COM_TYPE_RESPONSE) {
@@ -528,7 +588,7 @@ static int comm_launcher_to_launch_ta(struct manager_msg *man_msg, int *new_ta_f
 	*new_ta_pid = recv_created_msg->pid;
 
 	/* launcher is forking to new proc and creates sockpair. Other end will be send here. */
-	if (recv_fd(launcher_fd, new_ta_fd) == -1) {
+	if (recv_fd(launcher_fd, new_ta_fd, NULL, NULL, 0) == -1) {
 		OT_LOG(LOG_ERR, "Error at recv TA fd");
 		goto err;
 	}
@@ -805,6 +865,9 @@ static void open_session_msg(struct manager_msg *man_msg)
 
 	/* Query and response will handle in their own functions */
 	if (open_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
+		invoke_cmd_add_fds(&open_msg->operation, &open_msg->msg_hdr,
+				   &man_msg->proc->shm_mem);
+
 		open_session_query(man_msg);
 
 	} else if (open_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE) {
@@ -860,10 +923,13 @@ static void invoke_cmd(struct manager_msg *man_msg)
 	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
 		session->waiting_response_msg = WAIT_INVOKE_MSG;
 		invoke_msg->sess_ctx = session->to->sess_ctx;
+		invoke_cmd_add_fds(&invoke_msg->operation, &invoke_msg->msg_hdr,
+				   &man_msg->proc->shm_mem);
 
 	} else if (invoke_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE) {
 		session->to->waiting_response_msg = WAIT_NO_MSG_OUT;
 	}
+
 
 	man_msg->proc = session->to->owner;
 	add_msg_out_queue_and_notify(man_msg);
@@ -1776,11 +1842,12 @@ static void proc_changed_state(struct manager_msg *man_msg)
 			continue;
 		}
 		*/
-
+#ifdef WIFCONTINUED
 		if (WIFCONTINUED(status)) {
 			OT_LOG(LOG_ERR, "Recv continue sig"); /* No action needed */
 			continue;
 		}
+#endif
 
 		/* Signal caused stop. Note. No action, just logging */
 		if (WIFSTOPPED(status)) {

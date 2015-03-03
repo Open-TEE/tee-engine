@@ -17,8 +17,6 @@ DynamicLibrary {
     cpp.dynamicLibraries: [
         "dl",
         "pthread",
-        "uuid",
-        "crypt",
         "rt",
     ]
 
