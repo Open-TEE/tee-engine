@@ -46,6 +46,10 @@ static void cleanup_core()
 }
 #endif
 
+#ifdef ANDROID
+#define EFD_SEMAPHORE           (1 << 0)
+#endif
+
 static void sig_handler(int sig)
 {
 	uint64_t event = 1;
@@ -261,8 +265,10 @@ int main(int argc, char **argv)
 	memset(argv[0], 0, cmd_name_len);
 	strncpy(argv[0], proc_name, cmd_name_len);
 
+#ifndef ANDROID // build fails on android with this so for now, don't include (TODO)
 	/* open syslog for writing */
 	openlog(proc_name, 0, LOG_USER);
+#endif
 
 	control_params.self_pipe_fd = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
 	if (control_params.self_pipe_fd == -1)
