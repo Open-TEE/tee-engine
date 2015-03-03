@@ -32,7 +32,7 @@ struct control_fd {
  * \param fd_to_send The fd to be sent
  * \return 0 on success, -1 othersie
  */
-int send_fd(int sockfd, int fd_to_send);
+int send_fd(int sockfd, int *fd_table_to_send, int fd_count, struct iovec *aiov, int aiovlen);
 
 /*!
  * \brief recv_fd
@@ -41,6 +41,6 @@ int send_fd(int sockfd, int fd_to_send);
  * \param recvd_fd The fd to receive
  * \return 0 on success, -1 otherwise
  */
-int recv_fd(int sockfd, int *recvd_fd);
+int recv_fd(int sockfd, int *recvd_fd, int *fd_count, struct iovec *aiov, int aiovlen);
 
 #endif
