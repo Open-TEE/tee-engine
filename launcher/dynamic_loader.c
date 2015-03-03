@@ -20,6 +20,7 @@
 #include "core_control_resources.h"
 #include "ta_internal_thread.h"
 #include "tee_logging.h"
+#include "tee_memory.h"
 
 #include <dlfcn.h>
 #include <string.h>
