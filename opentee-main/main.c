@@ -36,6 +36,10 @@
 
 static struct core_control control_params;
 
+#ifdef ANDROID
+#define EFD_SEMAPHORE           (1 << 0)
+#endif
+
 static void sig_handler(int sig)
 {
 	uint64_t event = 1;
