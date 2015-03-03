@@ -174,7 +174,8 @@ static void send_msg(int to_fd, void *msg, int msg_len)
 	if (msg_len == 0)
 		return;
 
-	if (com_send_msg(to_fd, msg, msg_len) < 0) {
+	/* TA doesn't send fds */
+	if (com_send_msg(to_fd, msg, msg_len, NULL, 0) < 0) {
 		OT_LOG(LOG_ERR, "Message sending failed: %s", strerror(errno));
 		/* Note: Function may return -1 for out of memory, but fd_error will not
 		 * react this error. Lets hope this will clear it self or OOM killer act */
@@ -191,8 +192,9 @@ void free_task(struct ta_task *released_task)
 void receive_from_manager(struct epoll_event *event, int man_sockfd)
 {
 	struct ta_task *new_ta_task = NULL;
+	struct com_msg_hdr *header = NULL;
 	uint8_t msg_type, msg_name;
-	int ret;
+	int ret, fd[4], fd_count = 0;
 
 	if (event->events & (EPOLLHUP | EPOLLERR)) {
 		OT_LOG(LOG_ERR, "Manger sock problem");
@@ -205,7 +207,8 @@ void receive_from_manager(struct epoll_event *event, int man_sockfd)
 		return;
 	}
 
-	ret = com_recv_msg(man_sockfd, &new_ta_task->msg, &new_ta_task->msg_len);
+	ret = com_recv_msg(man_sockfd, &new_ta_task->msg, &new_ta_task->msg_len, fd, &fd_count);
+
 	if (ret != 0) {
 
 		free(new_ta_task);
@@ -218,14 +221,28 @@ void receive_from_manager(struct epoll_event *event, int man_sockfd)
 		return;
 	}
 
+
 	if (com_get_msg_type(new_ta_task->msg, &msg_type)) {
 		OT_LOG(LOG_ERR, "Failed retrieve message type");
 		goto skip;
 	}
 
+	header = new_ta_task->msg;
+	header->shareable_fd_count = 0;
+	if (fd_count > 0 && fd_count <= 4) {
+
+		header->shareable_fd_count = fd_count;
+		memcpy(header->shareable_fd, fd, sizeof(int)*fd_count);
+	}
+
 	if (msg_type == COM_TYPE_RESPONSE) {
 		response_msg = new_ta_task->msg;
 		free(new_ta_task);
+
+		while (header->shareable_fd_count > 0) {
+			header->shareable_fd_count--;
+			close(header->shareable_fd[header->shareable_fd_count]);
+		}
 
 		/* Inform the TA thread that we have a task to be completed */
 		if (pthread_cond_signal(&block_condition)) {

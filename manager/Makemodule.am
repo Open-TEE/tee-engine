@@ -34,6 +34,6 @@ libManagerApi_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/manager \
 	-iquote $(top_srcdir)/internal_api
 
-libManagerApi_la_LIBADD = -lcrypt\
+libManagerApi_la_LIBADD = \
 	libCommonApi.la
 
