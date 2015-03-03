@@ -27,12 +27,17 @@
 #include <sys/eventfd.h>
 #include <errno.h>
 #include <linux/limits.h>
+#include <syslog.h>
 
 #include "subprocess.h"
 #include "conf_parser.h"
 #include "core_control_resources.h"
 #include "tee_logging.h"
 #include "args.h"
+
+#ifdef ANDROID
+#include "android_defines.h"
+#endif
 
 static struct core_control control_params;
 
