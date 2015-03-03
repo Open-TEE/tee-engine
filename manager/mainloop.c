@@ -31,6 +31,10 @@
 #include "ta_dir_watch.h"
 #include "tee_logging.h"
 
+#ifdef ANDROID
+#include "android_defines.h"
+#endif
+
 /* Maximum epoll events */
 #define MAX_CURR_EVENTS 5
 
@@ -75,7 +79,11 @@ int event_close_sock;
  */
 static int init_sock(int *pub_sockfd)
 {
+#ifdef ANDROID
+	const char *sock_path = "/data/open_tee_sock";
+#else
 	const char *sock_path = "/tmp/open_tee_sock";
+#endif
 	struct sockaddr_un sock_addr;
 
 	if (remove(sock_path) == -1 && errno != ENOENT) {

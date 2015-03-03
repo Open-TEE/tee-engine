@@ -19,12 +19,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <sys/socket.h>
 
 #include "com_protocol.h"
 #include "core_control_resources.h"
 #include "io_thread.h"
 #include "extern_resources.h"
-#include "socket_help.h"
 #include "tee_list.h"
 #include "tee_logging.h"
 
@@ -139,6 +139,8 @@ static int check_event_fd_epoll_status(struct epoll_event *event)
 
 static void send_msg(proc_t send_to, void *msg, int msg_len)
 {
+	struct com_msg_hdr *msg_header;
+
 	if (msg_len == 0)
 		return; /* Not an error */
 
@@ -147,10 +149,12 @@ static void send_msg(proc_t send_to, void *msg, int msg_len)
 		return;
 	}
 
-	if (com_send_msg(send_to->sockfd, msg, msg_len) != msg_len) {
+	msg_header = msg;
+
+	if (com_send_msg(send_to->sockfd, msg, msg_len,
+			msg_header->shareable_fd, msg_header->shareable_fd_count) != msg_len)
 		proc_fd_err(errno, send_to);
-		return;
-	}
+
 }
 
 static void send_err_msg(proc_t proc, uint32_t err, uint32_t err_origin)
@@ -163,7 +167,7 @@ static void send_err_msg(proc_t proc, uint32_t err, uint32_t err_origin)
 	err_msg.ret = err;
 	err_msg.ret_origin = err_origin;
 
-	if (com_send_msg(proc->sockfd, &err_msg, sizeof(struct com_msg_error)) !=
+	if (com_send_msg(proc->sockfd, &err_msg, sizeof(struct com_msg_error), NULL, 0) !=
 	    sizeof(struct com_msg_error))
 		proc_fd_err(errno, proc);
 }
@@ -176,7 +180,7 @@ static void send_new_conn_err(int fd)
 	err_msg.msg_hdr.msg_type = COM_TYPE_RESPONSE;
 	err_msg.ret = TEE_ERROR_GENERIC;
 
-	com_send_msg(fd, &err_msg, sizeof(struct com_msg_ca_init_tee_conn));
+	com_send_msg(fd, &err_msg, sizeof(struct com_msg_ca_init_tee_conn), NULL, 0);
 }
 
 static int create_uninitialized_client_proc(proc_t *proc, int sockfd)
@@ -314,6 +318,7 @@ err_1:
 void read_fd_and_add_todo_queue(struct epoll_event *event)
 {
 	struct manager_msg *new_man_msg = NULL;
+	struct com_msg_hdr *msg_header;
 	int ret;
 
 	/* Process might have cleaned up */
@@ -339,7 +344,8 @@ void read_fd_and_add_todo_queue(struct epoll_event *event)
 	new_man_msg->proc = event->data.ptr;
 
 	/* Add message */
-	ret = com_recv_msg(new_man_msg->proc->sockfd, &new_man_msg->msg, &new_man_msg->msg_len);
+	ret = com_recv_msg(new_man_msg->proc->sockfd, &new_man_msg->msg, &new_man_msg->msg_len,
+			   NULL, NULL);
 	if (ret == -1) {
 		OT_LOG(LOG_ERR, "Socket error");
 		proc_fd_err(errno, new_man_msg->proc);
@@ -350,6 +356,9 @@ void read_fd_and_add_todo_queue(struct epoll_event *event)
 		OT_LOG(LOG_ERR, "Received corrupted/partial message, discarding");
 		goto err;
 	}
+
+	msg_header = new_man_msg->msg;
+	msg_header->shareable_fd_count = 0;
 
 	/* Add task to manager message queue */
 	if (add_man_msg_todo_queue_and_notify(new_man_msg)) {

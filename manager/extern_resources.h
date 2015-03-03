@@ -50,6 +50,7 @@ struct proc_shm_mem {
 	struct list_head list;
 	char name[SHM_MEM_NAME_LEN];
 	int size;
+	int fd;
 };
 
 /* These are for tasks received from the caller going to the logic thread */

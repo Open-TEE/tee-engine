@@ -14,7 +14,7 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <crypt.h>
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -23,7 +23,11 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
-#include <uuid/uuid.h>
+#include <sys/sysinfo.h>
+
+#ifdef ANDROID
+#include <cutils/ashmem.h>
+#endif /* ANDROID */
 
 #include "com_protocol.h"
 #include "extern_resources.h"
@@ -36,46 +40,32 @@
  * \brief generate_random_path Generate a path, that can be used for a shared memory path
  * Memory for the path will be allocated in this function but it is the callers responsibility
  * to free the memory when finished.
- * \param name [OUT] the path that is created by this function
- * \param name_len [in] name-buffer length
+ * \param name [OUT] the path that is created by this function, need to be atleast SHM_MEM_NAME_LEN
  * \return 0 on success, 1 in case of error
  */
-static int generate_random_path(char *name, size_t name_len)
+static int generate_random_path(char *name)
 {
-	time_t time_val;
-	const char *str_time;
-	uuid_t uuid;
-	char salt[20];
-	char *raw_rand, *tmp;
+	struct timespec realtime;
+	struct timespec boottime;
+	int n = SHM_MEM_NAME_LEN - 1;
 
-	time_val = time(NULL);
-	str_time = ctime(&time_val);
-	uuid_generate(uuid);
+	clock_gettime(CLOCK_BOOTTIME, &boottime);
+	clock_gettime(CLOCK_REALTIME, &realtime);
 
-	memcpy(salt, "$5$", 3);
-	memcpy(salt + 3, uuid, sizeof(uuid));
-	salt[19] = '$';
+	memset(name, 't', SHM_MEM_NAME_LEN-1);
+	name[0] = '/';
+	name[SHM_MEM_NAME_LEN-1] = 0;
+	sprintf(name+1, "%llu", (unsigned long long)boottime.tv_sec);
+	sprintf(name+15, "%llu", (unsigned long long)realtime.tv_nsec);
+	sprintf(name+30, "%llu", (unsigned long long)realtime.tv_sec);
 
-	raw_rand = strrchr(crypt(str_time, salt), '$');
-
-	/* shm_open does not like to have path seperators '/' in teh name so remove them */
-	tmp = raw_rand;
-	while (*tmp) {
-		if (*tmp == '/')
-			*tmp = '_';
-		tmp++;
+	/* strip null characters back to t , except terminating */
+	while (n--) {
+		if (name[n] == 0)
+			name[n] = 't';
 	}
 
-	if ((strlen(raw_rand) + 1) <= name_len) {
-		memcpy(name, raw_rand, strlen(raw_rand) + 1);
-		name[0] = '/';
-		return 0;
-
-	}
-
-	/* Buffer too small */
-	OT_LOG(LOG_ERR, "Name buffer too small");
-	return 1;
+	return 0;
 }
 
 
@@ -106,7 +96,7 @@ void open_shm_region(struct manager_msg *man_msg)
 	/* The name of the shm object files should be in the format "/somename\0"
 	 * so we will generate a random name that matches this format based of of
 	 * a UUID */
-	if (generate_random_path(open_shm->name, SHM_MEM_NAME_LEN)) {
+	if (generate_random_path(open_shm->name)) {
 		open_shm->return_code = TEEC_ERROR_GENERIC;
 		goto err_1;
 	}
@@ -115,13 +105,22 @@ void open_shm_region(struct manager_msg *man_msg)
 	memcpy(new_shm->name, open_shm->name, SHM_MEM_NAME_LEN);
 	new_shm->size = open_shm->size;
 
+#ifdef ANDROID
+	fd = ashmem_create_region(open_shm->name, open_shm->size);
+
+#else
 	fd = shm_open(open_shm->name, (O_RDWR | O_CREAT | O_EXCL),
 		      (S_IRUSR | S_IRGRP | S_IWUSR | S_IWGRP));
+
+#endif /* ANDROID */
+
 	if (fd == -1) {
 		OT_LOG(LOG_ERR, "Failed to open the shared memory");
 		open_shm->return_code = TEEC_ERROR_GENERIC;
 		goto err_1;
 	}
+
+#ifndef ANDROID
 
 	if (ftruncate(fd, open_shm->size) == -1) {
 		OT_LOG(LOG_ERR, "Failed to truncate: %d", errno);
@@ -129,9 +128,13 @@ void open_shm_region(struct manager_msg *man_msg)
 		goto err_2;
 	}
 
+#endif /* not ANDROID */
+
 	/* We have finished with the file handle as it has been mapped so don't leak it */
-	close(fd);
 	list_add_after(&new_shm->list, &man_msg->proc->shm_mem.list);
+	open_shm->msg_hdr.shareable_fd[0] = fd;
+	open_shm->msg_hdr.shareable_fd_count = 1;
+	new_shm->fd = fd;
 
 out:
 	open_shm->msg_hdr.msg_type = COM_TYPE_RESPONSE;
@@ -139,7 +142,9 @@ out:
 	return;
 
 err_2:
+#ifndef ANDROID
 	shm_unlink(open_shm->name);
+#endif
 	close(fd);
 err_1:
 	free(new_shm);
@@ -158,7 +163,10 @@ void unlink_shm_region(struct manager_msg *man_msg)
 		shm_entry = LIST_ENTRY(pos, struct proc_shm_mem, list);
 		if (!strncmp(shm_entry->name, unlink_shm->name, SHM_MEM_NAME_LEN)) {
 			list_unlink(&shm_entry->list);
+			close(shm_entry->fd);
+#ifndef ANDROID
 			shm_unlink(unlink_shm->name);
+#endif
 			free(shm_entry);
 			return;
 		}
@@ -173,7 +181,10 @@ void unlink_all_shm_region(proc_t proc)
 	LIST_FOR_EACH_SAFE(pos, la, &proc->shm_mem.list) {
 		shm_entry = LIST_ENTRY(pos, struct proc_shm_mem, list);
 		list_unlink(&shm_entry->list);
+		close(shm_entry->fd);
+#ifndef ANDROID
 		shm_unlink(shm_entry->name);
+#endif
 		free(shm_entry);
 	}
 }
