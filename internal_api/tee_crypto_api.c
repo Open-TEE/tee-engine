@@ -840,7 +840,7 @@ static bool object_type_compatible_to_op(uint32_t obj_type, uint32_t op_mode)
 		return false;
 
 	if (obj_type == TEE_TYPE_RSA_PUBLIC_KEY &&
-	    !(op_mode == TEE_MODE_SIGN || op_mode == TEE_MODE_ENCRYPT))
+	    !(op_mode == TEE_MODE_VERIFY || op_mode == TEE_MODE_ENCRYPT))
 		return false;
 
 	return true;
@@ -1269,11 +1269,6 @@ static TEE_Result malloc_and_cpy_rsa_key(TEE_OperationHandle operation, TEE_Obje
 				TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 			}
 		}
-	}
-
-	if (!RSA_check_key(RSA_key(operation))) {
-		OT_LOG(LOG_ERR, "cpy RSA key: Not a proper RSA key (openssl failure)\n");
-		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
 	return TEE_SUCCESS;

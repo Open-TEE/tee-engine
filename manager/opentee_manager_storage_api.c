@@ -787,6 +787,7 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 		case TEE_TYPE_HMAC_SHA512:
 		case TEE_TYPE_GENERIC_SECRET:
 		case TEE_TYPE_RSA_KEYPAIR:
+                case TEE_TYPE_RSA_PUBLIC_KEY:
 		case TEE_TYPE_DSA_PUBLIC_KEY:
 		case TEE_TYPE_DSA_KEYPAIR:
 			if (!malloc_for_attrs(cpy_obj, attr_count))
