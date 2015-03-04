@@ -675,7 +675,8 @@ static FILE *request_for_create(void *objectID, size_t objectIDLen, size_t reque
 		return NULL;
 	}
 
-	if ((request_access & TEE_DATA_FLAG_EXCLUSIVE) && (access(name_with_dir_path, F_OK) == 0)) {
+	if (!(request_access & TEE_DATA_FLAG_EXCLUSIVE) &&
+	    (access(name_with_dir_path, F_OK) == 0)) {
 		OT_LOG(LOG_ERR, "Access conflict: File exists\n");
 		goto ret;
 	}
