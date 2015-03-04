@@ -1464,12 +1464,39 @@ static int get_rsa_salt(TEE_Attribute *params, uint32_t paramCount)
 	return -1;
 }
 
+static uint32_t get_openssl_NID_value(uint32_t algorithm)
+{
+	switch (algorithm) {
+	case TEE_ALG_RSASSA_PKCS1_V1_5_MD5:
+		return NID_md5;
+
+	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA1:
+		return NID_sha1;
+
+	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA224:
+		return NID_sha224;
+
+	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
+		return NID_sha256;
+
+	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
+		return NID_sha384;
+
+	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
+		return NID_sha512;
+
+	default:
+		return 0;
+	}
+}
+
 static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle operation, void *digest,
 							uint32_t dig_len, void *signature,
 							uint32_t sig_len, TEE_Attribute *params,
 							uint32_t paramCount, int *salt,
 							unsigned char **rsa_mod_len_buf,
-							uint32_t *rsa_mod_len, const EVP_MD **hash)
+							uint32_t *rsa_mod_len, const EVP_MD **hash,
+							uint32_t *NID_value)
 {
 	if (!digest || !signature) {
 		OT_LOG(LOG_ERR, "rsa_sign_ver_generic_checks: Digest or Sig buf NULL\n");
@@ -1481,6 +1508,9 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 
 	/* Load hash */
 	*hash = load_evp_asym_hash(operation);
+
+	/* Openssl NID value */
+	*NID_value = get_openssl_NID_value(operation->operation_info.algorithm);
 
 	/* Digest should match to algorithm */
 	if (dig_len != int2uint32(EVP_MD_size(*hash))) {
@@ -1587,42 +1617,6 @@ static bool add_rsa_signature_padding(TEE_OperationHandle operation, void *EM, v
 	return true;
 }
 
-static bool verify_rsa_signature(TEE_OperationHandle operation, void *EM, void *mHash,
-				 uint32_t mHash_len, const EVP_MD *hash, int salt)
-{
-	switch (operation->operation_info.algorithm) {
-	case TEE_ALG_RSASSA_PKCS1_V1_5_MD5:
-	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA1:
-	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA224:
-	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
-	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
-	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
-		/* Padding is removed during decryption */
-		if (bcmp(EM, mHash, mHash_len))
-			return false;
-
-		break;
-
-	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
-	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA224:
-	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
-	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
-	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
-		if (!RSA_verify_PKCS1_PSS_mgf1(RSA_key(operation), mHash, hash, hash, EM, salt)) {
-			OT_LOG(LOG_ERR, "verify_rsa_signature: Bad signature\n");
-			return false;
-		}
-
-		break;
-
-	default:
-		OT_LOG(LOG_ERR, "verify_rsa_signature: Alg not supported\n");
-		return false;
-	}
-
-	return true;
-}
-
 static TEE_Result rsa_sign(TEE_OperationHandle operation, TEE_Attribute *params,
 			   uint32_t paramCount, void *digest, uint32_t digestLen, void *signature,
 			   uint32_t *signatureLen)
@@ -1632,11 +1626,12 @@ static TEE_Result rsa_sign(TEE_OperationHandle operation, TEE_Attribute *params,
 	int write_bytes;
 	const EVP_MD *hash = NULL;
 	unsigned char *rsa_mod_len_buf = NULL;
-	uint32_t rsa_mod_len;
+	uint32_t rsa_mod_len, NID_value;
 
 	ret = rsa_sign_ver_generic_checks_and_setup(operation, digest, digestLen, signature,
 						    *signatureLen, params, paramCount, &salt,
-						    &rsa_mod_len_buf, &rsa_mod_len, &hash);
+						    &rsa_mod_len_buf, &rsa_mod_len, &hash,
+						    &NID_value);
 	if (ret != TEE_SUCCESS)
 		return ret; /* Err msg has been written to log */
 
@@ -1650,8 +1645,14 @@ static TEE_Result rsa_sign(TEE_OperationHandle operation, TEE_Attribute *params,
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
-		write_bytes = RSA_private_encrypt(digestLen, rsa_mod_len_buf, signature,
-						  RSA_key(operation), RSA_PKCS1_PADDING);
+		write_bytes = RSA_sign(NID_value, rsa_mod_len_buf, digestLen,
+				       signature, signatureLen, RSA_key(operation));
+
+		if (write_bytes == 0) {
+			OT_LOG(LOG_ERR, "rsa signature failed\n");
+			TEE_Panic(TEE_ERROR_GENERIC);
+		}
+
 		break;
 
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
@@ -1661,20 +1662,20 @@ static TEE_Result rsa_sign(TEE_OperationHandle operation, TEE_Attribute *params,
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		write_bytes = RSA_private_encrypt(rsa_mod_len, rsa_mod_len_buf, signature,
 						  RSA_key(operation), RSA_NO_PADDING);
+
+		if (write_bytes == -1) {
+			OT_LOG(LOG_ERR, "rsa signature failed\n");
+			TEE_Panic(TEE_ERROR_GENERIC);
+		}
+
+		*signatureLen = write_bytes;
 		break;
 
 	default:
-		OT_LOG(LOG_ERR, "rsa_sign: Not sup asym sig alg\n");
-		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
-		write_bytes = 0; /* Suppress compiler warning */
-	}
-
-	if (write_bytes == -1) {
-		OT_LOG(LOG_ERR, "rsa_sign: encrypting failed\n");
+		OT_LOG(LOG_ERR, "Not sup asym sig alg\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
-	*signatureLen = write_bytes;
 	free(rsa_mod_len_buf);
 	return ret;
 }
@@ -1684,14 +1685,14 @@ static TEE_Result rsa_ver(TEE_OperationHandle operation, TEE_Attribute *params, 
 {
 	TEE_Result ret = TEE_SUCCESS;
 	int salt = 0;
-	int write_bytes;
 	const EVP_MD *hash = NULL;
 	unsigned char *rsa_mod_len_buf = NULL;
-	uint32_t rsa_mod_len;
+	uint32_t rsa_mod_len, NID_value;;
 
 	ret = rsa_sign_ver_generic_checks_and_setup(operation, digest, digestLen, signature,
 						    signatureLen, params, paramCount, &salt,
-						    &rsa_mod_len_buf, &rsa_mod_len, &hash);
+						    &rsa_mod_len_buf, &rsa_mod_len, &hash,
+						    &NID_value);
 	if (ret != TEE_SUCCESS)
 		return ret; /* Err msg has been written to log */
 
@@ -1702,8 +1703,11 @@ static TEE_Result rsa_ver(TEE_OperationHandle operation, TEE_Attribute *params, 
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
-		write_bytes = RSA_public_decrypt(signatureLen, signature, rsa_mod_len_buf,
-						 RSA_key(operation), RSA_PKCS1_PADDING);
+
+		if (RSA_verify(NID_value, digest, digestLen,
+			       signature, signatureLen, RSA_key(operation)) == 0)
+			ret = TEE_ERROR_SIGNATURE_INVALID;
+
 		break;
 
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
@@ -1711,23 +1715,23 @@ static TEE_Result rsa_ver(TEE_OperationHandle operation, TEE_Attribute *params, 
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
-		write_bytes = RSA_public_decrypt(signatureLen, signature, rsa_mod_len_buf,
-						 RSA_key(operation), RSA_NO_PADDING);
+
+		if (RSA_public_decrypt(signatureLen, signature, rsa_mod_len_buf,
+				       RSA_key(operation), RSA_NO_PADDING) == -1) {
+			OT_LOG(LOG_ERR, "decrypting failed\n");
+			TEE_Panic(TEE_ERROR_GENERIC);
+		}
+
+		if (!RSA_verify_PKCS1_PSS_mgf1(RSA_key(operation), digest,
+					       hash, hash, rsa_mod_len_buf, salt))
+			ret = TEE_ERROR_SIGNATURE_INVALID;
+
 		break;
 
 	default:
-		OT_LOG(LOG_ERR, "rsa_ver: Not sup asym ver alg\n");
-		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
-		write_bytes = 0; /* Suppress compiler warning */
-	}
-
-	if (write_bytes == -1) {
-		OT_LOG(LOG_ERR, "rsa_ver: decrypting failed\n");
+		OT_LOG(LOG_ERR, "Not sup asym ver alg\n");
 		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
-
-	if (!verify_rsa_signature(operation, rsa_mod_len_buf, digest, digestLen, hash, salt))
-		ret = TEE_ERROR_SIGNATURE_INVALID; /* Err msg has been written to log */
 
 	free(rsa_mod_len_buf);
 	return ret;
