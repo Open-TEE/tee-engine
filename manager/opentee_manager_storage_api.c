@@ -1335,27 +1335,35 @@ error:
 
 TEE_Result MGR_TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whence whence)
 {
+	long begin;
+	long end;
+	long pos;
 
 	if (object == NULL || object->per_object.object_file == NULL)
 		return TEE_ERROR_GENERIC;
 
-	/* convert whence to seek */
-	switch (whence) {
-	case TEE_DATA_SEEK_END:
-		whence = SEEK_END;
-		break;
-	case TEE_DATA_SEEK_SET:
-		whence = SEEK_SET;
-		break;
-	case TEE_DATA_SEEK_CUR:
-		whence = SEEK_CUR;
-		break;
-	}
+	begin = object->per_object.data_begin;
+	end = object->per_object.data_begin + object->per_object.data_size;
+	pos = object->per_object.data_position;
 
-	object->per_object.data_position += offset;
+	/* if whence is SEEK_CUR should stay as current pos */
+	if (whence == TEE_DATA_SEEK_END)
+		pos = end;
+	else if (whence == TEE_DATA_SEEK_SET)
+		pos = begin;
+
+	pos += offset;
+
+	/* check for overflow or underflow */
+	if (pos > end)
+		pos = end;
+	else if (pos < begin)
+		pos = begin;
+
+	object->per_object.data_position = pos;
 
 	/* TODO: If fseek fail -> kabum, so some solution is needed */
-	if (fseek(object->per_object.object_file, offset, whence) != 0)	{
+	if (fseek(object->per_object.object_file, pos, SEEK_SET) != 0) {
 		OT_LOG(LOG_ERR, "Fseek failed at seek data\n");
 		return TEE_ERROR_GENERIC;
 	}
