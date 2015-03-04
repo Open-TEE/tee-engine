@@ -20,6 +20,8 @@
 #include "tee_storage_api.h"
 #include "tee_object_handle.h"
 
+extern TEE_UUID current_TA_uuid;
+
 /* object handling */
 TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
 					uint32_t flags, TEE_ObjectHandle *object);

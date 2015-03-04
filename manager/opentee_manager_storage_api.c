@@ -59,6 +59,8 @@ static char *secure_storage_path;
 
 static struct storage_enumerator *enumerators_head;
 
+TEE_UUID current_TA_uuid;
+
 struct storage_enumerator {
 	struct storage_enumerator *next;
 	DIR *dir;
@@ -103,18 +105,15 @@ static void __attribute__((destructor)) storage_ext_cleanup()
  */
 static bool get_uuid(char *uuid)
 {
-	char UUID_test[] = "1234567890123456789012345678901234567890";
 	size_t i;
 
 	if (uuid == NULL)
 		return false;
 
 	for (i = 0; i < sizeof(TEE_UUID); ++i)
-		sprintf(uuid + i * 2, "%02x", *((unsigned char *)UUID_test + i));
+		sprintf(uuid + i * 2, "%02x", *((unsigned char *)&current_TA_uuid + i));
 
 	uuid[TEE_UUID_LEN_HEX] = '\0';
-
-	memcpy(uuid, UUID_test, TEE_UUID_LEN_HEX);
 
 	return true;
 }

@@ -2014,6 +2014,12 @@ void *logic_thread_mainloop(void *arg)
 			free_manager_msg(handled_msg);
 			continue;
 		    }
+
+			if (handled_msg->proc->p_type == proc_t_TA) {
+				memcpy(&current_TA_uuid,
+				       &handled_msg->proc->content.process.ta_uuid,
+				       sizeof(current_TA_uuid));
+			}
 		}
 
 		switch (com_msg_name) {
@@ -2074,6 +2080,8 @@ void *logic_thread_mainloop(void *arg)
 			OT_LOG(LOG_ERR, "Unknow message, ignore");
 			free_manager_msg(handled_msg);
 		}
+
+		memset(&current_TA_uuid, 0, sizeof(current_TA_uuid));
 	}
 
 	/* should never reach here */
