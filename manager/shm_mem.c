@@ -143,6 +143,7 @@ err_2:
 	close(fd);
 err_1:
 	free(new_shm);
+	open_shm->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
 	add_msg_out_queue_and_notify(man_msg);
 }
 
