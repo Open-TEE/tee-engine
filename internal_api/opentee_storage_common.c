@@ -9,8 +9,9 @@
 #include "tee_object_handle.h"
 #include "tee_storage_api.h"
 #include "tee_logging.h"
+#include "opentee_storage_common.h"
 
-inline int keysize_in_bits(uint32_t key_in_bits)
+int keysize_in_bits(uint32_t key_in_bits)
 {
 	if (key_in_bits <= UINT_MAX - 7)
 		key_in_bits += 7;
@@ -18,7 +19,7 @@ inline int keysize_in_bits(uint32_t key_in_bits)
 	return key_in_bits / 8;
 }
 
-inline bool is_value_attribute(uint32_t attr_ID)
+bool is_value_attribute(uint32_t attr_ID)
 {
 	/* Bit [29]:
 	 * 0: buffer attribute

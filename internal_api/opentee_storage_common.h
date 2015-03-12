@@ -2,8 +2,8 @@
 #define __OPENTEE_STORAGE_COMMON__
 
 /* functions to check properties */
-inline int keysize_in_bits(uint32_t key_in_bits);
-inline bool is_value_attribute(uint32_t attr_ID);
+int keysize_in_bits(uint32_t key_in_bits);
+bool is_value_attribute(uint32_t attr_ID);
 
 /* internal handle memory helpers */
 uint32_t object_attribute_size(TEE_ObjectHandle object);
