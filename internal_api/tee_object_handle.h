@@ -23,10 +23,12 @@
 struct persistant_object_info {
 	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
 	size_t obj_id_len;
-	FILE *object_file;
-	long data_begin;
-	long data_size;
-	long data_position;
+	uint32_t  storage_blob_id;
+	size_t data_begin;
+	/* size after data begin */
+	size_t data_size;
+	/* position in stream starting from data_begin */
+	size_t data_position;
 };
 
 struct __TEE_ObjectHandle {
