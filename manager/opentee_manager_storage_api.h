@@ -25,7 +25,7 @@ extern TEE_UUID current_TA_uuid;
 /* object handling */
 TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
 					uint32_t flags, TEE_ObjectHandle *object);
-TEE_Result MGR_TEE_CloseObject(TEE_ObjectHandle object);
+void MGR_TEE_CloseObject(TEE_ObjectHandle object);
 TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
 					  uint32_t flags, TEE_ObjectHandle attributes,
 					  void *initialData, size_t initialDataLen,

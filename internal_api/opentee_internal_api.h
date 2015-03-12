@@ -75,10 +75,11 @@ struct com_mrg_rename_persistent {
 	void *objectHandleOffset;
 } __attribute__((aligned));
 
-struct com_mrg_move_data_persistent {
-	void *objectHandleOffset;
+struct com_mrg_transfer_data_persistent {
+	uint32_t per_data_pos;
+	uint32_t per_data_size;
 	size_t dataSize;
-	void *data;
+	void *dataOffset;
 } __attribute__((aligned));
 
 struct com_mrg_enum_command {
