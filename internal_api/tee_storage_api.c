@@ -1198,7 +1198,7 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t
 								     initialDataLen);
 
 					if (!object)
-						free_object(tempHandle);
+						TEE_CloseObject(tempHandle);
 				}
 			}
 
@@ -1217,7 +1217,7 @@ TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void *newObjectID
 	TEE_Result retVal = TEE_ERROR_OUT_OF_MEMORY;
 	struct com_mrg_rename_persistent *renameParams;
 
-	if (object == NULL || !(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
+	if (object == NULL) {
 		OT_LOG(LOG_ERR, "ObjectID buffer is NULL or not persistant object\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
@@ -1225,12 +1225,6 @@ TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void *newObjectID
 	if (newObjectIDLen > TEE_OBJECT_ID_MAX_LEN) {
 		OT_LOG(LOG_ERR, "ObjectID length too big\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
-	}
-
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META) ||
-	    object->per_object.object_file == NULL) {
-		OT_LOG(LOG_ERR, "TEE_RenamePerObj: No rights or not valid object\n");
-		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
 	payload.size = offsetof(struct com_mrg_rename_persistent, objectHandleOffset) +
@@ -1260,17 +1254,6 @@ void TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object)
 
 	if (object == NULL)
 		return;
-
-	if (!(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
-		OT_LOG(LOG_ERR, "Not a persistant object\n");
-		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
-	}
-
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META) ||
-	    object->per_object.object_file == NULL) {
-		OT_LOG(LOG_ERR, "TEE_CloAndDelPerObj: No rights or not valid object\n");
-		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
-	}
 
 	payload.size = calculate_object_handle_size(object);
 	payload.data = TEE_Malloc(payload.size, 0);
@@ -1443,24 +1426,14 @@ TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
 TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size, uint32_t *count)
 {
 	struct com_mgr_invoke_cmd_payload payload, returnPayload;
+	struct com_mrg_transfer_data_persistent *return_transfer_struct;
 	TEE_Result retVal = TEE_ERROR_OUT_OF_MEMORY;
-	size_t returnObjSize;
 	void *writePtr;
 
 	if (object == NULL || buffer == NULL || count == NULL)
 		return TEE_ERROR_GENERIC;
 
 	*count = 0;
-
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_READ)) {
-		OT_LOG(LOG_ERR, "Can not read persistant object data: Not proper access rights\n");
-		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
-	}
-
-	if (object->per_object.object_file == NULL) {
-		OT_LOG(LOG_ERR, "Not a proper persistant object. Something is wrong\n");
-		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
-	}
 
 	payload.size = calculate_object_handle_size(object) + sizeof(size_t);
 	payload.data = TEE_Malloc(payload.size, 0);
@@ -1475,11 +1448,12 @@ TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size
 					      &payload, &returnPayload);
 
 		if (retVal == TEE_SUCCESS && returnPayload.size > 0) {
-			memcpy(&returnObjSize, returnPayload.data, sizeof(size_t));
-			*count = returnObjSize;
+			return_transfer_struct = returnPayload.data;
+			*count = return_transfer_struct->dataSize;
 
-			memcpy(buffer, returnPayload.data + sizeof(size_t), *count);
-			object->per_object.data_position += *count;
+			memcpy(buffer, &return_transfer_struct->dataOffset, *count);
+			object->per_object.data_position = return_transfer_struct->per_data_pos;
+			object->per_object.data_size = return_transfer_struct->per_data_size;
 
 			TEE_Free(returnPayload.data);
 		}
@@ -1492,22 +1466,13 @@ TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size
 TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t size)
 {
 	struct com_mgr_invoke_cmd_payload payload, returnPayload;
+	struct com_mrg_transfer_data_persistent *return_transfer_struct;
+
 	TEE_Result retVal = TEE_ERROR_OUT_OF_MEMORY;
 	void *writePtr;
 
 	if (object == NULL || buffer == NULL)
 		return TEE_ERROR_GENERIC;
-
-	if (!(object->objectInfo.handleFlags &
-	      (TEE_DATA_FLAG_ACCESS_WRITE | TEE_DATA_FLAG_ACCESS_WRITE_META))) {
-		OT_LOG(LOG_ERR, "Can not write persistant object data: Not proper access rights\n");
-		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
-	}
-
-	if (object->per_object.object_file == NULL) {
-		OT_LOG(LOG_ERR, "Not a proper persistant object. Something is wrong\n");
-		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
-	}
 
 	payload.size = calculate_object_handle_size(object) + size + sizeof(size_t);
 	payload.data = TEE_Malloc(payload.size, 0);
@@ -1524,9 +1489,13 @@ TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t siz
 					      COM_MGR_CMD_ID_WRITE_OBJ_DATA,
 					      &payload, &returnPayload);
 
-		if (retVal == TEE_SUCCESS)
-			object->per_object.data_position += size;
+		if (retVal == TEE_SUCCESS && returnPayload.size > 0) {
+			return_transfer_struct = returnPayload.data;
+			object->per_object.data_position = return_transfer_struct->per_data_pos;
+			object->per_object.data_size = return_transfer_struct->per_data_size;
 
+			TEE_Free(returnPayload.data);
+		}
 		TEE_Free(payload.data);
 	}
 	return retVal;
@@ -1535,21 +1504,13 @@ TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t siz
 TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)
 {
 	struct com_mgr_invoke_cmd_payload payload, returnPayload;
+	struct com_mrg_transfer_data_persistent *return_transfer_struct;
+
 	TEE_Result retVal = TEE_ERROR_OUT_OF_MEMORY;
 	void *writePtr;
 
 	if (object == NULL)
 		return TEE_ERROR_GENERIC;
-
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META)) {
-		OT_LOG(LOG_ERR, "Can not write persistent object data: Not proper access rights\n");
-		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
-	}
-
-	if (object->per_object.object_file == NULL) {
-		OT_LOG(LOG_ERR, "Not a proper persistent object. Something is wrong\n");
-		TEE_Panic(TEE_ERROR_ACCESS_DENIED);
-	}
 
 	payload.size = calculate_object_handle_size(object) + sizeof(size);
 	payload.data = TEE_Malloc(payload.size, 0);
@@ -1564,12 +1525,12 @@ TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)
 					      &payload, &returnPayload);
 
 		if (retVal == TEE_SUCCESS && returnPayload.size > 0) {
-			memcpy(&object->per_object.data_position, returnPayload.data,
-			       sizeof(object->per_object.data_position));
-			memcpy(&object->per_object.data_size,
-			       returnPayload.data + sizeof(object->per_object.data_position),
-			       sizeof(object->per_object.data_size));
+			return_transfer_struct = returnPayload.data;
+			object->per_object.data_position = return_transfer_struct->per_data_pos;
+			object->per_object.data_size = return_transfer_struct->per_data_size;
+
 			TEE_Free(returnPayload.data);
+
 		}
 		TEE_Free(payload.data);
 	}
@@ -1580,11 +1541,13 @@ TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)
 TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whence whence)
 {
 	struct com_mgr_invoke_cmd_payload payload, returnPayload;
+	struct com_mrg_transfer_data_persistent *return_transfer_struct;
+
 	TEE_Result retVal = TEE_ERROR_OUT_OF_MEMORY;
 	void *writePtr;
 	uint32_t copyWhence = whence;
 
-	if (object == NULL || object->per_object.object_file == NULL)
+	if (object == NULL)
 		return TEE_ERROR_GENERIC;
 
 	payload.size = calculate_object_handle_size(object) + sizeof(int32_t) + sizeof(uint32_t);
@@ -1602,8 +1565,10 @@ TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whenc
 					      &payload, &returnPayload);
 
 		if (retVal == TEE_SUCCESS && returnPayload.size > 0) {
-			memcpy(&object->per_object.data_position, returnPayload.data,
-			       sizeof(object->per_object.data_position));
+			return_transfer_struct = returnPayload.data;
+			object->per_object.data_position = return_transfer_struct->per_data_pos;
+			object->per_object.data_size = return_transfer_struct->per_data_size;
+
 			TEE_Free(returnPayload.data);
 		}
 
