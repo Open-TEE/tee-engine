@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "3a1371a2_0134dddc",
+        "filename": "internal_api/Android.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-03-13T08:02:37Z",
+      "side": 1,
+      "message": "empty file?",
+      "revId": "7dd7a8caeec090fbed73540e6ee27687f159cf06",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
