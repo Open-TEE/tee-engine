@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "com_protocol.h"
 #include "core_control_resources.h"
@@ -186,17 +187,12 @@ static int create_uninitialized_client_proc(proc_t *proc, int sockfd)
 		return 1;
 	}
 
-	h_table_create(&(*proc)->content.process.links, CA_SES_APPROX_COUNT);
-	if (!(*proc)->content.process.links) {
-		OT_LOG(LOG_ERR, "Out of memory");
-		free(*proc);
-		return 1;
-	}
+	INIT_LIST(&(*proc)->links);
+	INIT_LIST(&(*proc)->content.process.shm_mem.list);
 
-	(*proc)->content.process.status = proc_uninitialized;
+	(*proc)->status = proc_uninitialized;
 	(*proc)->sockfd = sockfd;
 	(*proc)->p_type = proc_t_CA;
-	INIT_LIST(&(*proc)->content.process.shm_mem.list);
 
 	return 0;
 }

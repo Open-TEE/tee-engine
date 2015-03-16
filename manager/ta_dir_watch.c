@@ -35,21 +35,25 @@
 #include "epoll_wrapper.h"
 #include "extern_resources.h"
 #include "io_thread.h"
-#include "h_table.h"
 #include "ta_dir_watch.h"
+#include "tee_list.h"
 #include "tee_ta_properties.h"
 #include "tee_logging.h"
+
+struct loaded_ta {
+	struct list_head list;
+	struct trusted_app_propertie *ta;
+};
 
 static const char *seek_section_name = PROPERTY_SEC_NAME;
 struct core_control *control_params;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-static HASHTABLE ta_dir_table;
+static struct loaded_ta ta_dir_table;
 static int inotify_fd;
 static int inotify_wd;
 static uint32_t inotify_flags =
-    IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO;
+		IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO;
 #define BUF_LEN (10 * (sizeof(struct inotify_event) + NAME_MAX + 1))
-#define ESTIMATE_COUNT_OF_TAS 40
 
 static void free_ta(struct trusted_app_propertie *ta)
 {
@@ -80,7 +84,8 @@ static void free_ta(struct trusted_app_propertie *ta)
 
 static void remove_all_tas()
 {
-	struct trusted_app_propertie *ta = NULL;
+	struct loaded_ta *ta = NULL;
+	struct list_head *pos, *la;
 
 	if (ta_dir_watch_lock_mutex()) {
 		/* Lets hope that errot clear it shelf..
@@ -88,16 +93,13 @@ static void remove_all_tas()
 		return;
 	}
 
-	h_table_init_stepper(ta_dir_table);
+	if (!list_is_empty(&ta_dir_table.list)) {
 
-	while (1) {
-		ta = h_table_step(ta_dir_table);
-		if (!ta)
-			break;
-
-		h_table_remove(ta_dir_table, (unsigned char *)&ta->user_config.appID,
-			       sizeof(TEE_UUID));
-		free_ta(ta);
+		LIST_FOR_EACH_SAFE(pos, la, &ta_dir_table.list) {
+			ta = LIST_ENTRY(pos, struct loaded_ta, list);
+			list_unlink(&ta->list);
+			free_ta(ta->ta);
+		}
 	}
 
 	ta_dir_watch_unlock_mutex();
@@ -105,31 +107,32 @@ static void remove_all_tas()
 
 static bool does_name_and_uuid_in_table(struct trusted_app_propertie *new_ta)
 {
-	struct trusted_app_propertie *ta_in_table;
+	struct loaded_ta *ta_in_table;
+	struct list_head *pos;
 	bool ret = false;
 
 	if (ta_dir_watch_lock_mutex())
 		return true;
 
-	h_table_init_stepper(ta_dir_table);
+	if (list_is_empty(&ta_dir_table.list))
+		goto end;
 
-	while (1) {
-		ta_in_table = h_table_step(ta_dir_table);
-		if (!ta_in_table)
-			break;
+	LIST_FOR_EACH(pos, &ta_dir_table.list) {
 
-		if (!strncasecmp(ta_in_table->ta_so_name, new_ta->ta_so_name,
-				 strlen(ta_in_table->ta_so_name))) {
+		ta_in_table = LIST_ENTRY(pos, struct loaded_ta, list);
+
+		if (!strncasecmp(ta_in_table->ta->ta_so_name, new_ta->ta_so_name,
+				 strlen(ta_in_table->ta->ta_so_name))) {
 			OT_LOG(LOG_ERR, "TA .so name: %s : is already in use",
-			       ta_in_table->ta_so_name);
+			       ta_in_table->ta->ta_so_name);
 			ret = true;
 			goto end;
 		}
 
-		if (!bcmp(&ta_in_table->user_config.appID, &new_ta->user_config.appID,
+		if (!memcmp(&ta_in_table->ta->user_config.appID, &new_ta->user_config.appID,
 			  sizeof(TEE_UUID))) {
 			OT_LOG(LOG_ERR, "TAs has same UUID: %s : %s",
-			       ta_in_table->ta_so_name, new_ta->ta_so_name);
+			       ta_in_table->ta->ta_so_name, new_ta->ta_so_name);
 			ret = true;
 			goto end;
 		}
@@ -143,7 +146,7 @@ end:
 static void add_new_ta(char *name)
 {
 	char *ta_with_path = NULL;
-	struct trusted_app_propertie *new_ta_propertie = NULL;
+	struct loaded_ta *new_ta_propertie = NULL;
 	size_t ta_user_config_size = sizeof(struct gpd_ta_config);
 
 	if (!name || strlen(name) > TA_MAX_FILE_NAME) {
@@ -157,21 +160,21 @@ static void add_new_ta(char *name)
 		goto err;
 	}
 
-	new_ta_propertie = calloc(1, sizeof(struct trusted_app_propertie));
+	new_ta_propertie = calloc(1, sizeof(struct loaded_ta));
 	if (!new_ta_propertie) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		goto err;
 	}
 
-	if (!get_data_from_elf(ta_with_path, seek_section_name, &new_ta_propertie->user_config,
+	if (!get_data_from_elf(ta_with_path, seek_section_name, &new_ta_propertie->ta->user_config,
 			       &ta_user_config_size)) {
 		OT_LOG(LOG_ERR, "%s : properties section is not found", name);
 		goto err;
 	}
 
-	memcpy(&new_ta_propertie->ta_so_name, name, strlen(name));
+	memcpy(&new_ta_propertie->ta->ta_so_name, name, strlen(name));
 
-	if (does_name_and_uuid_in_table(new_ta_propertie))
+	if (does_name_and_uuid_in_table(new_ta_propertie->ta))
 		goto err;
 
 	if (ta_dir_watch_lock_mutex()) {
@@ -181,15 +184,8 @@ static void add_new_ta(char *name)
 	}
 
 	/* Not optimatez */
-	free(h_table_remove(ta_dir_table, (unsigned char *)&new_ta_propertie->user_config.appID,
-			    sizeof(TEE_UUID)));
-
-	if (h_table_insert(ta_dir_table, (unsigned char *)&new_ta_propertie->user_config.appID,
-			   sizeof(TEE_UUID), new_ta_propertie)) {
-		OT_LOG(LOG_ERR, "table insert failed");
-		free(new_ta_propertie);
-		/* No move to error, lets free mutex */
-	}
+	delete_ta(new_ta_propertie->ta->ta_so_name);
+	list_add_before(&new_ta_propertie->list, &ta_dir_table.list);
 
 	ta_dir_watch_unlock_mutex();
 
@@ -204,7 +200,8 @@ err:
 
 static void delete_ta(char *name)
 {
-	struct trusted_app_propertie *ta = NULL;
+	struct loaded_ta *ta = NULL;
+	struct list_head *pos, *la;
 
 	if (ta_dir_watch_lock_mutex()) {
 		/* Lets hope that errot clear it shelf..
@@ -212,23 +209,23 @@ static void delete_ta(char *name)
 		return;
 	}
 
-	h_table_init_stepper(ta_dir_table);
+	if (list_is_empty(&ta_dir_table.list))
+		goto end;
 
-	while (1) {
-		ta = h_table_step(ta_dir_table);
-		if (!ta)
-			break;
+	LIST_FOR_EACH_SAFE(pos, la, &ta_dir_table.list) {
 
-		if (strncasecmp(name, ta->ta_so_name, TA_MAX_FILE_NAME) != 0)
+		ta = LIST_ENTRY(pos, struct loaded_ta, list);
+
+		if (strncasecmp(name, ta->ta->ta_so_name, TA_MAX_FILE_NAME) != 0)
 			continue;
 
 		/* Found */
-		h_table_remove(ta_dir_table, (unsigned char *)&ta->user_config.appID,
-			       sizeof(TEE_UUID));
-		free_ta(ta);
+		list_unlink(&ta->list);
+		free_ta(ta->ta);
 		break;
 	}
 
+end:
 	ta_dir_watch_unlock_mutex();
 }
 
@@ -366,14 +363,9 @@ reinit_ta_properties:
 
 int ta_dir_watch_init(struct core_control *c_params, int *man_ta_dir_watch_fd)
 {
-	ta_dir_table = NULL;
 	control_params = c_params;
 
-	h_table_create(&ta_dir_table, ESTIMATE_COUNT_OF_TAS);
-	if (!ta_dir_table) {
-		OT_LOG(LOG_ERR, "Hashtable creation failed");
-		goto err;
-	}
+	INIT_LIST(&ta_dir_table.list);
 
 	if (init_notifys() == -1)
 		goto err;
@@ -396,7 +388,6 @@ void ta_dir_watch_cleanup()
 	inotify_rm_watch(inotify_fd, inotify_wd);
 	close(inotify_fd);
 	remove_all_tas();
-	h_table_free(ta_dir_table);
 
 	while (pthread_mutex_destroy(&mutex)) {
 		if (errno != EBUSY) {
@@ -409,10 +400,25 @@ void ta_dir_watch_cleanup()
 
 struct trusted_app_propertie *ta_dir_watch_props(TEE_UUID *get_ta_uuid)
 {
+	struct loaded_ta *ta = NULL;
+	struct list_head *pos;
+
 	if (!ta_dir_table || !get_ta_uuid)
 		return NULL;
 
-	return h_table_get(ta_dir_table, (unsigned char *)get_ta_uuid, sizeof(TEE_UUID));
+	if (list_is_empty(&ta_dir_table.list))
+		goto end;
+
+	LIST_FOR_EACH(pos, &ta_dir_table.list) {
+
+		ta = LIST_ENTRY(pos, struct loaded_ta, list);
+
+		if (!memcmp(&ta->ta->user_config.appID, get_ta_uuid, sizeof(TEE_UUID)))
+			return ta->ta;
+	}
+
+end:
+	return ta->ta;
 }
 
 int ta_dir_watch_lock_mutex()
