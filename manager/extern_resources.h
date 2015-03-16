@@ -21,7 +21,6 @@
 #include <stdint.h>
 
 #include "com_protocol.h"
-#include "h_table.h"
 #include "tee_list.h"
 #include "tee_shared_data_types.h"
 
@@ -63,10 +62,10 @@ extern struct manager_msg done_queue;
 extern struct sock_to_close socks_to_close;
 
 /* Client connections */
-extern HASHTABLE clientApps;
+extern struct __proc clientApps;
 
 /* Loaded TAs (ready accept open sessions) */
-extern HASHTABLE trustedApps;
+extern struct __proc trustedApps;
 
 /* Data structures mutex */
 extern pthread_mutex_t CA_table_mutex;
@@ -92,7 +91,7 @@ extern int event_close_sock;
 
 /* Different proc type will be handeled in different way */
 enum proc_type {
-	proc_t_CA,
+	proc_t_CA = 1,
 	proc_t_TA,
 	proc_t_session,
 	proc_t_last, /* Used for "looping" through enumerator */
@@ -100,7 +99,7 @@ enum proc_type {
 
 /* Note: Might not be complite */
 enum proc_status {
-	proc_uninitialized,
+	proc_uninitialized = 1,
 	proc_initialized,
 	proc_active,
 	proc_disconnected,
@@ -111,7 +110,7 @@ enum proc_status {
 
 /* Note: Might not be complite */
 enum session_status {
-	sess_initialized,
+	sess_initialized = 1,
 	sess_active,
 	sess_closed,
 	sess_panicked,
@@ -123,29 +122,26 @@ enum session_status {
  * Process: ClientApp or TrustedApp
  * Sessionlink: Links CA or TA session to another session.
  * Point: Sessionlink is representing opened session between applicatons */
+struct sesLink {
+	enum proc_type p_type;
+	struct list_head list;
+	proc_t owner;
+	struct sesLink *to;
+	uintptr_t sess_ctx;
+	uint64_t session_id;
+	int waiting_response_msg;
+	enum session_status status;
+};
+
 struct __proc {
 	int sockfd;
 	enum proc_type p_type;
-
-	union {
-		struct {
-			proc_t owner;
-			proc_t to;
-			uintptr_t sess_ctx;
-			int session_id;
-			int waiting_response_msg;
-			enum session_status status;
-		} sesLink;
-
-		struct {
-			TEE_UUID ta_uuid;
-			HASHTABLE links; /* Hashtable */
-			struct proc_shm_mem shm_mem;
-			pid_t pid;
-			enum proc_status status;
-		} process;
-
-	} content;
+	struct list_head list;
+	TEE_UUID ta_uuid;
+	struct sesLink links;
+	struct proc_shm_mem shm_mem;
+	pid_t pid;
+	enum proc_status status;
 };
 
 #endif /* __EXTERN_RESOURCES_H__ */
