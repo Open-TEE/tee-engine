@@ -71,6 +71,7 @@ typedef struct __TEE_ObjectEnumHandle* TEE_ObjectEnumHandle;
 #define TEE_DATA_FLAG_SHARE_READ		0x00000010
 #define TEE_DATA_FLAG_SHARE_WRITE		0x00000020
 #define TEE_DATA_FLAG_CREATE			0x00000200
+#define TEE_DATA_FLAG_OVERWRITE                 0x00000400
 #define TEE_DATA_FLAG_EXCLUSIVE			0x00000400
 
 /* Usage Constants */
