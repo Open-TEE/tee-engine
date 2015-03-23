@@ -1257,7 +1257,8 @@ static void invoke_mgr_cmd(struct manager_msg *man_msg)
 
 	/* Function is only valid for proc FDs */
 	if (man_msg->proc->p_type == proc_t_session ||
-	    man_msg->proc->content.process.status != proc_active) {
+	    !(man_msg->proc->content.process.status == proc_active ||
+	      man_msg->proc->content.process.status == proc_initialized)) {
 		OT_LOG(LOG_ERR, "Invalid sender or senders status");
 		goto discard_msg;
 	}
