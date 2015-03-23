@@ -18,7 +18,7 @@
 #define __TA_IO_THREAD_H__
 
 #include "epoll_wrapper.h"
-#include "ta_extern_resources.h"
+#include "ta_control_params.h"
 
 /*!
  * \brief free_task

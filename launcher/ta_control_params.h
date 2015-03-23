@@ -14,8 +14,8 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TA_EXTERN_RESOURCES_H__
-#define __TA_EXTERN_RESOURCES_H__
+#ifndef __TA_CONTROL_PARAMS_H__
+#define __TA_CONTROL_PARAMS_H__
 
 #include <pthread.h>
 #include <stdbool.h>
@@ -64,4 +64,4 @@ extern int event_fd;
 extern bool cancellation_mask;
 extern bool cancellation_flag;
 
-#endif /* __TA_EXTERN_RESOURCES_H__ */
+#endif /* __TA_CONTROL_PARAMS_H__ */
