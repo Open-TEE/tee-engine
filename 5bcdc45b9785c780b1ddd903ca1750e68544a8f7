@@ -50,6 +50,29 @@
       "revId": "5bcdc45b9785c780b1ddd903ca1750e68544a8f7",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_ccdcbe77",
+        "filename": "internal_api/Android.mk",
+        "patchSetId": 5
+      },
+      "lineNbr": 19,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-03-23T12:59:07Z",
+      "side": 1,
+      "message": "should not have commented out variables",
+      "range": {
+        "startLine": 18,
+        "startChar": 0,
+        "endLine": 19,
+        "endChar": 53
+      },
+      "revId": "5bcdc45b9785c780b1ddd903ca1750e68544a8f7",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
