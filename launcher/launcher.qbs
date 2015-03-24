@@ -41,5 +41,7 @@ DynamicLibrary {
         "ta_io_thread.c",
         "ta_process.h",
         "ta_process.c",
+        "ta_signal_handler.h",
+        "ta_signal_handler.c",
     ]
 }
