@@ -727,12 +727,12 @@ static void map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uin
 
 		} else if (TEE_PARAM_TYPE_GET(operation->paramTypes, i) == TEEC_MEMREF_WHOLE) {
 
-			if (operation->params[i].flags & TEEC_MEM_INPUT)
-				types[i] = TEE_PARAM_TYPE_MEMREF_INPUT;
-			if (operation->params[i].flags & TEEC_MEM_OUTPUT)
-				types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
-			if (operation->params[i].flags & (TEEC_MEM_INPUT | TEEC_MEM_OUTPUT))
+			if (operation->params[i].flags == (TEEC_MEM_INPUT | TEEC_MEM_OUTPUT))
 				types[i] = TEE_PARAM_TYPE_MEMREF_INOUT;
+			else if (operation->params[i].flags & TEEC_MEM_INPUT)
+				types[i] = TEE_PARAM_TYPE_MEMREF_INPUT;
+			else if (operation->params[i].flags & TEEC_MEM_OUTPUT)
+				types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
 
 		} else {
 			OT_LOG(LOG_ERR, "Warning: Unknow parameter type")
