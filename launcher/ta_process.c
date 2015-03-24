@@ -34,6 +34,7 @@
 #include "ta_internal_thread.h"
 #include "ta_io_thread.h"
 #include "ta_process.h"
+#include "ta_signal_handler.h"
 #include "tee_logging.h"
 
 /* we have 2 threads to synchronize so we can achieve this with static condition and statix mutex */
@@ -188,7 +189,7 @@ int ta_process_loop(void *arg)
 		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);
 		if (event_count == -1) {
 			if (errno == EINTR) {
-
+				ta_signal_handler(ctl_params);
 				continue;
 			}
 
@@ -206,6 +207,7 @@ int ta_process_loop(void *arg)
 				reply_to_manager(&cur_events[i], man_sockfd);
 
 			} else if (cur_events[i].data.fd == ctl_params->self_pipe_fd) {
+				ta_signal_handler(ctl_params);
 
 			} else {
 				OT_LOG(LOG_ERR, "unknown event source");
