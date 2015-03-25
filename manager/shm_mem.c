@@ -131,7 +131,7 @@ void open_shm_region(struct manager_msg *man_msg)
 
 	/* We have finished with the file handle as it has been mapped so don't leak it */
 	close(fd);
-	list_add_after(&new_shm->list, &man_msg->proc->content.process.shm_mem.list);
+	list_add_after(&new_shm->list, &man_msg->proc->shm_mem.list);
 
 out:
 	open_shm->msg_hdr.msg_type = COM_TYPE_RESPONSE;
@@ -153,7 +153,7 @@ void unlink_shm_region(struct manager_msg *man_msg)
 	struct proc_shm_mem *shm_entry;
 	struct list_head *pos, *la;
 
-	LIST_FOR_EACH_SAFE(pos, la, &man_msg->proc->content.process.shm_mem.list) {
+	LIST_FOR_EACH_SAFE(pos, la, &man_msg->proc->shm_mem.list) {
 
 		shm_entry = LIST_ENTRY(pos, struct proc_shm_mem, list);
 		if (!strncmp(shm_entry->name, unlink_shm->name, SHM_MEM_NAME_LEN)) {
@@ -170,7 +170,7 @@ void unlink_all_shm_region(proc_t proc)
 	struct proc_shm_mem *shm_entry;
 	struct list_head *pos, *la;
 
-	LIST_FOR_EACH_SAFE(pos, la, &proc->content.process.shm_mem.list) {
+	LIST_FOR_EACH_SAFE(pos, la, &proc->shm_mem.list) {
 		shm_entry = LIST_ENTRY(pos, struct proc_shm_mem, list);
 		list_unlink(&shm_entry->list);
 		shm_unlink(shm_entry->name);

@@ -26,7 +26,6 @@
 
 #include "com_protocol.h"
 #include "extern_resources.h"
-#include "h_table.h"
 #include "io_thread.h"
 #include "shm_mem.h"
 #include "socket_help.h"
@@ -84,13 +83,12 @@ static void add_and_notify_io_sock_to_close(int fd)
 	}
 }
 
-static void free_sess(proc_t del_sess)
+static void free_sess(struct sesLink *del_sess)
 {
 	if (!del_sess || del_sess->p_type != proc_t_session)
 		return;
 
-	h_table_remove(del_sess->content.sesLink.owner->content.process.links,
-		       (unsigned char *)&del_sess->content.sesLink.session_id, sizeof(uint64_t));
+	/* Placeholder, if there is a need for some special operations */
 
 	free(del_sess);
 	del_sess = NULL;
@@ -98,7 +96,8 @@ static void free_sess(proc_t del_sess)
 
 static void free_proc(proc_t del_proc)
 {
-	proc_t proc_sess = NULL;
+	struct sesLink *proc_sess = NULL;
+	struct list_head *pos, *la;
 
 	if (!del_proc || del_proc->p_type == proc_t_session)
 		return;
@@ -108,43 +107,36 @@ static void free_proc(proc_t del_proc)
 
 	/* Free process sessions
 	 * Note: It is a programmer error, if he close session and there is session open */
-	h_table_init_stepper(del_proc->content.process.links);
-	while (1) {
-		proc_sess = h_table_step(del_proc->content.process.links);
-		if (proc_sess)
-			free(h_table_remove(del_proc->content.process.links,
-					    (unsigned char *)
-					    (&proc_sess->content.sesLink.session_id),
-					    sizeof(uint64_t)));
-		else
-			break;
+	if (!list_is_empty(&del_proc->links.list)) {
+
+		LIST_FOR_EACH_SAFE(pos, la, &del_proc->links.list) {
+
+			proc_sess = LIST_ENTRY(pos, struct sesLink, list);
+			list_unlink(&proc_sess->list);
+			free_sess(proc_sess);
+		}
 	}
 
-	/* Free session hashtable */
-	h_table_free(del_proc->content.process.links);
-
-	/* Client process spesific operations */
+	/* Do CA/TA spesific cleanup operations */
 	if (del_proc->p_type == proc_t_CA) {
+		/* Client process spesific operations */
 
 		if (pthread_mutex_lock(&CA_table_mutex) == -1) {
 			OT_LOG(LOG_ERR, "Failed to lock mutex")
 			goto skip;
 		}
 
-		h_table_remove(clientApps,
-			       (unsigned char *)&del_proc->sockfd, sizeof(del_proc->sockfd));
+		list_unlink(&del_proc->list);
 
 		if (pthread_mutex_unlock(&CA_table_mutex))
 			OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+
+	} else if (del_proc->p_type == proc_t_TA) {
+		/* Trusted process spesific operations */
+		release_ta_file_locks(del_proc);
+		list_unlink(&del_proc->list);
 	}
 skip:
-	/* Trusted process spesific operations */
-	if (del_proc->p_type == proc_t_TA) {
-		release_ta_file_locks(del_proc);
-		h_table_remove(trustedApps,
-			       (unsigned char *)&del_proc->content.process.pid, sizeof(pid_t));
-	}
-
 	add_and_notify_io_sock_to_close(del_proc->sockfd);
 
 	free(del_proc);
@@ -222,13 +214,13 @@ static void ca_init_context(struct manager_msg *man_msg)
 
 	/* Message can be received only from client */
 	if (man_msg->proc->p_type != proc_t_CA ||
-	    man_msg->proc->content.process.status != proc_uninitialized) {
+	    man_msg->proc->status != proc_uninitialized) {
 		OT_LOG(LOG_ERR, "Message can be received only from clientApp");
 		goto discard_msg;
 	}
 
 	/* Valid message. Updated CA proc status to initialized */
-	man_msg->proc->content.process.status = proc_active;
+	man_msg->proc->status = proc_active;
 
 	/* Response to CA */
 	init_msg->msg_hdr.msg_type = COM_TYPE_RESPONSE;
@@ -245,20 +237,22 @@ discard_msg:
 
 static bool active_sess_in_ta(proc_t ta_proc)
 {
-	proc_t sess;
+	struct list_head *pos;
+	struct sesLink *sess;
 
-	h_table_init_stepper(ta_proc->content.process.links);
+	if (list_is_empty(&ta_proc->links.list))
+		return false;
 
-	while (1) {
-		sess = h_table_step(ta_proc->content.process.links);
-		if (!sess)
-			return false;
+	LIST_FOR_EACH(pos, &ta_proc->links.list) {
+
+		sess = LIST_ENTRY(pos, struct sesLink, list);
 
 		/* Initialized means that there might be an open session message out */
-		if (sess->content.sesLink.status == sess_active ||
-		    sess->content.sesLink.status == sess_initialized)
+		if (sess->status == sess_active || sess->status == sess_initialized)
 			return true;
 	}
+
+	return false;
 }
 
 /*!
@@ -276,7 +270,7 @@ static int should_ta_destroy(proc_t ta_proc)
 	if (ta_dir_watch_lock_mutex())
 		return -1; /* Err logged */
 
-	ta_properties = ta_dir_watch_props(&ta_proc->content.process.ta_uuid);
+	ta_properties = ta_dir_watch_props(&ta_proc->ta_uuid);
 	if (!ta_properties) {
 		OT_LOG(LOG_ERR, "TA with requested UUID is not found");
 		ret = -1;
@@ -300,12 +294,12 @@ unlock:
 	return ret;
 }
 
-static void send_close_sess_msg(proc_t ta_sess)
+static void send_close_sess_msg(struct sesLink *ta_sess)
 {
 	struct manager_msg *man_msg = NULL;
 
 	if (ta_sess->p_type != proc_t_session ||
-	    ta_sess->content.sesLink.owner->p_type != proc_t_TA) {
+	    ta_sess->owner->p_type != proc_t_TA) {
 		OT_LOG(LOG_ERR, "Not session or not session in TA process\n");
 		return;
 	}
@@ -324,16 +318,15 @@ static void send_close_sess_msg(proc_t ta_sess)
 	}
 
 	man_msg->msg_len = sizeof(struct com_msg_close_session);
-	man_msg->proc = ta_sess->content.sesLink.owner;
+	man_msg->proc = ta_sess->owner;
 
 	((struct com_msg_close_session *)man_msg->msg)->msg_hdr.msg_name =
 			COM_MSG_NAME_CLOSE_SESSION;
 	((struct com_msg_close_session *)man_msg->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
-	((struct com_msg_close_session *)man_msg->msg)->sess_ctx =
-			ta_sess->content.sesLink.sess_ctx;
+	((struct com_msg_close_session *)man_msg->msg)->sess_ctx = ta_sess->sess_ctx;
 
 	((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy =
-	    should_ta_destroy(ta_sess->content.sesLink.owner);
+	    should_ta_destroy(ta_sess->owner);
 	if (((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy == -1) {
 		free_manager_msg(man_msg);
 		return;
@@ -342,19 +335,42 @@ static void send_close_sess_msg(proc_t ta_sess)
 	add_msg_out_queue_and_notify(man_msg);
 }
 
+static struct sesLink *get_sesLink_by_ID(proc_t proc, uint64_t get_sess_id)
+{
+	struct list_head *pos;
+	struct sesLink *sess;
+
+	if (list_is_empty(&proc->links.list))
+		return NULL;
+
+	LIST_FOR_EACH(pos, &proc->links.list) {
+
+		sess = LIST_ENTRY(pos, struct sesLink, list);
+
+		if (sess->session_id == get_sess_id)
+			return sess;
+	}
+
+	return NULL;
+}
+
 static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
 {
-	free(h_table_remove(owner->content.process.links, (unsigned char *)(&sess_id),
-			    sizeof(uint64_t)));
+	struct sesLink *session;
 
-	free(h_table_remove(to->content.process.links, (unsigned char *)(&sess_id),
-			    sizeof(uint64_t)));
+	session = get_sesLink_by_ID(owner, sess_id);
+	list_unlink(&session->list);
+	free_sess(session);
+
+	session = get_sesLink_by_ID(to, sess_id);
+	list_unlink(&session->list);
+	free_sess(session);
 }
 
 static void open_session_response(struct manager_msg *man_msg)
 {
 	struct com_msg_open_session *open_resp_msg = man_msg->msg;
-	proc_t ta_session;
+	struct sesLink *ta_session;
 	proc_t resp_msg_to_proc;
 
 	/* Message can be received only from trusted App! */
@@ -364,58 +380,54 @@ static void open_session_response(struct manager_msg *man_msg)
 
 	}
 
-	if (!(man_msg->proc->content.process.status == proc_active ||
-	      man_msg->proc->content.process.status == proc_initialized)) {
+	if (!(man_msg->proc->status == proc_active ||
+	      man_msg->proc->status == proc_initialized)) {
 		OT_LOG(LOG_ERR, "Invalid sender status");
 		goto ignore_msg;
 	}
 
 	/* Sender is TA. Lets get TA session from TA proc session links */
-	ta_session =
-	    h_table_get(man_msg->proc->content.process.links,
-			(unsigned char *)(&open_resp_msg->msg_hdr.sess_id), sizeof(uint64_t));
+	ta_session = get_sesLink_by_ID(man_msg->proc, open_resp_msg->msg_hdr.sess_id);
 	if (!ta_session) {
 		OT_LOG(LOG_ERR, "Invalid session ID");
 		goto ignore_msg;
 	}
 
-	if (ta_session->content.sesLink.status != sess_initialized ||
-	    ta_session->content.sesLink.to->content.sesLink.status != sess_initialized) {
+	if (ta_session->status != sess_initialized || ta_session->to->status != sess_initialized) {
 		OT_LOG(LOG_ERR, "Invalid session status");
 		goto ignore_msg;
 	}
 
 	/* Session might be removed, because return code is not TEE_SUCCESS. Therefore
 	 * we need save "address" to where this message to send */
-	resp_msg_to_proc = ta_session->content.sesLink.to->content.sesLink.owner;
+	resp_msg_to_proc = ta_session->to->owner;
 
 	/* Check received message answer and proceed according to that */
 
 	/* Take session ctx pointer */
-	ta_session->content.sesLink.sess_ctx = open_resp_msg->sess_ctx;
+	ta_session->sess_ctx = open_resp_msg->sess_ctx;
 
 	if (open_resp_msg->return_code_open_session != TEE_SUCCESS) {
 
 		/* Although session will be removed, it is marked as closed. It is done,
 		 * because then we can call send_close_sess_msg() and it can decide if TA needs
 		 * to be terminated. */
-		ta_session->content.sesLink.status = sess_closed;
-		ta_session->content.sesLink.to->content.sesLink.status = sess_closed;
+		ta_session->status = sess_closed;
+		ta_session->to->status = sess_closed;
 
 		send_close_sess_msg(ta_session);
 
-		remove_session_between(ta_session->content.sesLink.owner,
-				       ta_session->content.sesLink.to->content.sesLink.owner,
+		remove_session_between(ta_session->owner, ta_session->to->owner,
 				       open_resp_msg->msg_hdr.sess_id);
 
 	} else {
 
 		/* Update session status to active */
-		ta_session->content.sesLink.status = sess_active;
-		ta_session->content.sesLink.to->content.sesLink.status = sess_active;
+		ta_session->status = sess_active;
+		ta_session->to->status = sess_active;
 
 		/* Proc can be set active if TA create entry point func is executed */
-		ta_session->content.sesLink.owner->content.process.status = proc_active;
+		ta_session->owner->status = proc_active;
 	}
 
 	/* Send message to its initial sender
@@ -445,34 +457,32 @@ static int create_uninitialized_ta_proc(proc_t *new_ta, TEE_UUID *ta_uuid)
 		return 1;
 	}
 
-	h_table_create(&(*new_ta)->content.process.links, TA_SESS_COUNT_EST);
-	if (!(*new_ta)->content.process.links) {
-		OT_LOG(LOG_ERR, "Out of memory");
-		free(*new_ta);
-		return 1;
-	}
+	INIT_LIST(&(*new_ta)->links.list);
+	INIT_LIST(&(*new_ta)->shm_mem.list);
 
+	(*new_ta)->status = proc_uninitialized;
+	memcpy(&(*new_ta)->ta_uuid, ta_uuid, sizeof(TEE_UUID));
 	(*new_ta)->p_type = proc_t_TA;
-	(*new_ta)->content.process.status = proc_uninitialized;
-	memcpy(&(*new_ta)->content.process.ta_uuid, ta_uuid, sizeof(TEE_UUID));
-	INIT_LIST(&(*new_ta)->content.process.shm_mem.list);
 
 	return 0;
 }
 
 static proc_t get_ta_by_uuid(TEE_UUID *uuid)
 {
+	struct list_head *pos;
 	proc_t ta = NULL;
 
-	h_table_init_stepper(trustedApps);
+	if (list_is_empty(&trustedApps.list))
+		return ta;
 
-	while (1) {
-		ta = (proc_t)h_table_step(trustedApps);
-		if (!ta)
-			break; /* TA is not running, return NULL */
+	LIST_FOR_EACH(pos, &trustedApps.list) {
 
-		if (!bcmp(&ta->content.process.ta_uuid, uuid, sizeof(TEE_UUID)))
+		ta = LIST_ENTRY(pos, struct __proc, list);
+
+		if (!memcmp(&ta->ta_uuid, uuid, sizeof(TEE_UUID)))
 			break; /* TA running, return proc ptr */
+		else
+			ta = NULL;
 	}
 
 	return ta;
@@ -534,43 +544,39 @@ err:
 	return 1;
 }
 
-static int alloc_and_init_sessLink(struct __proc **sesLink, proc_t owner, proc_t to,
+static int alloc_and_init_sessLink(struct sesLink **sesLink, proc_t owner, struct sesLink *to,
 				   uint64_t sess_id)
 {
-	*sesLink = (proc_t)calloc(1, sizeof(struct __proc));
+	*sesLink = (struct sesLink *)calloc(1, sizeof(struct sesLink));
 	if (!*sesLink) {
 		OT_LOG(LOG_ERR, "Out of memory");
 		return 1;
 	}
 
 	(*sesLink)->p_type = proc_t_session;
-	(*sesLink)->content.sesLink.status = sess_initialized;
-	(*sesLink)->content.sesLink.owner = owner;
-	(*sesLink)->content.sesLink.to = to;
-	(*sesLink)->content.sesLink.session_id = sess_id;
+	(*sesLink)->status = sess_initialized;
+	(*sesLink)->owner = owner;
+	(*sesLink)->to = to;
+	(*sesLink)->session_id = sess_id;
 
 	return 0;
 }
 
-static int add_new_session_to_proc(proc_t owner, proc_t to, uint64_t session_id,
-				   proc_t *new_sesLink)
+static int add_new_session_to_proc(proc_t owner, struct sesLink *to, uint64_t session_id,
+				   struct sesLink **new_sesLink)
 {
 	if (alloc_and_init_sessLink(new_sesLink, owner, to, session_id))
 		return 1;
 
-	if (h_table_insert(owner->content.process.links, (unsigned char *)&session_id,
-			   sizeof(uint64_t), *new_sesLink)) {
-		OT_LOG(LOG_ERR, "Out of memory");
-		return 1;
-	}
+	list_add_before(&(*new_sesLink)->list, &owner->links.list);
 
 	return 0;
 }
 
 static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
 {
-	proc_t new_owner_ses = NULL;
-	proc_t new_to_ses = NULL;
+	struct sesLink *new_owner_ses = NULL;
+	struct sesLink *new_to_ses = NULL;
 
 	/* Following code will be generating two session link and cross linking sessions to gether
 	 */
@@ -585,8 +591,8 @@ static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
 
 	/* It is initialized to waiting open session message, because immediately
 	 * after this is open session message send out */
-	new_owner_ses->content.sesLink.waiting_response_msg = WAIT_OPEN_SESSION_MSG;
-	new_owner_ses->content.sesLink.to = new_to_ses;
+	new_owner_ses->waiting_response_msg = WAIT_OPEN_SESSION_MSG;
+	new_owner_ses->to = new_to_ses;
 
 	return 0;
 }
@@ -603,8 +609,8 @@ static int create_sesLink(proc_t owner, proc_t to, uint64_t sess_id)
 static bool does_ta_exist_and_connectable(struct manager_msg *man_msg,
 					  proc_t *conn_ta, TEE_UUID *ta_uuid)
 {
-	bool ret = true;
 	struct trusted_app_propertie *ta_propertie;
+	bool ret = true;
 
 	*conn_ta = get_ta_by_uuid(ta_uuid);
 	if (*conn_ta && (*conn_ta)->p_type != proc_t_TA) {
@@ -626,9 +632,9 @@ static bool does_ta_exist_and_connectable(struct manager_msg *man_msg,
 		goto ret;
 	}
 
-	if (*conn_ta && ((*conn_ta)->content.process.status == proc_active ||
-			 (*conn_ta)->content.process.status == proc_initialized ||
-			 (*conn_ta)->content.process.status == proc_uninitialized) &&
+	if (*conn_ta && ((*conn_ta)->status == proc_active ||
+			 (*conn_ta)->status == proc_initialized ||
+			 (*conn_ta)->status == proc_uninitialized) &&
 	    ta_propertie->user_config.singletonInstance &&
 	    !ta_propertie->user_config.multiSession) {
 		/* Singleton and running and not supporting multi session! */
@@ -642,15 +648,15 @@ static bool does_ta_exist_and_connectable(struct manager_msg *man_msg,
 
 	if (*conn_ta && ta_propertie->user_config.singletonInstance) {
 
-		if ((*conn_ta)->content.process.status == proc_active) {
+		if ((*conn_ta)->status == proc_active) {
 			ret = true;
 			goto ret; /* Singleton and TA running */
 		}
 
 		/* TA is being to initialized and we can not predict if initialization will
 		 * success --> do not accept new open session msg */
-		if ((*conn_ta)->content.process.status == proc_initialized ||
-		    (*conn_ta)->content.process.status == proc_uninitialized) {
+		if ((*conn_ta)->status == proc_initialized ||
+		    (*conn_ta)->status == proc_uninitialized) {
 			gen_err_msg_and_add_to_out(man_msg,
 						   TEE_ORIGIN_TEE, TEE_ERROR_ACCESS_CONFLICT);
 			ret = false;
@@ -662,13 +668,13 @@ static bool does_ta_exist_and_connectable(struct manager_msg *man_msg,
 
 	if (*conn_ta && ta_propertie->user_config.instanceKeepAlive) {
 
-		if ((*conn_ta)->content.process.status == proc_active) {
+		if ((*conn_ta)->status == proc_active) {
 			ret = true;
 			goto ret; /* Keep alive and TA running */
 		}
 
-		if ((*conn_ta)->content.process.status == proc_initialized ||
-		    (*conn_ta)->content.process.status == proc_uninitialized) {
+		if ((*conn_ta)->status == proc_initialized ||
+		    (*conn_ta)->status == proc_uninitialized) {
 			gen_err_msg_and_add_to_out(man_msg,
 						   TEE_ORIGIN_TEE, TEE_ERROR_ACCESS_CONFLICT);
 			ret = false;
@@ -694,43 +700,33 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid, pr
 	*new_ta_proc = NULL;
 
 	/* Connection to new TA -> TA will be created */
-	if (create_uninitialized_ta_proc(new_ta_proc, ta_uuid)) {
-		/* Err logged and just send err to sender*/
-		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
-		return 1;
-	}
+	if (create_uninitialized_ta_proc(new_ta_proc, ta_uuid))
+		goto err_1;
 
 	/* Launch new TA */
-	if (comm_launcher_to_launch_ta(man_msg, &(((*new_ta_proc)->sockfd)),
-				       &((*new_ta_proc)->content.process.pid))) {
-		free(*new_ta_proc);
-		return 1; /* Err logged and send */
-	}
+	if (comm_launcher_to_launch_ta(man_msg,
+				       &(((*new_ta_proc)->sockfd)),
+				       &((*new_ta_proc)->pid)))
+		goto err_2;
 
 	/* Note: TA is launched and its init process is on going now on its own proc */
 
-	if (epoll_reg_data((*new_ta_proc)->sockfd, EPOLLIN, *new_ta_proc)) {
-		OT_LOG(LOG_ERR, "Epoll reg error");
-		goto err_1;
-	}
+	if (epoll_reg_data((*new_ta_proc)->sockfd, EPOLLIN, *new_ta_proc))
+		goto err_3;
 
-	if (h_table_insert(trustedApps, (unsigned char *)&((*new_ta_proc)->content.process.pid),
-			   sizeof(pid_t), *new_ta_proc)) {
-		OT_LOG(LOG_ERR, "out of memory");
-		goto err_2;
-	}
+	list_add_before(&(*new_ta_proc)->list, &trustedApps.list);
 
 	/* TA initialization is going on */
-	(*new_ta_proc)->content.process.status = proc_initialized;
+	(*new_ta_proc)->status = proc_initialized;
 
 	return 0;
 
-err_2:
-	epoll_unreg((*new_ta_proc)->sockfd);
-err_1:
+err_3:
 	kill(new_ta_pid, SIGKILL);
+err_2:
 	free_proc(*new_ta_proc);
 	*new_ta_proc = NULL;
+err_1:
 	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 
 	return 1;
@@ -828,7 +824,7 @@ discard_msg:
 static void invoke_cmd(struct manager_msg *man_msg)
 {
 	struct com_msg_invoke_cmd *invoke_msg = man_msg->msg;
-	proc_t session = NULL;
+	struct sesLink *session = NULL;
 
 	/* Valid open session message */
 	if (invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_CMD) {
@@ -837,8 +833,7 @@ static void invoke_cmd(struct manager_msg *man_msg)
 	}
 
 	/* Function is only valid for proc FDs */
-	if (man_msg->proc->p_type == proc_t_session ||
-	    man_msg->proc->content.process.status != proc_active) {
+	if (man_msg->proc->p_type == proc_t_session || man_msg->proc->status != proc_active) {
 		OT_LOG(LOG_ERR, "Invalid sender or senders status");
 		goto discard_msg;
 	}
@@ -850,28 +845,27 @@ static void invoke_cmd(struct manager_msg *man_msg)
 		goto discard_msg;
 	}
 
-	session = h_table_get(man_msg->proc->content.process.links,
-			      (unsigned char *)(&invoke_msg->msg_hdr.sess_id), sizeof(uint64_t));
+	session = get_sesLink_by_ID(man_msg->proc, invoke_msg->msg_hdr.sess_id);
 	if (!session || session->p_type != proc_t_session) {
 		OT_LOG(LOG_ERR, "Session is not found");
 		goto discard_msg;
 	}
 
-	if (session->content.sesLink.status == sess_panicked) {
+	if (session->status == sess_panicked) {
 		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_TARGET_DEAD);
 		free_sess(session);
 		return;
 	}
 
 	if (invoke_msg->msg_hdr.msg_type == COM_TYPE_QUERY) {
-		session->content.sesLink.waiting_response_msg = WAIT_INVOKE_MSG;
-		invoke_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
+		session->waiting_response_msg = WAIT_INVOKE_MSG;
+		invoke_msg->sess_ctx = session->to->sess_ctx;
 
 	} else if (invoke_msg->msg_hdr.msg_type == COM_TYPE_RESPONSE) {
-		session->content.sesLink.to->content.sesLink.waiting_response_msg = WAIT_NO_MSG_OUT;
+		session->to->waiting_response_msg = WAIT_NO_MSG_OUT;
 	}
 
-	man_msg->proc = session->content.sesLink.to->content.sesLink.owner;
+	man_msg->proc = session->to->owner;
 	add_msg_out_queue_and_notify(man_msg);
 
 	return;
@@ -1257,8 +1251,7 @@ static void invoke_mgr_cmd(struct manager_msg *man_msg)
 
 	/* Function is only valid for proc FDs */
 	if (man_msg->proc->p_type == proc_t_session ||
-	    !(man_msg->proc->content.process.status == proc_active ||
-	      man_msg->proc->content.process.status == proc_initialized)) {
+	    !(man_msg->proc->status == proc_active || man_msg->proc->status == proc_initialized)) {
 		OT_LOG(LOG_ERR, "Invalid sender or senders status");
 		goto discard_msg;
 	}
@@ -1373,13 +1366,12 @@ static void ca_finalize_context(struct manager_msg *man_msg)
 	}
 
 	/* Message can be received only from client */
-	if (man_msg->proc->p_type != proc_t_CA ||
-	    man_msg->proc->content.process.status != proc_active) {
+	if (man_msg->proc->p_type != proc_t_CA || man_msg->proc->status != proc_active) {
 		OT_LOG(LOG_ERR, "Invalid sender process or status");
 		goto ignore_msg;
 	}
 
-	man_msg->proc->content.process.status = proc_disconnected;
+	man_msg->proc->status = proc_disconnected;
 
 	/* No more messages from this CA */
 	if (epoll_unreg(man_msg->proc->sockfd))
@@ -1423,7 +1415,7 @@ static void close_session(struct manager_msg *man_msg)
 	struct com_msg_close_session *close_msg = man_msg->msg;
 	proc_t close_ta_proc;
 	proc_t sender_proc = man_msg->proc;
-	proc_t session;
+	struct sesLink *session;
 
 	/* Valid open session message */
 	if (close_msg->msg_hdr.msg_name != COM_MSG_NAME_CLOSE_SESSION ||
@@ -1433,34 +1425,30 @@ static void close_session(struct manager_msg *man_msg)
 	}
 
 	/* Function is only valid for proc FDs */
-	if (man_msg->proc->p_type == proc_t_session ||
-	    man_msg->proc->content.process.status != proc_active) {
+	if (man_msg->proc->p_type == proc_t_session || man_msg->proc->status != proc_active) {
 		OT_LOG(LOG_ERR, "Invalid sender or senders status");
 		goto ignore_msg;
 	}
 
-	session = h_table_get(man_msg->proc->content.process.links,
-			      (unsigned char *)(&close_msg->msg_hdr.sess_id), sizeof(uint64_t));
+	session = get_sesLink_by_ID(man_msg->proc, close_msg->msg_hdr.sess_id);
 	if (!session || session->p_type != proc_t_session) {
 		OT_LOG(LOG_ERR, "Session is not found");
 		goto ignore_msg;
 	}
 
-	if (session->content.sesLink.status == sess_panicked) {
+	if (session->status == sess_panicked) {
 		free_sess(session);
 		return;
 	}
 
 	/* Save session TO proc addr, because session might be removed */
-	close_ta_proc = session->content.sesLink.to->content.sesLink.owner;
+	close_ta_proc = session->to->owner;
 
 	/* Fill in session ctx before session gets removed */
-	close_msg->sess_ctx = session->content.sesLink.to->content.sesLink.sess_ctx;
+	close_msg->sess_ctx = session->to->sess_ctx;
 
 	/* Remove session */
-	remove_session_between(session->content.sesLink.owner,
-			       session->content.sesLink.to->content.sesLink.owner,
-			       session->content.sesLink.session_id);
+	remove_session_between(session->owner, session->to->owner, session->session_id);
 
 	/* Update close message */
 	close_msg->should_ta_destroy = should_ta_destroy(close_ta_proc);
@@ -1469,7 +1457,7 @@ static void close_session(struct manager_msg *man_msg)
 
 	} else if (close_msg->should_ta_destroy == 1) {
 		/* Mark TA as disconnected for signaling that this TA will be removed */
-		close_ta_proc->content.process.status = proc_disconnected;
+		close_ta_proc->status = proc_disconnected;
 
 		/* No more messages from this TA */
 		if (epoll_unreg(close_ta_proc->sockfd))
@@ -1490,41 +1478,34 @@ ignore_msg:
 
 static void set_all_ta_sess_status(proc_t ta, enum session_status new_status)
 {
-	proc_t proc_sess;
+	struct sesLink *proc_sess;
+	struct list_head *pos;
 
-	h_table_init_stepper(ta->content.process.links);
-	while (1) {
-		proc_sess = h_table_step(ta->content.process.links);
-		if (proc_sess) {
-			proc_sess->content.sesLink.to->content.sesLink.status = new_status;
-			proc_sess->content.sesLink.status = new_status;
-		} else {
-			break;
-		}
+	if (list_is_empty(&ta->links.list))
+		return;
+
+	LIST_FOR_EACH(pos, &ta->links.list) {
+
+		proc_sess = LIST_ENTRY(pos, struct sesLink, list);
+			proc_sess->to->status = new_status;
+			proc_sess->status = new_status;
 	}
 }
 
 static void rm_all_ta_sessions(proc_t ta)
 {
-	proc_t proc_sess;
+	struct sesLink *proc_sess;
+	struct list_head *pos, *la;
 
-	h_table_init_stepper(ta->content.process.links);
-	while (1) {
-		proc_sess = h_table_step(ta->content.process.links);
-		if (proc_sess) {
+	if (list_is_empty(&ta->links.list))
+		return;
 
-			/* Remove session from CA */
-			free(h_table_remove(proc_sess->content.sesLink.to->content.process.links,
-					    (unsigned char *)&proc_sess->content.sesLink.session_id,
-					    sizeof(uint64_t)));
+	LIST_FOR_EACH_SAFE(pos, la, &ta->links.list) {
 
-			/* Remove session from TA */
-			free(h_table_remove(proc_sess->content.sesLink.owner->content.process.links,
-					    (unsigned char *)&proc_sess->content.sesLink.session_id,
-					    sizeof(uint64_t)));
-		} else {
-			break;
-		}
+		proc_sess = LIST_ENTRY(pos, struct sesLink, list);
+		remove_session_between(proc_sess->owner,
+				       proc_sess->to->owner,
+				       proc_sess->session_id);
 	}
 }
 
@@ -1592,7 +1573,7 @@ static TEE_Result unmap_create_entry_exit_value(uint8_t ret)
 	return TEE_ERROR_GENERIC; /* Should not end up here */
 }
 
-static void gen_man_and_err_and_send(proc_t ta_sess, uint8_t exit_status, int waited_msg)
+static void gen_man_and_err_and_send(struct sesLink *ta_sess, uint8_t exit_status, int waited_msg)
 {
 	struct manager_msg *man_msg = NULL;
 
@@ -1610,7 +1591,7 @@ static void gen_man_and_err_and_send(proc_t ta_sess, uint8_t exit_status, int wa
 	}
 
 	man_msg->msg_len = sizeof(struct com_msg_error);
-	man_msg->proc = ta_sess->content.sesLink.to->content.sesLink.owner;
+	man_msg->proc = ta_sess->to->owner;
 
 	((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_name = COM_MSG_NAME_ERROR;
 
@@ -1643,16 +1624,17 @@ static void gen_man_and_err_and_send(proc_t ta_sess, uint8_t exit_status, int wa
 
 static void send_err_to_initialized_sess(proc_t ta, uint8_t exit_status)
 {
-	proc_t proc_sess;
+	struct sesLink *proc_sess;
+	struct list_head *pos;
 
-	h_table_init_stepper(ta->content.process.links);
-	while (1) {
+	if (list_is_empty(&ta->links.list))
+		return;
 
-		proc_sess = h_table_step(ta->content.process.links);
-		if (!proc_sess)
-			break;
+	LIST_FOR_EACH(pos, &ta->links.list) {
 
-		if (proc_sess->content.sesLink.status != sess_initialized)
+		proc_sess = LIST_ENTRY(pos, struct sesLink, list);
+
+		if (proc_sess->status != sess_initialized)
 			continue;
 
 		gen_man_and_err_and_send(proc_sess, exit_status, 0);
@@ -1661,47 +1643,57 @@ static void send_err_to_initialized_sess(proc_t ta, uint8_t exit_status)
 
 static void send_err_msg_to_waiting_sess(proc_t ta)
 {
-	proc_t proc_sess;
+	struct sesLink *proc_sess;
+	struct list_head *pos;
 
-	h_table_init_stepper(ta->content.process.links);
-	while (1) {
+	if (list_is_empty(&ta->links.list))
+		return;
 
-		proc_sess = h_table_step(ta->content.process.links);
-		if (!proc_sess)
-			break;
+	LIST_FOR_EACH(pos, &ta->links.list) {
 
-		if (proc_sess->content.sesLink.to->content.sesLink.waiting_response_msg ==
-		    WAIT_NO_MSG_OUT)
+		proc_sess = LIST_ENTRY(pos, struct sesLink, list);
+
+		if (proc_sess->to->waiting_response_msg == WAIT_NO_MSG_OUT)
 			continue;
 
-		proc_sess->content.sesLink.to->content.sesLink.waiting_response_msg =
-				WAIT_NO_MSG_OUT;
-		gen_man_and_err_and_send(proc_sess, 0,
-					 proc_sess->content.sesLink.to->
-					 content.sesLink.waiting_response_msg);
+		proc_sess->to->waiting_response_msg = WAIT_NO_MSG_OUT;
+		gen_man_and_err_and_send(proc_sess, 0, proc_sess->to->waiting_response_msg);
 	}
 }
 
 static void send_err_generic_err_msg(proc_t ta)
 {
-	proc_t proc_sess;
+	struct sesLink *proc_sess;
+	struct list_head *pos;
 
-	h_table_init_stepper(ta->content.process.links);
-	while (1) {
+	if (list_is_empty(&ta->links.list))
+		return;
 
-		proc_sess = h_table_step(ta->content.process.links);
-		if (!proc_sess)
-			break;
+	LIST_FOR_EACH(pos, &ta->links.list) {
 
+		proc_sess = LIST_ENTRY(pos, struct sesLink, list);
 		gen_man_and_err_and_send(proc_sess, 0, 0);
 	}
 }
 
 static void ta_status_change(pid_t ta_pid, int status)
 {
+	struct list_head *pos;
 	proc_t ta = NULL;
 
-	ta = h_table_get(trustedApps, (unsigned char *)&ta_pid, sizeof(pid_t));
+	if (list_is_empty(&trustedApps.list))
+		return;
+
+	LIST_FOR_EACH(pos, &trustedApps.list) {
+
+		ta = LIST_ENTRY(pos, struct __proc, list);
+
+		if (ta->pid == ta_pid)
+			break;
+		else
+			ta = NULL;
+	}
+
 	if (!ta || ta->p_type != proc_t_TA) {
 		OT_LOG(LOG_ERR, "TA is not found or Something else has changed status");
 		return;
@@ -1789,16 +1781,16 @@ static void proc_changed_state(struct manager_msg *man_msg)
 
 static void send_close_msg_to_all_sessions(proc_t ca_proc)
 {
-	proc_t ca_sess;
+	struct sesLink *proc_sess;
+	struct list_head *pos;
 
-	h_table_init_stepper(ca_proc->content.process.links);
-	while (1) {
+	if (list_is_empty(&ca_proc->links.list))
+		return;
 
-		ca_sess = h_table_step(ca_proc->content.process.links);
-		if (!ca_sess)
-			break;
+	LIST_FOR_EACH(pos, &ca_proc->links.list) {
 
-		send_close_sess_msg(ca_sess->content.sesLink.to);
+		proc_sess = LIST_ENTRY(pos, struct sesLink, list);
+		send_close_sess_msg(proc_sess->to);
 	}
 }
 
@@ -1811,7 +1803,7 @@ static void term_proc_by_fd_err(proc_t proc)
 	} else if (proc->p_type == proc_t_TA) {
 
 		/* TA socket dead. Kill TA and then it will generate SIGCHLD */
-		if (kill(proc->content.process.pid, SIGKILL)) {
+		if (kill(proc->pid, SIGKILL)) {
 
 			if (errno != ESRCH)
 				OT_LOG(LOG_ERR, "Failed to send signal")
@@ -1855,16 +1847,17 @@ static void fd_error(struct manager_msg *man_msg)
 static void ta_rem_from_dir(struct manager_msg *man_msg)
 {
 	struct com_msg_ta_rem_from_dir *rem_ta_msg = man_msg->msg;
+	struct list_head *pos, *la;
 	proc_t ta;
 
-	h_table_init_stepper(trustedApps);
+	if (list_is_empty(&trustedApps.list))
+		return;
 
-	while (1) {
-		ta = h_table_step(trustedApps);
-		if (!ta)
-			break;
+	LIST_FOR_EACH_SAFE(pos, la, &trustedApps.list) {
 
-		if (!bcmp(&rem_ta_msg->uuid, &ta->content.process.ta_uuid, sizeof(TEE_UUID))) {
+		ta = LIST_ENTRY(pos, struct __proc, list);
+
+		if (!memcmp(&rem_ta_msg->uuid, &ta->ta_uuid, sizeof(TEE_UUID))) {
 			set_all_ta_sess_status(ta, sess_panicked);
 			rm_all_ta_sessions(ta);
 			free_proc(ta);
@@ -1879,7 +1872,8 @@ static void request_cancel(struct manager_msg *man_msg)
 {
 	struct com_msg_request_cancellation *cancel_msg = man_msg->msg;
 	struct manager_msg *new_man_msg = NULL;
-	proc_t ca_sess;
+	struct sesLink *ca_sess;
+	struct list_head *pos;
 
 	if (cancel_msg->msg_hdr.msg_name != COM_MSG_NAME_REQUEST_CANCEL ||
 	    cancel_msg->msg_hdr.msg_type != COM_TYPE_QUERY) {
@@ -1893,15 +1887,16 @@ static void request_cancel(struct manager_msg *man_msg)
 		goto discard_msg;
 	}
 
-	h_table_init_stepper(man_msg->proc->content.process.links);
 
-	while (1) {
-		ca_sess = h_table_step(man_msg->proc->content.process.links);
-		if (!ca_sess)
-			break;
+	if (list_is_empty(&man_msg->proc->links.list))
+		return;
 
-		if (ca_sess->content.sesLink.status == sess_panicked ||
-		    ca_sess->content.sesLink.waiting_response_msg == WAIT_NO_MSG_OUT)
+	LIST_FOR_EACH(pos, &man_msg->proc->links.list) {
+
+		ca_sess = LIST_ENTRY(pos, struct sesLink, list);
+
+		if (ca_sess->status == sess_panicked ||
+		    ca_sess->waiting_response_msg == WAIT_NO_MSG_OUT)
 			continue;
 
 		new_man_msg = calloc(1, sizeof(struct manager_msg));
@@ -1918,7 +1913,7 @@ static void request_cancel(struct manager_msg *man_msg)
 		}
 
 		new_man_msg->msg_len = sizeof(struct com_msg_request_cancellation);
-		new_man_msg->proc = ca_sess->content.sesLink.to->content.sesLink.owner;
+		new_man_msg->proc = ca_sess->to->owner;
 
 		memcpy(new_man_msg->msg, cancel_msg, sizeof(struct com_msg_request_cancellation));
 
@@ -1931,6 +1926,7 @@ discard_msg:
 
 static void manager_termination(struct manager_msg *man_msg)
 {
+	struct list_head *pos;
 	proc_t proc;
 
 	free_manager_msg(man_msg); /* No information */
@@ -1939,24 +1935,24 @@ static void manager_termination(struct manager_msg *man_msg)
 	 * would be left "open" after process terminaiton. This are shared memorys and file locks */
 
 	/* Unlink all TAs shm and release file locks */
-	h_table_init_stepper(trustedApps);
-	while(1) {
-		proc = h_table_step(trustedApps);
-		if (!proc)
-			break;
+	if (!list_is_empty(&trustedApps.list)) {
 
-		unlink_all_shm_region(proc);
-		release_ta_file_locks(proc);
+		LIST_FOR_EACH(pos, &trustedApps.list) {
+
+			proc = LIST_ENTRY(pos, struct __proc, list);
+			unlink_all_shm_region(proc);
+			release_ta_file_locks(proc);
+		}
 	}
 
 	/* Unlink all CAs shm */
-	h_table_init_stepper(clientApps);
-	while(1) {
-		proc = h_table_step(clientApps);
-		if (!proc)
-			break;
+	if (!list_is_empty(&clientApps.list)) {
 
-		unlink_all_shm_region(proc);
+		LIST_FOR_EACH(pos, &clientApps.list) {
+
+			proc = LIST_ENTRY(pos, struct __proc, list);
+			unlink_all_shm_region(proc);
+		}
 	}
 
 	exit(0); /* Manager termination */
@@ -2018,7 +2014,7 @@ void *logic_thread_mainloop(void *arg)
 
 			if (handled_msg->proc->p_type == proc_t_TA) {
 				memcpy(&current_TA_uuid,
-				       &handled_msg->proc->content.process.ta_uuid,
+				       &handled_msg->proc->ta_uuid,
 				       sizeof(current_TA_uuid));
 			}
 		}

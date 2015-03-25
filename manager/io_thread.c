@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "com_protocol.h"
 #include "core_control_resources.h"
@@ -186,17 +187,12 @@ static int create_uninitialized_client_proc(proc_t *proc, int sockfd)
 		return 1;
 	}
 
-	h_table_create(&(*proc)->content.process.links, CA_SES_APPROX_COUNT);
-	if (!(*proc)->content.process.links) {
-		OT_LOG(LOG_ERR, "Out of memory");
-		free(*proc);
-		return 1;
-	}
+	INIT_LIST(&(*proc)->links.list);
+	INIT_LIST(&(*proc)->shm_mem.list);
 
-	(*proc)->content.process.status = proc_uninitialized;
+	(*proc)->status = proc_uninitialized;
 	(*proc)->sockfd = sockfd;
 	(*proc)->p_type = proc_t_CA;
-	INIT_LIST(&(*proc)->content.process.shm_mem.list);
 
 	return 0;
 }
@@ -210,11 +206,7 @@ static int add_client_to_ca_table(proc_t add_client)
 		return 1;
 	}
 
-	if (h_table_insert(clientApps, (unsigned char *)(&add_client->sockfd),
-			   sizeof(add_client->sockfd), add_client)) {
-		OT_LOG(LOG_ERR, "Failed to add client table(out-of-mem)");
-		ret = 1;
-	}
+	list_add_before(&add_client->list, &clientApps.list);
 
 	if (pthread_mutex_unlock(&CA_table_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
@@ -229,8 +221,7 @@ static void remove_client_from_ca_table(proc_t rm_client)
 		return;
 	}
 
-	h_table_remove(clientApps, (unsigned char *)(&rm_client->sockfd),
-		       sizeof(rm_client->sockfd));
+	list_unlink(&rm_client->list);
 
 	if (pthread_mutex_unlock(&CA_table_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
@@ -314,7 +305,6 @@ void handle_public_fd(struct epoll_event *event)
 err_3:
 	remove_client_from_ca_table(new_client);
 err_2:
-	h_table_free(new_client->content.process.links);
 	free(new_client);
 err_1:
 	send_new_conn_err(accept_fd);

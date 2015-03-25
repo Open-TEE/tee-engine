@@ -34,10 +34,6 @@
 /* Maximum epoll events */
 #define MAX_CURR_EVENTS 5
 
-/* TODO: Opentee should switch to use more sophisticated hashtable implementation */
-#define ESTIMATE_COUNT_OF_CAS 50
-#define ESTIMATE_COUNT_OF_TAS 50
-
 /* These are for tasks received from the caller going to the logic thread */
 struct manager_msg todo_queue;
 
@@ -48,10 +44,10 @@ struct manager_msg done_queue;
 struct sock_to_close socks_to_close;
 
 /* Client connections */
-HASHTABLE clientApps;
+struct __proc clientApps;
 
 /* Loaded TAs (ready accept open sessions) */
-HASHTABLE trustedApps;
+struct __proc trustedApps;
 
 pthread_mutex_t CA_table_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TA_table_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -116,21 +112,14 @@ err_out:
 
 static int init_extern_res(int launcher_proc_fd)
 {
-	trustedApps = NULL;
-	clientApps = NULL;
-
 	/* Linked lists */
 	INIT_LIST(&todo_queue.list);
 	INIT_LIST(&done_queue.list);
 	INIT_LIST(&socks_to_close.list);
 
 	/* CA and TA hashtables */
-	h_table_create(&clientApps, ESTIMATE_COUNT_OF_CAS);
-	h_table_create(&trustedApps, ESTIMATE_COUNT_OF_TAS);
-	if (!clientApps || !trustedApps) {
-		OT_LOG(LOG_ERR, "Failed to init clientApps or trustedApps table")
-		goto err_1;
-	}
+	INIT_LIST(&clientApps.list);
+	INIT_LIST(&trustedApps.list);
 
 	/* Launcher fd */
 	launcher_fd = launcher_proc_fd;
@@ -139,24 +128,18 @@ static int init_extern_res(int launcher_proc_fd)
 	event_out_queue_fd = eventfd(0, EFD_SEMAPHORE);
 	if (event_out_queue_fd == -1) {
 		OT_LOG(LOG_ERR, "Failed to init event_done_queue_fd: %s", strerror(errno));
-		goto err_1;
+		return 1;
 	}
 
 	/* Close socket is only zeroed */
 	event_close_sock = eventfd(0, 0);
 	if (event_close_sock == -1) {
 		OT_LOG(LOG_ERR, "Failed to init event_close_sock: %s", strerror(errno));
-		goto err_2;
+		close(event_out_queue_fd);
+		return 1;
 	}
 
 	return 0;
-
-err_2:
-	close(event_out_queue_fd);
-err_1:
-	h_table_free(clientApps);
-	h_table_free(trustedApps);
-	return 1;
 }
 
 int lib_main_loop(struct core_control *control_params)
