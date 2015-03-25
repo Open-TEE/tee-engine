@@ -232,8 +232,11 @@ static FILE *request_file(char *file_name_with_path, size_t request_access)
 	FILE *test_exist;
 	/* TODO: Check if TA is granted for this per obj */
 
-	if (request_access & TEE_DATA_FLAG_ACCESS_WRITE_META ||
-	    request_access & TEE_DATA_FLAG_ACCESS_WRITE) {
+	if (request_access & TEE_DATA_FLAG_OVERWRITE) {
+		return fopen(file_name_with_path, "w+b");
+
+	} else if (request_access & TEE_DATA_FLAG_ACCESS_WRITE_META ||
+		   request_access & TEE_DATA_FLAG_ACCESS_WRITE) {
 		test_exist = fopen(file_name_with_path, "rb+");
 
 		if (test_exist == NULL)
