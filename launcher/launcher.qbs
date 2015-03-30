@@ -27,7 +27,10 @@ DynamicLibrary {
         "../include",
     ]
 
-    cpp.defines: ["OT_LOGGING"]
+    cpp.defines: [
+        "OT_LOGGING",
+        //"HAVE_SECCOMP"
+    ]
 
     files: [
         "../include/core_control_resources.h",

@@ -30,6 +30,9 @@
 #include "logic_thread.h"
 #include "ta_dir_watch.h"
 #include "tee_logging.h"
+#ifdef HAVE_SECCOMP
+#include "tee_seccomp.h"
+#endif
 
 /* Maximum epoll events */
 #define MAX_CURR_EVENTS 5
@@ -212,6 +215,10 @@ int lib_main_loop(struct core_control *control_params)
 
 	OT_LOG(LOG_ERR, "Entering the Manager mainloop");
 
+#ifdef HAVE_SECCOMP
+	if (tee_set_seccomp_filter(SET_MANAGER_IO_THREAD_FILTER))
+		return -1;
+#endif
 	for (;;) {
 		/* Block and wait for a one of the monitored I/Os to become available */
 		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);

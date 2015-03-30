@@ -20,6 +20,7 @@ DynamicLibrary {
 
     cpp.dynamicLibraries: [
         "elf",
+        "seccomp",
         "z"
     ]
 
@@ -36,10 +37,12 @@ DynamicLibrary {
         "../include/socket_help.h",
         "../include/tee_list.h",
         "../include/tee_logging.h",
+        "../include/tee_seccomp.h",
         "com_protocol.c",
         "elf_read.c",
         "epoll_wrapper.c",
         "socket_help.c",
         "tee_list.c",
+        "tee_seccomp.c"
     ]
 }

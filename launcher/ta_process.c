@@ -35,6 +35,9 @@
 #include "ta_io_thread.h"
 #include "ta_process.h"
 #include "tee_logging.h"
+#ifdef HAVE_SECCOMP
+#include "tee_seccomp.h"
+#endif
 
 /* we have 2 threads to synchronize so we can achieve this with static condition and statix mutex */
 pthread_mutex_t todo_list_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -187,6 +190,10 @@ int ta_process_loop(void *arg)
 		exit(TA_EXIT_FIRST_OPEN_SESS_FAILED);
 	}
 
+#ifdef HAVE_SECCOMP
+	if (tee_set_seccomp_filter(SET_TA_IO_THREAD_FILTER))
+		exit(TA_EXIT_FIRST_OPEN_SESS_FAILED);
+#endif
 	/* Enter into the main part of this io_thread */
 	for (;;) {
 		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);
