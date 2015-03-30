@@ -21,6 +21,8 @@ DynamicLibrary {
         "../include",
     ]
 
+    cpp.defines: ["OT_LOGGING"]
+
     destinationDirectory: '.'
 
     files: [

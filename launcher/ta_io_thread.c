@@ -53,11 +53,11 @@ static void fd_error(int fd_errno)
 	case EINTR:
 	case EDESTADDRREQ:
 	case EISDIR:
-		OT_LOG(LOG_DEBUG, "No action: %s", strerror(fd_errno))
+		OT_LOG(LOG_DEBUG, "No action: %s", strerror(fd_errno));
 		break;
 
 	default:
-		OT_LOG(LOG_DEBUG, "Unknown errno: %s", strerror(fd_errno))
+		OT_LOG(LOG_DEBUG, "Unknown errno: %s", strerror(fd_errno));
 	}
 }
 
@@ -159,13 +159,13 @@ static void add_task_todo_queue_and_notify(struct ta_task *task)
 	list_add_before(&task->list, &tasks_todo.list);
 
 	if (pthread_mutex_unlock(&todo_list_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to unlock the mutex: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex: %s", strerror(errno));
 		return;
 	}
 
 	/* Inform the TA thread that we have a task to be completed */
 	if (pthread_cond_signal(&condition)) {
-		OT_LOG(LOG_ERR, "Failed signal: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed signal: %s", strerror(errno));
 	}
 }
 
@@ -219,7 +219,7 @@ void receive_from_manager(struct epoll_event *event, int man_sockfd)
 	}
 
 	if (com_get_msg_type(new_ta_task->msg, &msg_type)) {
-		OT_LOG(LOG_ERR, "Failed retrieve message type")
+		OT_LOG(LOG_ERR, "Failed retrieve message type");
 		goto skip;
 	}
 
@@ -229,7 +229,7 @@ void receive_from_manager(struct epoll_event *event, int man_sockfd)
 
 		/* Inform the TA thread that we have a task to be completed */
 		if (pthread_cond_signal(&block_condition)) {
-			OT_LOG(LOG_ERR, "Failed signal to block thread")
+			OT_LOG(LOG_ERR, "Failed signal to block thread");
 			free(response_msg);
 		}
 
@@ -270,7 +270,7 @@ void reply_to_manager(struct epoll_event *event, int man_sockfd)
 
 	/* Lock from logic thread */
 	if (pthread_mutex_lock(&done_list_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno));
 		/* Lets hope that errot clear it shelf.. */
 		return;
 	}
@@ -280,7 +280,7 @@ void reply_to_manager(struct epoll_event *event, int man_sockfd)
 	list_unlink(&out_task->list);
 
 	if (pthread_mutex_unlock(&done_list_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to unlock the mutex: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex: %s", strerror(errno));
 	}
 
 	send_msg(man_sockfd, out_task->msg, out_task->msg_len);

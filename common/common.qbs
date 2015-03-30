@@ -27,6 +27,8 @@ DynamicLibrary {
         "../include"
     ]
 
+    cpp.defines: ["OT_LOGGING"]
+
     files: [
         "../include/com_protocol.h",
         "../include/elf_read.h",

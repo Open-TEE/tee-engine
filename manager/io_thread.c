@@ -57,7 +57,7 @@ static void notify_logic_fd_err(int err_nro, proc_t proc)
 	((struct com_msg_fd_err *)new_man_msg->msg)->proc_ptr = proc;
 
 	if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
-		OT_LOG(LOG_ERR, "Failed to add out queue")
+		OT_LOG(LOG_ERR, "Failed to add out queue");
 		free_manager_msg(new_man_msg);
 	}
 }
@@ -143,7 +143,7 @@ static void send_msg(proc_t send_to, void *msg, int msg_len)
 		return; /* Not an error */
 
 	if (!msg || !send_to) {
-		OT_LOG(LOG_ERR, "Sender proc or msg NULL")
+		OT_LOG(LOG_ERR, "Sender proc or msg NULL");
 		return;
 	}
 
@@ -322,7 +322,7 @@ void read_fd_and_add_todo_queue(struct epoll_event *event)
 
 	/* Function is only valid for proc FDs */
 	if (((proc_t)event->data.ptr)->p_type >= proc_t_last) {
-		OT_LOG(LOG_ERR, "Invalid connection type")
+		OT_LOG(LOG_ERR, "Invalid connection type");
 		return;
 	}
 
@@ -353,7 +353,7 @@ void read_fd_and_add_todo_queue(struct epoll_event *event)
 
 	/* Add task to manager message queue */
 	if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
-		OT_LOG(LOG_ERR, "Failed to add inbound queue")
+		OT_LOG(LOG_ERR, "Failed to add inbound queue");
 		goto err;
 	}
 
@@ -433,7 +433,7 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 				COM_MSG_NAME_PROC_STATUS_CHANGE;
 
 		if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
-			OT_LOG(LOG_ERR, "Failed to add inbound queue")
+			OT_LOG(LOG_ERR, "Failed to add inbound queue");
 			free_manager_msg(new_man_msg);
 		}
 	}
@@ -461,7 +461,7 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 				COM_MSG_NAME_MANAGER_TERMINATION;
 
 		if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
-			OT_LOG(LOG_ERR, "Failed to add inbound queue")
+			OT_LOG(LOG_ERR, "Failed to add inbound queue");
 			free_manager_msg(new_man_msg);
 		}
 	}
