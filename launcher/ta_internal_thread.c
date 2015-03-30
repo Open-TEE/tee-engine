@@ -33,6 +33,9 @@
 #include "ta_io_thread.h"
 #include "tee_list.h"
 #include "tee_logging.h"
+#ifdef HAVE_SECCOMP
+#include "tee_seccomp.h"
+#endif
 
 /* The client names for the params */
 #define TEEC_NONE			0x00000000
@@ -1252,6 +1255,10 @@ void *ta_internal_thread(void *arg)
 	struct ta_task *task = NULL;
 	uint8_t com_msg_name;
 
+#ifdef HAVE_SECCOMP
+	if (tee_set_seccomp_filter(SET_TA_LOGIC_THREAD_FILTER))
+		return NULL;
+#endif
 	tee_ret = interface->create();
 	if (tee_ret != TEE_SUCCESS) {
 		OT_LOG(LOG_ERR, "TA create entry point failed");

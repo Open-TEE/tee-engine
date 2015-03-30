@@ -38,6 +38,9 @@
 #include "opentee_internal_api.h"
 #include "opentee_manager_storage_api.h"
 #include "opentee_storage_common.h"
+#ifdef HAVE_SECCOMP
+#include "tee_seccomp.h"
+#endif
 
 /* Used for hashtable init */
 #define TA_SESS_COUNT_EST 50
@@ -1964,6 +1967,10 @@ void *logic_thread_mainloop(void *arg)
 	struct manager_msg *handled_msg;
 	uint8_t com_msg_name;
 
+#ifdef HAVE_SECCOMP
+	if (tee_set_seccomp_filter(SET_MANAGER_LOGIC_THREAD_FILTER))
+		return NULL;
+#endif
 	while (1) {
 
 		if (pthread_mutex_lock(&todo_queue_mutex)) {
