@@ -118,7 +118,7 @@ int ta_process_loop(void *arg)
 
 	/* Note: All signal are blocked. Prepare allow set when we can accept signals */
 	if (sigemptyset(&sig_empty_set)) {
-		OT_LOG(LOG_ERR, "Sigempty set failed: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Sigempty set failed: %s", strerror(errno));
 		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
@@ -155,7 +155,7 @@ int ta_process_loop(void *arg)
 	/* Init worker thread */
 	ret = pthread_attr_init(&attr);
 	if (ret) {
-		OT_LOG(LOG_ERR, "Failed to create attr for thread: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed to create attr for thread: %s", strerror(errno));
 		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
@@ -163,7 +163,7 @@ int ta_process_loop(void *arg)
 
 	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 	if (ret) {
-		OT_LOG(LOG_ERR, "Failed set DETACHED: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed set DETACHED: %s", strerror(errno));
 		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
@@ -174,7 +174,7 @@ int ta_process_loop(void *arg)
 	/* Launch worker thread and pass open session message as a parameter */
 	ret = pthread_create(&ta_logic_thread, &attr, ta_internal_thread, open_msg);
 	if (ret) {
-		OT_LOG(LOG_ERR, "Failed launch thread: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed launch thread: %s", strerror(errno));
 		interface->destroy();
 		exit(TA_EXIT_FIRST_OPEN_SESS_FAILED);
 	}
@@ -183,7 +183,7 @@ int ta_process_loop(void *arg)
 
 	/* Allow signal delivery */
 	if (pthread_sigmask(SIG_SETMASK, &sig_empty_set, NULL)) {
-		OT_LOG(LOG_ERR, "failed to allow signals: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "failed to allow signals: %s", strerror(errno));
 		exit(TA_EXIT_FIRST_OPEN_SESS_FAILED);
 	}
 

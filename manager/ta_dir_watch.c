@@ -227,7 +227,7 @@ static void add_new_ta(char *name)
 	return;
 
 err:
-	OT_LOG(LOG_ERR, "TA \"%s\" rejected", name)
+	OT_LOG(LOG_ERR, "TA \"%s\" rejected", name);
 	free(ta_with_path);
 	free(new_ta_propertie);
 }

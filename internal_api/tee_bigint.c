@@ -121,7 +121,7 @@ static int32_t BNToBigInt(TEE_BigInt *dest, const BIGNUM *src)
 
 	/* Check parameters */
 	if (dest == NULL || src == NULL) {
-		OT_LOG(LOG_ERR, "Internal Error: Null parameters")
+		OT_LOG(LOG_ERR, "Internal Error: Null parameters");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
@@ -1019,8 +1019,7 @@ void TEE_BigIntInvMod(TEE_BigInt *dest, TEE_BigInt *op, TEE_BigInt *n)
 
 	/* Take inverse mod */
 	if (!BN_mod_inverse(result, bn_op, bn_n, context)) {
-		uint32_t err = ERR_get_error();
-		OT_LOG(LOG_ERR, "Error while calculating inverse mod: %i", err);
+		OT_LOG(LOG_ERR, "Error while calculating inverse mod: %ld", ERR_get_error());
 		OT_LOG(LOG_ERR, "Internal error: BN_mod_inverse call failed");
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}

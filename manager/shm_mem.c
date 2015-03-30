@@ -74,7 +74,7 @@ static int generate_random_path(char *name, size_t name_len)
 	}
 
 	/* Buffer too small */
-	OT_LOG(LOG_ERR, "Name buffer too small")
+	OT_LOG(LOG_ERR, "Name buffer too small");
 	return 1;
 }
 

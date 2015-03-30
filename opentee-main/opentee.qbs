@@ -14,6 +14,8 @@ CppApplication {
 
     destinationDirectory: '.'
 
+    cpp.defines: ["OT_LOGGING"]
+
     Export {
         Depends { name: "cpp" }
         cpp.includePaths: ["../include", "."]

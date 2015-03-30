@@ -82,7 +82,7 @@ static bool set_exec_operation_id(uint64_t new_op_id)
 {
 	/* Lock task queue from logic thread */
 	if (pthread_mutex_lock(&executed_operation_id_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to lock the mutex")
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 		return false;
 	}
 
@@ -94,7 +94,7 @@ static bool set_exec_operation_id(uint64_t new_op_id)
 	executed_operation_id = new_op_id;
 
 	if (pthread_mutex_unlock(&executed_operation_id_mutex))
-		OT_LOG(LOG_ERR, "Failed to lock the mutex")
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 
 	return true;
 }
@@ -105,7 +105,7 @@ static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 
 	/* Lock task queue from logic thread */
 	if (pthread_mutex_lock(&done_list_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno));
 		return;
 	}
 
@@ -114,13 +114,13 @@ static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 
 	if (pthread_mutex_unlock(&done_list_mutex)) {
 		/* For now, just log error */
-		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno));
 		return;
 	}
 
 	/* notify the I/O thread that there is something at output queue */
 	if (write(event_fd, &event, sizeof(uint64_t)) == -1) {
-		OT_LOG(LOG_ERR, "Failed to notify the io thread: %s", strerror(errno))
+		OT_LOG(LOG_ERR, "Failed to notify the io thread: %s", strerror(errno));
 		/* TODO: See what is causing it! */
 	}
 }
@@ -150,7 +150,7 @@ static bool get_vals_from_err_msg(void *msg, TEE_Result *ret_code, uint32_t *msg
 	uint8_t msg_name;
 
 	if (com_get_msg_name(msg, &msg_name)) {
-		OT_LOG(LOG_ERR, "Failed to read msg name")
+		OT_LOG(LOG_ERR, "Failed to read msg name");
 		return false;
 	}
 
@@ -172,7 +172,7 @@ static void free_shm_and_from_manager(struct ta_shared_mem *ta_shm_mem)
 	if (!(ta_shm_mem->type == TEE_PARAM_TYPE_MEMREF_INOUT ||
 	      ta_shm_mem->type == TEE_PARAM_TYPE_MEMREF_INPUT ||
 	      ta_shm_mem->type == TEE_PARAM_TYPE_MEMREF_OUTPUT)) {
-		OT_LOG(LOG_ERR, "Unknow memory type")
+		OT_LOG(LOG_ERR, "Unknow memory type");
 		return;
 	}
 
@@ -261,14 +261,14 @@ static TEE_Result get_shm_from_manager_and_map_region(struct ta_shared_mem *ta_s
 	/* Unregister shared memory */
 	new_ta_task = calloc(1, sizeof(struct ta_task));
 	if (!new_ta_task) {
-		OT_LOG(LOG_ERR, "out of memory")
+		OT_LOG(LOG_ERR, "out of memory");
 		return TEE_ERROR_OUT_OF_MEMORY;
 	}
 
 	new_ta_task->msg_len = sizeof(struct com_msg_open_shm_region);
 	new_ta_task->msg = calloc(1, new_ta_task->msg_len);
 	if (!new_ta_task->msg) {
-		OT_LOG(LOG_ERR, "out of memory")
+		OT_LOG(LOG_ERR, "out of memory");
 		free(new_ta_task);
 		return TEE_ERROR_OUT_OF_MEMORY;
 	}
@@ -414,7 +414,7 @@ static TEE_Result wait_and_handle_open_sess_resp(uint32_t paramTypes, TEE_Param 
 	if (resp_open_msg->msg_hdr.msg_name != COM_MSG_NAME_OPEN_SESSION) {
 
 		if (!get_vals_from_err_msg(response_msg, &ret, returnOrigin)) {
-			OT_LOG(LOG_ERR, "Received unknown message")
+			OT_LOG(LOG_ERR, "Received unknown message");
 			goto err_com;
 		}
 
@@ -468,10 +468,10 @@ static void wait_and_handle_close_session_resp(TEE_TASessionHandle session)
 		/* Fine */
 
 	} else if (resp_close_msg->msg_hdr.msg_name == COM_MSG_NAME_ERROR) {
-		OT_LOG(LOG_ERR, "Received error message")
+		OT_LOG(LOG_ERR, "Received error message");
 
 	} else {
-		OT_LOG(LOG_ERR, "Received unknow message")
+		OT_LOG(LOG_ERR, "Received unknow message");
 	}
 
 	free(session);
@@ -494,7 +494,7 @@ static TEE_Result wait_and_handle_invoke_cmd_resp(uint32_t paramTypes, TEE_Param
 	if (resp_invoke_msg->msg_hdr.msg_name != COM_MSG_NAME_INVOKE_CMD) {
 
 		if (!get_vals_from_err_msg(response_msg, &ret, returnOrigin)) {
-			OT_LOG(LOG_ERR, "Received unknown message")
+			OT_LOG(LOG_ERR, "Received unknown message");
 			goto err_com;
 		}
 
@@ -735,7 +735,7 @@ static void map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uin
 				types[i] = TEE_PARAM_TYPE_MEMREF_OUTPUT;
 
 		} else {
-			OT_LOG(LOG_ERR, "Warning: Unknow parameter type")
+			OT_LOG(LOG_ERR, "Warning: Unknow parameter type");
 		}
 	}
 
@@ -1017,7 +1017,7 @@ TEE_Result ta_open_ta_session(TEE_UUID *destination, uint32_t cancellationReques
 
 	*session = calloc(1, sizeof(struct __TEE_TASessionHandle));
 	if (!*session) {
-		OT_LOG(LOG_ERR, "out of memory")
+		OT_LOG(LOG_ERR, "out of memory");
 		goto err_1;
 	}
 
@@ -1070,7 +1070,7 @@ void ta_close_ta_session(TEE_TASessionHandle session)
 	struct ta_task *new_ta_task = NULL;
 
 	if (!session || session->session_state != SESSION_STATE_ACTIVE) {
-		OT_LOG(LOG_ERR, "Session NULL or not opened")
+		OT_LOG(LOG_ERR, "Session NULL or not opened");
 		return;
 	}
 
@@ -1117,7 +1117,7 @@ TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
 	}
 
 	if (!session || session->session_state != SESSION_STATE_ACTIVE) {
-		OT_LOG(LOG_ERR, "Session NULL or not opened")
+		OT_LOG(LOG_ERR, "Session NULL or not opened");
 		goto err_1;
 	}
 

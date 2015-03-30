@@ -122,7 +122,7 @@ static void free_proc(proc_t del_proc)
 		/* Client process spesific operations */
 
 		if (pthread_mutex_lock(&CA_table_mutex) == -1) {
-			OT_LOG(LOG_ERR, "Failed to lock mutex")
+			OT_LOG(LOG_ERR, "Failed to lock mutex");
 			goto skip;
 		}
 
@@ -1566,7 +1566,7 @@ static TEE_Result unmap_create_entry_exit_value(uint8_t ret)
 	case 35:
 		return TEE_ERROR_TIME_NEEDS_RESET;
 	default:
-		OT_LOG(LOG_ERR, "Unknow exit state")
+		OT_LOG(LOG_ERR, "Unknow exit state");
 		break;
 	}
 
@@ -1806,7 +1806,7 @@ static void term_proc_by_fd_err(proc_t proc)
 		if (kill(proc->pid, SIGKILL)) {
 
 			if (errno != ESRCH)
-				OT_LOG(LOG_ERR, "Failed to send signal")
+				OT_LOG(LOG_ERR, "Failed to send signal");
 		}
 	}
 }
@@ -1834,10 +1834,10 @@ static void fd_error(struct manager_msg *man_msg)
 	case EINTR:
 	case EDESTADDRREQ:
 	case EISDIR:
-		OT_LOG(LOG_DEBUG, "Logging fd error. No action: %d", fd_err_msg->err_no)
+		OT_LOG(LOG_DEBUG, "Logging fd error. No action: %d", fd_err_msg->err_no);
 		break;
 	default:
-		OT_LOG(LOG_DEBUG, "Logging fd error: Unknown errno")
+		OT_LOG(LOG_DEBUG, "Logging fd error: Unknown errno");
 		break;
 	}
 
