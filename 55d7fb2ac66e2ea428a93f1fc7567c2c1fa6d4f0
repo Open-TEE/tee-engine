@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1a106d94_483c0de3",
+        "filename": "common/tee_seccomp.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 79,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-04-02T10:28:28Z",
+      "side": 1,
+      "message": "These just prove that we have work todo.  We must move the file handling to the IO thread, as the logic thread should no be doing IO",
+      "range": {
+        "startLine": 79,
+        "startChar": 43,
+        "endLine": 79,
+        "endChar": 51
+      },
+      "revId": "55d7fb2ac66e2ea428a93f1fc7567c2c1fa6d4f0",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
