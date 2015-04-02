@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1a106d94_934bd62a",
+        "filename": "manager/ext_storage_stream_api_posix.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 309,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-04-02T11:54:07Z",
+      "side": 1,
+      "message": "777 would 755 do ?",
+      "range": {
+        "startLine": 309,
+        "startChar": 42,
+        "endLine": 309,
+        "endChar": 46
+      },
+      "revId": "81fb52b60036dec39e47c9198c0d915f7fd0ef5b",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_7348da2d",
+        "filename": "manager/ext_storage_stream_api_posix.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 315,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-04-02T11:54:07Z",
+      "side": 1,
+      "message": "same",
+      "range": {
+        "startLine": 315,
+        "startChar": 31,
+        "endLine": 315,
+        "endChar": 35
+      },
+      "revId": "81fb52b60036dec39e47c9198c0d915f7fd0ef5b",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
