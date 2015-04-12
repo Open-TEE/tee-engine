@@ -47,8 +47,20 @@
 #include "epoll_wrapper.h"
 #include "tee_logging.h"
 
+/* Child stack for clone command */
+char *child_stack;
+
 #define MAX_CURR_EVENTS 5
 #define CHILD_STACK_SIZE 8192
+
+#ifdef GRACEFUL_TERMINATION
+/* Freeing only resources that are allocated here */
+static void cleanup_launcher()
+{
+	cleanup_epoll();
+	free(child_stack);
+}
+#endif
 
 static void check_signal_status(struct core_control *control_params)
 {
@@ -91,7 +103,6 @@ int lib_main_loop(struct core_control *ctl_params)
 	int ret, event_count, i;
 	sigset_t sig_empty_set, sig_block_set;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
-	char *child_stack = NULL;
 	struct ta_loop_arg ta_loop_args;
 
 	child_stack = calloc(1, CHILD_STACK_SIZE);
@@ -125,6 +136,11 @@ int lib_main_loop(struct core_control *ctl_params)
 		OT_LOG(LOG_ERR, "Failed reg self pipe socket");
 		exit(EXIT_FAILURE);
 	}
+
+#ifdef GRACEFUL_TERMINATION
+	/* Cleanup function if process need to be cleaned gracefully */
+	ctl_params->fn_cleanup_launher = cleanup_launcher;
+#endif
 
 	OT_LOG(LOG_ERR, "Entering the launcher mainloop");
 

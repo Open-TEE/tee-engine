@@ -14,8 +14,9 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <string.h>
 #include <errno.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "epoll_wrapper.h"
 #include "tee_logging.h"
@@ -74,4 +75,9 @@ int epoll_unreg(int fd)
 int wrap_epoll_wait(struct epoll_event *events, int max_events)
 {
 	return epoll_wait(epollfd, events, max_events, -1);
+}
+
+void cleanup_epoll()
+{
+	close(epollfd);
 }

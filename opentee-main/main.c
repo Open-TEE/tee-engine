@@ -36,6 +36,16 @@
 
 static struct core_control control_params;
 
+#ifdef GRACEFUL_TERMINATION
+/* Freeing only resources that are allocated here */
+static void cleanup_core()
+{
+	config_parser_free_config(control_params.opentee_conf);
+	close(control_params.self_pipe_fd);
+	close(control_params.comm_sock_fd);
+}
+#endif
+
 static void sig_handler(int sig)
 {
 	uint64_t event = 1;
@@ -220,6 +230,9 @@ int main(int argc, char **argv)
 	control_params.argv0 = argv[0];
 	control_params.argv0_len = cmd_name_len;
 	control_params.reset_signal_self_pipe = reset_signal_self_pipe;
+#ifdef GRACEFUL_TERMINATION
+	control_params.fn_cleanup_core = cleanup_core;
+#endif
 
 	/* fork now to create the manager and launcher subprocesses */
 	control_params.launcher_pid = fork();
