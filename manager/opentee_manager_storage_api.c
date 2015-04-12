@@ -236,6 +236,7 @@ static bool serialize_attributes_to_storage(TEE_ObjectHandle object,
 
 static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle src_obj)
 {
+	TEE_Result tee_ret = TEE_ERROR_OUT_OF_MEMORY;
 	TEE_ObjectHandle cpy_obj;
 	int attr_count;
 
@@ -245,12 +246,14 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 	/* malloc for object handler and cpy that */
 	cpy_obj = calloc(1, sizeof(struct __TEE_ObjectHandle));
 	if (cpy_obj == NULL)
-		goto err_out_of_mem;
+		goto err_out_of_mem_1;
 
 	if (src_obj != NULL) {
 		attr_count = valid_obj_type_and_attr_count(src_obj->objectInfo.objectType);
-		if (attr_count == -1)
-			return TEE_ERROR_GENERIC;
+		if (attr_count == -1) {
+			tee_ret = TEE_ERROR_GENERIC;
+			goto err_out_of_mem_2;
+		}
 
 		memcpy(cpy_obj, src_obj, sizeof(struct __TEE_ObjectHandle));
 
@@ -258,7 +261,7 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 		/* Malloc for attribute pointers */
 		cpy_obj->attrs = calloc(src_obj->attrs_count, sizeof(TEE_Attribute));
 		if (cpy_obj->attrs == NULL)
-			goto err_out_of_mem;
+			goto err_out_of_mem_2;
 
 		/* Malloc space for attributes (attribute buffers) */
 		switch (src_obj->objectInfo.objectType) {
@@ -277,19 +280,19 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 		case TEE_TYPE_DSA_PUBLIC_KEY:
 		case TEE_TYPE_DSA_KEYPAIR:
 			if (!malloc_for_attrs(cpy_obj, attr_count))
-				goto err_out_of_mem;
+				goto err_out_of_mem_3;
 			break;
 
 		case TEE_TYPE_DH_KEYPAIR:
 			/* -1, because DH contains one value attribute */
 			if (!malloc_for_attrs(cpy_obj, attr_count - 1))
-				goto err_out_of_mem;
+				goto err_out_of_mem_3;
 			break;
 
 		default:
 			/* Should never get here */
-			goto err_out_of_mem;
-			break;
+			tee_ret = TEE_ERROR_GENERIC;
+			goto err_out_of_mem_3;
 		}
 
 		copy_all_attributes(src_obj, cpy_obj);
@@ -299,11 +302,13 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 
 	return TEE_SUCCESS;
 
-err_out_of_mem:
-	OT_LOG(LOG_ERR, "Cannot malloc space for object\n");
+err_out_of_mem_3:
 	free_object(cpy_obj);
-	*dst_obj = NULL;
-	return TEE_ERROR_OUT_OF_MEMORY;
+err_out_of_mem_2:
+	free(cpy_obj);
+err_out_of_mem_1:
+	OT_LOG(LOG_ERR, "Cannot malloc space for object\n");
+	return tee_ret;
 }
 
 /************************************************************************************************
