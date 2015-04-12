@@ -886,7 +886,26 @@ out:
 	add_msg_done_queue_and_notify(in_task);
 }
 
+#ifdef GRACEFUL_TERMINATION
+static void notify_io_process_termination(int exit_value)
+{
+	uint64_t termination = 1;
+
+	graceful_exit_value = exit_value;
+
+	/* notify the I/O thread that destroy entry is executed */
+	if (write(termination_fd, &termination, sizeof(uint64_t)) == -1) {
+		OT_LOG(LOG_ERR, "Failed to write termination fd");
+		exit(TA_EXIT_PANICKED); /* Can't be sure if IO is getting message -> term proccess*/
+	}
+}
+#endif
+
+#ifdef GRACEFUL_TERMINATION
+static bool close_session(struct ta_task *in_task)
+#else
 static void close_session(struct ta_task *in_task)
+#endif
 {
 	struct com_msg_close_session *close_msg = in_task->msg;
 
@@ -900,11 +919,19 @@ static void close_session(struct ta_task *in_task)
 
 	if (close_msg->should_ta_destroy) {
 		unload_ta(interface);
+#ifdef GRACEFUL_TERMINATION
+		notify_io_process_termination(TA_EXIT_DESTROY_ENTRY_EXEC);
+#else
 		exit(TA_EXIT_DESTROY_ENTRY_EXEC);
+#endif
 	}
 
 ignore_msg:
 	free_task(in_task);
+
+#ifdef GRACEFUL_TERMINATION
+	return true;
+#endif
 }
 
 static void first_open_session_msg(struct com_msg_open_session *open_msg)
@@ -1252,10 +1279,18 @@ void *ta_internal_thread(void *arg)
 	struct ta_task *task = NULL;
 	uint8_t com_msg_name;
 
+	/* Note: Graceful termination is working after this point */
+
 	tee_ret = interface->create();
 	if (tee_ret != TEE_SUCCESS) {
 		OT_LOG(LOG_ERR, "TA create entry point failed");
+#ifdef GRACEFUL_TERMINATION
+		notify_io_process_termination(map_create_entry_exit_value(tee_ret));
+		TEE_Free(arg); /* Open session message */
+		return NULL;
+#else
 		exit(map_create_entry_exit_value(tee_ret));
+#endif
 	}
 
 	first_open_session_msg(arg);
@@ -1302,9 +1337,13 @@ void *ta_internal_thread(void *arg)
 			break;
 
 		case COM_MSG_NAME_CLOSE_SESSION:
+#ifdef GRACEFUL_TERMINATION
+			if (close_session(task))
+				return NULL; /* No resources to cleanup */
+#else
 			close_session(task);
 			break;
-
+#endif
 		default:
 			/* Just logging an error and message will be ignored */
 			OT_LOG(LOG_ERR, "Unknow message, ignore");
