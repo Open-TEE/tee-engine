@@ -42,6 +42,8 @@ struct core_control {
 	int self_pipe_fd;
 	struct emulator_config *opentee_conf;
 	void (*reset_signal_self_pipe)(void);
+	void (*fn_cleanup_launher)(void); /* Can be used only when flag GRACEFUL_TERMINATION def*/
+	void (*fn_cleanup_core)(void); /* Can be used only when flag GRACEFUL_TERMINATION def*/
 	int comm_sock_fd;
 };
 
