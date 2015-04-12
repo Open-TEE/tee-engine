@@ -177,6 +177,7 @@ static void gen_err_msg_and_add_to_out(struct manager_msg *man_msg, uint32_t err
 	man_msg->msg = calloc(1, sizeof(struct com_msg_error));
 	if (!man_msg->msg) {
 		OT_LOG(LOG_ERR, "Out of memory");
+		free(man_msg);
 		return;
 	}
 
@@ -540,7 +541,6 @@ err:
 		kill(*new_ta_pid, SIGKILL);
 
 	free(recv_created_msg);
-	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);
 	return 1;
 }
 
@@ -724,7 +724,7 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid, pr
 err_3:
 	kill(new_ta_pid, SIGKILL);
 err_2:
-	free_proc(*new_ta_proc);
+	free(*new_ta_proc);
 	*new_ta_proc = NULL;
 err_1:
 	gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_GENERIC);

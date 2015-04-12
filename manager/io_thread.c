@@ -239,7 +239,7 @@ void free_manager_msg(struct manager_msg *released_msg)
 void handle_out_queue(struct epoll_event *event)
 {
 	struct manager_msg *handled_msg = NULL;
-	uint64_t done_event;
+	uint64_t done_event = 1;
 	struct list_head *pos, *la;
 
 	if (check_event_fd_epoll_status(event))
