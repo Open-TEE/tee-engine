@@ -60,6 +60,19 @@ extern void *response_msg;
 /* Use eventfd to notify the io_thread that the TA thread has finished processing a task */
 extern int event_fd;
 
+/* Graceful is an extra and in normal operation this is obsolite. This is for debuging.
+ * Graceful termination is working after create entry point call! If TA is failing to set up
+ * framework, resources is not released by this process. */
+#ifdef GRACEFUL_TERMINATION
+	/* Logic thread will signal throug termination_fd to io thread that destroy entry point has
+	 * been executed and this process need to be clean up */
+	extern int termination_fd;
+
+	/* Variable is storing exit value. Logic thread is deciding exit value and this is
+	 * used by IO thread when it is cleaned up all resources */
+	extern int graceful_exit_value;
+#endif
+
 /* Interal API cancel functionality */
 extern bool cancellation_mask;
 extern bool cancellation_flag;

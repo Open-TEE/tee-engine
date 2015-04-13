@@ -62,6 +62,19 @@ struct ta_interface *interface;
 /* Use eventfd to notify the io_thread that the TA thread has finished processing a task */
 int event_fd;
 
+/* Graceful is an extra and in normal operation this is obsolite. This is for debuging.
+ * Graceful termination is working after create entry point call! If TA is failing to set up
+ * framework, resources is not released by this process. */
+#ifdef GRACEFUL_TERMINATION
+	/* Logic thread will signal throug termination_fd to io thread that destroy entry point has
+	 * been executed and this process need to be clean up */
+	int termination_fd;
+
+	/* Variable is storing exit value. Logic thread is deciding exit value and this is
+	 * used by IO thread when it is cleaned up all resources */
+	int graceful_exit_value;
+#endif
+
 /* These are for tasks received from the caller going to the TA */
 struct ta_task tasks_todo;
 
@@ -74,6 +87,36 @@ bool cancellation_flag;
 
 /* Maximum epoll events */
 #define MAX_CURR_EVENTS 5
+
+#ifdef GRACEFUL_TERMINATION
+static void clear_queues()
+{
+	struct list_head *pos, *la;
+	struct ta_task *queue_task;
+
+	/* Mutex not needed, bevause logic thread is ended its execution */
+
+	/* Done Queue */
+	if (!list_is_empty(&tasks_done.list)) {
+
+		LIST_FOR_EACH_SAFE(pos, la, &tasks_done.list) {
+			queue_task = LIST_ENTRY(pos, struct ta_task, list);
+			list_unlink(&queue_task->list);
+			free_task(queue_task);
+		}
+	}
+
+	/* Todo queue */
+	if (!list_is_empty(&tasks_todo.list)) {
+
+		LIST_FOR_EACH_SAFE(pos, la, &tasks_todo.list) {
+			queue_task = LIST_ENTRY(pos, struct ta_task, list);
+			list_unlink(&queue_task->list);
+			free_task(queue_task);
+		}
+	}
+}
+#endif
 
 int ta_process_loop(void *arg)
 {
@@ -132,7 +175,13 @@ int ta_process_loop(void *arg)
 		OT_LOG(LOG_ERR, "Failed to initialize eventfd");
 		exit(TA_EXIT_LAUNCH_FAILED);
 	}
-
+#ifdef GRACEFUL_TERMINATION
+	termination_fd = eventfd(0, 0);
+	if (termination_fd == -1) {
+		OT_LOG(LOG_ERR, "Failed to initialize termination_fd");
+		exit(TA_EXIT_LAUNCH_FAILED);
+	}
+#endif
 	/* Initializations of TODO and DONE queues*/
 	INIT_LIST(&tasks_todo.list);
 	INIT_LIST(&tasks_done.list);
@@ -146,9 +195,11 @@ int ta_process_loop(void *arg)
 	if (epoll_reg_fd(event_fd, EPOLLIN))
 		exit(TA_EXIT_LAUNCH_FAILED);
 
-	/* Signal handling */
-	if (epoll_reg_fd(ctl_params->self_pipe_fd, EPOLLIN))
+#ifdef GRACEFUL_TERMINATION
+	/* Logic and IO thread communication about termination */
+	if (epoll_reg_fd(termination_fd, EPOLLIN))
 		exit(TA_EXIT_LAUNCH_FAILED);
+#endif
 
 	/* Init worker thread */
 	ret = pthread_attr_init(&attr);
@@ -184,6 +235,8 @@ int ta_process_loop(void *arg)
 		exit(TA_EXIT_FIRST_OPEN_SESS_FAILED);
 	}
 
+	/* Note: Graceful termination is working after this point */
+
 	/* Enter into the main part of this io_thread */
 	for (;;) {
 		event_count = wrap_epoll_wait(cur_events, MAX_CURR_EVENTS);
@@ -209,6 +262,10 @@ int ta_process_loop(void *arg)
 			} else if (cur_events[i].data.fd == ctl_params->self_pipe_fd) {
 				ta_signal_handler(ctl_params);
 
+#ifdef GRACEFUL_TERMINATION
+			} else if (cur_events[i].data.fd == termination_fd) {
+				goto termination;
+#endif
 			} else {
 				OT_LOG(LOG_ERR, "unknown event source");
 			}
@@ -217,4 +274,34 @@ int ta_process_loop(void *arg)
 
 	/* Should never reach here */
 	exit(TA_EXIT_PANICKED);
+
+#ifdef GRACEFUL_TERMINATION
+termination:
+	/* Release resources that have been alloced by launcher/core process */
+	ctl_params->fn_cleanup_launher();
+	ctl_params->fn_cleanup_core();
+
+	/* Remove all messages from queues */
+	clear_queues();
+
+	/* Assuming that mutex will be destroyed. If not, this process will be terminated anyway */
+	pthread_mutex_destroy(&todo_list_mutex);
+	pthread_mutex_destroy(&done_list_mutex);
+	pthread_mutex_destroy(&block_internal_thread_mutex);
+	pthread_mutex_destroy(&executed_operation_id_mutex);
+
+	/* Conditional variables */
+	pthread_cond_destroy(&condition);
+	pthread_cond_destroy(&block_condition);
+
+	/* Close FDs */
+	close(event_fd);
+	close(termination_fd);
+	close(man_sockfd);
+
+	/* Close syslog */
+	closelog();
+
+	exit(graceful_exit_value);
+#endif
 }

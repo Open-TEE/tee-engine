@@ -63,4 +63,10 @@ int epoll_unreg(int fd);
  */
 int wrap_epoll_wait(struct epoll_event *events, int max_events);
 
+/*!
+ * \brief cleanup_epoll
+ * Releasing resources that epoll is reserved
+ */
+void cleanup_epoll();
+
 #endif
