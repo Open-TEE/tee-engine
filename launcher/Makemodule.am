@@ -7,7 +7,7 @@ libLauncherApi_la_includes = \
 	include/ta_exit_states.h \
 	internal_api/tee_data_types.h \
 	launcher/dynamic_loader.h \
-	launcher/ta_extern_resources.h \
+	launcher/ta_ctl_resources.h \
 	launcher/ta_internal_thread.h \
 	launcher/ta_io_thread.h \
 	launcher/ta_process.h
