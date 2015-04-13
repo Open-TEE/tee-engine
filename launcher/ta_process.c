@@ -30,7 +30,7 @@
 #include "dynamic_loader.h"
 #include "epoll_wrapper.h"
 #include "ta_exit_states.h"
-#include "ta_extern_resources.h"
+#include "ta_ctl_resources.h"
 #include "ta_internal_thread.h"
 #include "ta_io_thread.h"
 #include "ta_process.h"

@@ -36,7 +36,7 @@ DynamicLibrary {
         "dynamic_loader.h",
         "dynamic_loader.c",
         "launcher_mainloop.c",
-        "ta_extern_resources.h",
+        "ta_ctl_resources.h",
         "ta_internal_thread.h",
         "ta_internal_thread.c",
         "ta_io_thread.h",

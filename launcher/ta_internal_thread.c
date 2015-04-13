@@ -26,7 +26,7 @@
 #include "com_protocol.h"
 #include "dynamic_loader.h"
 #include "ta_exit_states.h"
-#include "ta_extern_resources.h"
+#include "ta_ctl_resources.h"
 #include "ta_internal_thread.h"
 #include "tee_data_types.h"
 #include "tee_cancellation.h"
