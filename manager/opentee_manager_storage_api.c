@@ -248,7 +248,9 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 	if (cpy_obj == NULL)
 		goto err_out_of_mem_1;
 
-	if (src_obj != NULL) {
+	/* Attributes are copied, if object is containing attributes. This is done, because
+	 * pure data object is not containing attributes */
+	if (src_obj != NULL && src_obj->attrs_count > 0) {
 		attr_count = valid_obj_type_and_attr_count(src_obj->objectInfo.objectType);
 		if (attr_count == -1) {
 			tee_ret = TEE_ERROR_GENERIC;
