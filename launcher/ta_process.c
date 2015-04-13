@@ -136,11 +136,8 @@ int ta_process_loop(void *arg)
 	INIT_LIST(&tasks_todo.list);
 	INIT_LIST(&tasks_done.list);
 
-	/* Init epoll and register FD/data */
-	if (init_epoll())
-		exit(TA_EXIT_LAUNCH_FAILED);
-
-	/* listen to inbound connections from the manager */
+	/* Note: Launcher has inited epoll.
+	 * Listen to inbound connections from the manager */
 	if (epoll_reg_fd(man_sockfd, EPOLLIN))
 		exit(TA_EXIT_LAUNCH_FAILED);
 
@@ -175,7 +172,6 @@ int ta_process_loop(void *arg)
 	ret = pthread_create(&ta_logic_thread, &attr, ta_internal_thread, open_msg);
 	if (ret) {
 		OT_LOG(LOG_ERR, "Failed launch thread: %s", strerror(errno));
-		interface->destroy();
 		exit(TA_EXIT_FIRST_OPEN_SESS_FAILED);
 	}
 

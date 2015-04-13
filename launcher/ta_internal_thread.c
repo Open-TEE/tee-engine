@@ -899,7 +899,7 @@ static void close_session(struct ta_task *in_task)
 	interface->close_session((void *)close_msg->sess_ctx);
 
 	if (close_msg->should_ta_destroy) {
-		interface->destroy();
+		unload_ta(interface);
 		exit(TA_EXIT_DESTROY_ENTRY_EXEC);
 	}
 
