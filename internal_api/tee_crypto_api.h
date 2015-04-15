@@ -238,7 +238,7 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uin
  * \return
  */
 TEE_Result TEE_MACCompareFinal(TEE_OperationHandle operation, void *message, uint32_t messageLen,
-			       void *mac, uint32_t *macLen);
+			       void *mac, uint32_t macLen);
 
 /*
  * ## Authenticated Encryption Functions (GB TEE AE API is not supported!) ##

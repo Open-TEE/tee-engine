@@ -3218,7 +3218,7 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uin
 }
 
 TEE_Result TEE_MACCompareFinal(TEE_OperationHandle operation, void *message, uint32_t messageLen,
-			       void *mac, uint32_t *macLen)
+			       void *mac, uint32_t macLen)
 {
 	void *comp_mac = NULL;
 	uint32_t comp_mac_len;
@@ -3242,7 +3242,7 @@ TEE_Result TEE_MACCompareFinal(TEE_OperationHandle operation, void *message, uin
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 
-	if (CRYPTO_memcmp(mac, comp_mac, *macLen) != 0) {
+	if (CRYPTO_memcmp(mac, comp_mac, macLen) != 0) {
 		OT_LOG(LOG_ERR, "TEE_MACCompareFinal: MACs do not match\n");
 		ret = TEE_ERROR_MAC_INVALID;
 	}
