@@ -1,0 +1,191 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1a106d94_6f86b8dc",
+        "filename": "include/socket_help.h",
+        "patchSetId": 10
+      },
+      "lineNbr": 35,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "Would it make sense to move these functions into com_protocol? Because these functions are only needed in that file?",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_af6b901c",
+        "filename": "launcher/dynamic_loader.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 99,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "Not our change, but replace this with calloc and remove include.",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_0f7584f9",
+        "filename": "launcher/launcher_mainloop.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 222,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "FD leak possibility?",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_ef71080d",
+        "filename": "launcher/launcher_mainloop.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 236,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "FD leak possibility?",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_ef8d88d4",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 319,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "Leaking FD in \"normal\" shared memory case?",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_0f7f44ac",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 376,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "FD leak. See line 390",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_4f4c9c9e",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 390,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "Loop might have failed during the third iteration and then we might have two FD open. free_all_shm need to be updated.",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_efa4684c",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 826,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "FD leak. This function is not closing FDs.",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_2f6a00ee",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 857,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "FD leak. This function is not closing FDs.",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_cf26cccd",
+        "filename": "launcher/ta_io_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 210,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "Would it make sense to abstract away fd and fd_count stuff? Hide this into com_protocol file and if fd is send, it will be added into message header. Then com_recv_msg can drop two argument.",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_8f10545a",
+        "filename": "launcher/ta_io_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 245,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T09:39:05Z",
+      "side": 1,
+      "message": "FD leak",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
