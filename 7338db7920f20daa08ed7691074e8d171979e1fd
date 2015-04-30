@@ -186,6 +186,91 @@
       "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_8ae5e2dd",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 77,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T11:02:47Z",
+      "side": 1,
+      "message": "Get rid of if-else if-else. Combine first two into one if -\u003e continue.\n\nAdd TEE_NONE, just to be perfect..",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_caa4faa7",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 89,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T11:02:47Z",
+      "side": 1,
+      "message": "DEfine at top of function",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_6aea26ad",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 594,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T11:02:47Z",
+      "side": 1,
+      "message": "REmove this. The FD can be send part of the message. Combine this with line 571 and make necessary changes to launcher. Thank you :)",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_6a018669",
+        "filename": "manager/shm_mem.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 50,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T11:02:47Z",
+      "side": 1,
+      "message": "is name_len parameter needed, because this function will only work for SHM_MEM_NAME_LEN ?",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_8afcc273",
+        "filename": "manager/shm_mem.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 71,
+      "author": {
+        "id": 1000804
+      },
+      "writtenOn": "2015-04-30T11:02:47Z",
+      "side": 1,
+      "message": "Brian comment: shm_open does not like to have path seperators \u0027/\u0027 in teh name so remove them",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
