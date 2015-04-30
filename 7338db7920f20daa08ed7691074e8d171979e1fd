@@ -19,6 +19,24 @@
     },
     {
       "key": {
+        "uuid": "1a106d94_657ff966",
+        "filename": "include/socket_help.h",
+        "patchSetId": 10
+      },
+      "lineNbr": 35,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1a106d94_6f86b8dc",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "1a106d94_af6b901c",
         "filename": "launcher/dynamic_loader.c",
         "patchSetId": 10
@@ -30,6 +48,24 @@
       "writtenOn": "2015-04-30T09:39:05Z",
       "side": 1,
       "message": "Not our change, but replace this with calloc and remove include.",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_e5a769a5",
+        "filename": "launcher/dynamic_loader.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 99,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1a106d94_af6b901c",
       "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
@@ -87,6 +123,24 @@
     },
     {
       "key": {
+        "uuid": "1a106d94_65e099fa",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 319,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "yes, in both cases",
+      "parentUuid": "1a106d94_ef8d88d4",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "1a106d94_0f7f44ac",
         "filename": "launcher/ta_internal_thread.c",
         "patchSetId": 10
@@ -121,6 +175,29 @@
     },
     {
       "key": {
+        "uuid": "1a106d94_6571b9a7",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 577,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "need to check if fd is greater than -1",
+      "range": {
+        "startLine": 577,
+        "startChar": 8,
+        "endLine": 577,
+        "endChar": 9
+      },
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "1a106d94_efa4684c",
         "filename": "launcher/ta_internal_thread.c",
         "patchSetId": 10
@@ -132,6 +209,24 @@
       "writtenOn": "2015-04-30T09:39:05Z",
       "side": 1,
       "message": "FD leak. This function is not closing FDs.",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_45a3ddb1",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 826,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "nope, TA closes the FD after mapping",
+      "parentUuid": "1a106d94_efa4684c",
       "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
@@ -155,6 +250,24 @@
     },
     {
       "key": {
+        "uuid": "1a106d94_a593b159",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 857,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "fd is closed at the time of mapping in open_shared_mem",
+      "parentUuid": "1a106d94_2f6a00ee",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "1a106d94_cf26cccd",
         "filename": "launcher/ta_io_thread.c",
         "patchSetId": 10
@@ -166,6 +279,24 @@
       "writtenOn": "2015-04-30T09:39:05Z",
       "side": 1,
       "message": "Would it make sense to abstract away fd and fd_count stuff? Hide this into com_protocol file and if fd is send, it will be added into message header. Then com_recv_msg can drop two argument.",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_a570d172",
+        "filename": "launcher/ta_io_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 210,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "as discussed, lets leave it like this for now, as sendmdg vs sendv and counterparts are not tested if can be unifid",
+      "parentUuid": "1a106d94_cf26cccd",
       "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
@@ -189,6 +320,24 @@
     },
     {
       "key": {
+        "uuid": "1a106d94_65853906",
+        "filename": "launcher/ta_io_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 245,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1a106d94_8f10545a",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "1a106d94_8ae5e2dd",
         "filename": "manager/logic_thread.c",
         "patchSetId": 10
@@ -200,6 +349,24 @@
       "writtenOn": "2015-04-30T11:02:47Z",
       "side": 1,
       "message": "Get rid of if-else if-else. Combine first two into one if -\u003e continue.\n\nAdd TEE_NONE, just to be perfect..",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_85979539",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 77,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1a106d94_8ae5e2dd",
       "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
@@ -223,6 +390,24 @@
     },
     {
       "key": {
+        "uuid": "1a106d94_45911d46",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 89,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1a106d94_caa4faa7",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "1a106d94_6aea26ad",
         "filename": "manager/logic_thread.c",
         "patchSetId": 10
@@ -234,6 +419,24 @@
       "writtenOn": "2015-04-30T11:02:47Z",
       "side": 1,
       "message": "REmove this. The FD can be send part of the message. Combine this with line 571 and make necessary changes to launcher. Thank you :)",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_a5a1f195",
+        "filename": "manager/logic_thread.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 594,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "yes, and as agreed, lets do it after we are sure that the recvmsg and recvv apis are working",
+      "parentUuid": "1a106d94_6aea26ad",
       "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
@@ -257,6 +460,24 @@
     },
     {
       "key": {
+        "uuid": "1a106d94_05c28533",
+        "filename": "manager/shm_mem.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 50,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "removed paremeter",
+      "parentUuid": "1a106d94_6a018669",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "1a106d94_8afcc273",
         "filename": "manager/shm_mem.c",
         "patchSetId": 10
@@ -268,6 +489,24 @@
       "writtenOn": "2015-04-30T11:02:47Z",
       "side": 1,
       "message": "Brian comment: shm_open does not like to have path seperators \u0027/\u0027 in teh name so remove them",
+      "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_45b8fdc7",
+        "filename": "manager/shm_mem.c",
+        "patchSetId": 10
+      },
+      "lineNbr": 71,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-04-30T12:53:01Z",
+      "side": 1,
+      "message": "from specification: \"For portable use, a shared memory object should be identified by a name of the form /somename\" current format is /tttnumbertttttnumbertttnymberttttt",
+      "parentUuid": "1a106d94_8afcc273",
       "revId": "7338db7920f20daa08ed7691074e8d171979e1fd",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
