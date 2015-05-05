@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1a106d94_30707c71",
+        "filename": "manager/Makemodule.am",
+        "patchSetId": 13
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-05-05T10:29:28Z",
+      "side": 1,
+      "message": "and from the qbs file can remove the  \"uuid\", \"crypt\",",
+      "range": {
+        "startLine": 37,
+        "startChar": 0,
+        "endLine": 37,
+        "endChar": 23
+      },
+      "revId": "cd80dbd5dae1cf386e36cda0d783ac75a7de12d4",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
