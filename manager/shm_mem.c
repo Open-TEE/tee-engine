@@ -29,7 +29,6 @@
 #include <cutils/ashmem.h>
 #endif /* ANDROID */
 
-#include "com_protocol.h"
 #include "extern_resources.h"
 #include "io_thread.h"
 #include "logic_thread.h"

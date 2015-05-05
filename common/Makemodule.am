@@ -7,7 +7,6 @@ libCommonApi_la_includes = \
 	include/elf_read.h \
 	include/epoll_wrapper.h \
 	include/h_table.h \
-	include/socket_help.h \
 	include/tee_list.h \
 	include/tee_logging.h
 
@@ -15,7 +14,6 @@ libCommonApi_la_SOURCES = ${libCommonApi_la_includes} \
 	common/com_protocol.c \
 	common/elf_read.c \
 	common/epoll_wrapper.c \
-	common/socket_help.c \
 	common/tee_list.c
 
 libCommonApi_la_CFLAGS = ${AM_CFLAGS} \
@@ -26,4 +24,3 @@ libCommonApi_la_LDFLAGS = ${AM_LDFLAGS} \
 	-lz
 
 libCommonApi_la_LIBADD =
-
