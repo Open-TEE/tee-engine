@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1a106d94_107c6071",
+        "filename": "manager/shm_mem.c",
+        "patchSetId": 11
+      },
+      "lineNbr": 32,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-05-05T09:37:20Z",
+      "side": 1,
+      "message": "is this still used ?",
+      "range": {
+        "startLine": 32,
+        "startChar": 10,
+        "endLine": 32,
+        "endChar": 14
+      },
+      "revId": "a9a8964f2bfd1aa502da2e0bc0f61dcd4862cfa5",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
