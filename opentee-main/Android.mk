@@ -18,4 +18,8 @@ LOCAL_C_INCLUDES    :=  \
 LOCAL_SHARED_LIBRARIES := libdl
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/include
 
+ifeq ($(TARGET_ARCH),arm)
+LOCAL_LDFLAGS := -Wl,--hash-style=sysv
+endif
+
 include $(BUILD_EXECUTABLE)

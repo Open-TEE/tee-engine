@@ -30,4 +30,8 @@ LOCAL_SHARED_LIBRARIES := libssl libcrypto libc
 LOCAL_EXPORT_C_INCLUDE_DIRS :=	\
 				$(LOCAL_PATH)/../include
 
+ifeq ($(TARGET_ARCH),arm)
+LOCAL_LDFLAGS := -Wl,--hash-style=sysv
+endif
+
 include $(BUILD_SHARED_LIBRARY)
