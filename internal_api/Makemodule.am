@@ -26,6 +26,8 @@ libInternalApi_la_includes = \
 libInternalApi_la_SOURCES = ${libInternalApi_la_includes} \
 	internal_api/callbacks.c \
 	internal_api/openssl_1_0_2_beta_rsa_oaep.c \
+	internal_api/opentee_internal_api.c \
+	internal_api/opentee_storage_common.c \
 	internal_api/tee_bigint.c \
 	internal_api/tee_cancellation.c \
 	internal_api/tee_crypto_api.c \
