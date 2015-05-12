@@ -10,14 +10,16 @@ libLauncherApi_la_includes = \
 	launcher/ta_ctl_resources.h \
 	launcher/ta_internal_thread.h \
 	launcher/ta_io_thread.h \
-	launcher/ta_process.h
+	launcher/ta_process.h \
+	launcher/ta_signal_handler.h
 
 libLauncherApi_la_SOURCES = ${libLauncherApi_la_includes} \
 	launcher/dynamic_loader.c \
 	launcher/launcher_mainloop.c \
 	launcher/ta_internal_thread.c \
 	launcher/ta_io_thread.c \
-	launcher/ta_process.c
+	launcher/ta_process.c \
+	launcher/ta_signal_handler.c
 
 libLauncherApi_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/include \
