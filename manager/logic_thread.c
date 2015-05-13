@@ -1130,9 +1130,9 @@ static TEE_Result mgr_cmd_reset_persist_obj_enum(struct com_mgr_invoke_cmd_paylo
 		return TEE_ERROR_OUT_OF_MEMORY;
 
 	enumHandle->ID = enumCommand->ID;
-
 	MGR_TEE_ResetPersistentObjectEnumerator(enumHandle);
 
+	free(enumHandle);
 	return TEE_SUCCESS;
 }
 
@@ -1407,6 +1407,7 @@ static void invoke_mgr_cmd(struct manager_msg *man_msg)
 	/* prepare the message for return, return payload copy and possible realloc*/
 	/* make size 0 means that there is no payload return, and must be marked to 0 */
 	invoke_msg->payload.size = 0;
+	invoke_msg->result = retVal;
 
 	if (in.size < out.size) {
 		uint32_t sizeDiff = out.size - in.size;
@@ -1425,8 +1426,6 @@ static void invoke_mgr_cmd(struct manager_msg *man_msg)
 		free(out.data);
 		out.data = 0;
 	}
-
-	invoke_msg->result = retVal;
 
 	add_msg_out_queue_and_notify(man_msg);
 
@@ -1983,7 +1982,7 @@ static void request_cancel(struct manager_msg *man_msg)
 			continue;
 
 		new_man_msg = calloc(1, sizeof(struct manager_msg));
-		if (!man_msg) {
+		if (!new_man_msg) {
 			OT_LOG(LOG_ERR, "Out of memory\n");
 			continue;
 		}

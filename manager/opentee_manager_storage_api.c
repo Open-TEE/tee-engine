@@ -306,6 +306,7 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 
 err_out_of_mem_3:
 	free_object(cpy_obj);
+	cpy_obj = NULL;
 err_out_of_mem_2:
 	free(cpy_obj);
 err_out_of_mem_1:

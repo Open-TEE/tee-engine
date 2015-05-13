@@ -528,7 +528,7 @@ static TEE_Result wait_and_handle_invoke_mgr_cmd_resp(
 		struct com_mgr_invoke_cmd_payload *returnPayload)
 {
 	struct com_msg_invoke_mgr_cmd *resp_invoke_msg = NULL;
-	TEE_Result ret;
+	TEE_Result ret = TEEC_ERROR_BAD_PARAMETERS;
 
 	if (!wait_response_msg())
 		goto err_com;
@@ -601,11 +601,7 @@ static int open_shared_mem(int fd, void **buffer, uint32_t size, bool isOutput)
 	}
 #endif /* ANDROID */
 
-	/* mmap does not allow for the size to be zero, however the TEEC API allows it, so map a
-	 * size of 1 byte, though it will probably be mapped to a page
-	 */
-	address = mmap(NULL, size != 0 ? size : 1,
-		       ((flag == O_RDONLY) ? PROT_READ : (PROT_WRITE | PROT_READ)),
+	address = mmap(NULL, size, ((flag == O_RDONLY) ? PROT_READ : (PROT_WRITE | PROT_READ)),
 		       MAP_SHARED, fd, 0);
 	if (address == MAP_FAILED) {
 		OT_LOG(LOG_ERR, "Failed to mmap the area");
@@ -1180,6 +1176,7 @@ TEE_Result ta_invoke_ta_command(TEE_TASessionHandle session,
 
 err_2:
 	free_task(new_ta_task);
+	new_ta_task = NULL;
 err_1:
 	free(new_ta_task);
 	if (returnOrigin)
@@ -1226,9 +1223,14 @@ TEE_Result ta_invoke_mgr_command(uint32_t cancellationRequestTimeout, uint32_t c
 	invoke_msg->msg_hdr.msg_type = COM_TYPE_QUERY;
 	invoke_msg->msg_hdr.sess_id = 0;
 	invoke_msg->cmd_id = commandID;
-	invoke_msg->payload.size = sendPayload->size;
-	if (invoke_msg->payload.size > 0)
-		memcpy(&invoke_msg->payload.data, sendPayload->data, invoke_msg->payload.size);
+
+	if (sendPayload) {
+		invoke_msg->payload.size = sendPayload->size;
+		if (invoke_msg->payload.size > 0) {
+			memcpy(&invoke_msg->payload.data,
+			       sendPayload->data, invoke_msg->payload.size);
+		}
+	}
 
 	add_msg_done_queue_and_notify(new_ta_task);
 
