@@ -342,7 +342,8 @@ size_t ext_get_storage_blob_size(uint32_t storage_blob_id)
 	FILE *file = storage_id_to_file(storage_blob_id);
 	struct stat st;
 	if (file) {
-		fstat(fileno(file), &st);
+		if (fstat(fileno(file), &st))
+			return 0; /* some error occured */
 		return st.st_size;
 	}
 	return 0;
