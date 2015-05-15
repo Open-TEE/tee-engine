@@ -16,6 +16,24 @@
       "revId": "eb945efa74da21720b76721aee7c61ae98030512",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_44bf1161",
+        "filename": "launcher/ta_internal_thread.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 607,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-05-15T11:27:01Z",
+      "side": 1,
+      "message": "actually there is a check for if (size \u003d\u003d 0) return ... earlier in the function which triggered this warning from coverity that \"dead un reachable code\" because it can never follow the if size \u003d\u003d 0 branch :D",
+      "parentUuid": "1a106d94_44d6f128",
+      "revId": "eb945efa74da21720b76721aee7c61ae98030512",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
