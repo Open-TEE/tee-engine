@@ -1052,7 +1052,8 @@ static TEE_Result mgr_cmd_rename_persistent(struct com_mgr_invoke_cmd_payload *i
 		ret = MGR_TEE_RenamePersistentObject(object, renameMessage->newObjectID,
 						     renameMessage->newObjectIDLen);
 
-		free_object(object);
+		if (ret != TEE_ERROR_CORRUPT_OBJECT)
+			free_object(object);
 	}
 
 	return ret;
@@ -1223,7 +1224,9 @@ static TEE_Result mgr_cmd_read_obj_data(struct com_mgr_invoke_cmd_payload *in,
 		}
 	}
 
-	free_object(handle);
+	if (ret != TEE_ERROR_CORRUPT_OBJECT)
+		free_object(handle);
+
 	return ret;
 }
 
@@ -1253,7 +1256,8 @@ static TEE_Result mgr_cmd_write_obj_data(struct com_mgr_invoke_cmd_payload *in,
 		return_transfer_struct->per_data_size = handle->per_object.data_size;
 	}
 
-	free_object(handle);
+	if (ret != TEE_ERROR_CORRUPT_OBJECT)
+		free_object(handle);
 
 	return ret;
 }
@@ -1282,7 +1286,9 @@ static TEE_Result mgr_cmd_truncate_obj_data(struct com_mgr_invoke_cmd_payload *i
 		return_transfer_struct->per_data_size = handle->per_object.data_size;
 
 	}
-	free_object(handle);
+
+	if (ret != TEE_ERROR_CORRUPT_OBJECT)
+		free_object(handle);
 
 	return ret;
 }
@@ -1314,7 +1320,8 @@ static TEE_Result mgr_cmd_seek_obj_data(struct com_mgr_invoke_cmd_payload *in,
 		return_transfer_struct->per_data_size = handle->per_object.data_size;
 	}
 
-	free_object(handle);
+	if (ret != TEE_ERROR_CORRUPT_OBJECT)
+		free_object(handle);
 
 	return ret;
 }
