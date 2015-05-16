@@ -53,7 +53,7 @@
 char *child_stack;
 
 #define MAX_CURR_EVENTS 5
-#define CHILD_STACK_SIZE 8192
+#define CHILD_STACK_SIZE 8192 /* this is a small stack, normal stack size is 8192 * 1024 */
 
 #ifdef GRACEFUL_TERMINATION
 /* Freeing only resources that are allocated here */
@@ -105,9 +105,11 @@ int lib_main_loop(struct core_control *ctl_params)
 	int ret, event_count, i;
 	sigset_t sig_empty_set, sig_block_set;
 	struct epoll_event cur_events[MAX_CURR_EVENTS];
-	struct ta_loop_arg ta_loop_args;
+	struct ta_loop_arg ta_loop_args = {0};
 	int shm_fds[4];
 	int shm_fd_count;
+
+	memset(&new_ta_info, 0, sizeof(struct com_msg_ta_created));
 
 	child_stack = calloc(1, CHILD_STACK_SIZE);
 	if (!child_stack) {

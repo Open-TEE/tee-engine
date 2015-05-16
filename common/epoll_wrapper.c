@@ -46,7 +46,7 @@ int init_epoll()
 
 int epoll_reg_fd(int fd, uint32_t events)
 {
-	struct epoll_event event;
+	struct epoll_event event = {0};
 
 	event.events = events;
 	event.data.fd = fd;
@@ -56,7 +56,7 @@ int epoll_reg_fd(int fd, uint32_t events)
 
 int epoll_reg_data(int fd, uint32_t events, void *data)
 {
-	struct epoll_event event;
+	struct epoll_event event = {0};
 
 	event.events = events;
 	event.data.ptr = data;
@@ -66,7 +66,7 @@ int epoll_reg_data(int fd, uint32_t events, void *data)
 
 int epoll_unreg(int fd)
 {
-	struct epoll_event event;
+	struct epoll_event event = {0};
 	event.events = EPOLLIN;
 
 	return wrap_epoll_ctl(fd, &event, EPOLL_CTL_DEL);
