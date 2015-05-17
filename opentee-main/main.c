@@ -14,6 +14,10 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <string.h>
+
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -22,12 +26,12 @@
 #include <signal.h>
 #include <dlfcn.h>
 #include <sys/prctl.h>
-#include <string.h>
 #include <pthread.h>
 #include <sys/eventfd.h>
 #include <errno.h>
 #include <linux/limits.h>
 #include <syslog.h>
+#include <unistd.h>
 
 #include "subprocess.h"
 #include "conf_parser.h"
@@ -180,6 +184,108 @@ int load_lib(char *path, main_loop_cb *callback)
 	return ret;
 }
 
+/*!
+ * \brief check_create_pid_file
+ * Check the existance of a PID file and try to aquire a lock on it, if we fail to lock the file
+ * then it probably means that another instance of this program is already running and it must be
+ * killed first
+ * \param proc_name The name of this process e.e. argv[0]
+ * \param write_pid Should we write the pid of this process? if false we will just check if we can
+ * aquire a lock and will close the fd of the pid file before returning, if true we will write
+ * to the pid file and keep the file handle to the pid file open, hence holding the lock.
+ * \return 0 on success
+ */
+int check_create_pid_file(char *proc_name_a0, bool write_pid)
+{
+	struct stat st = {0};
+	char *pid_file = NULL;
+	char *pid_str = NULL;
+	int fd, ret = 0;
+	struct flock lock;
+	char pid_dir[100] = {0};
+	char *proc_name = basename(proc_name_a0);
+
+	/* determine if the directory /var/run/opentee exists, this is the preferred place
+	 * for daemon run files, i.e. when running in production this is where we will
+	 * store the information, but when developing Open-TEE engine itself we will just use the
+	 * /tmp dir for fast and easy starts and stops of the processes
+	 */
+	if (stat(PID_FILE_ROOT, &st) == -1) {
+		/* we will use the tmp dir for the pid_file */
+		memcpy(pid_dir, PID_FILE_USER, strnlen(PID_FILE_USER, sizeof(pid_dir) - 1));
+		if (mkdir(pid_dir, 0755) == -1 && errno != EEXIST) {
+			printf("Error mkdir %s\n", strerror(errno));
+			ret = -1;
+			goto out;
+		}
+	} else {
+		/* either a wrapper program or init script has created the PID_FILE_ROOT for us */
+		memcpy(pid_dir, PID_FILE_ROOT, strnlen(PID_FILE_ROOT, sizeof(pid_dir) - 1));
+	}
+
+	if (asprintf(&pid_file, "%s/%s.pid", pid_dir, proc_name) == -1) {
+		printf("problems with asprintf\n");
+		goto out;
+	}
+
+	fd = open(pid_file, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	if (fd == -1) {
+		printf("Could not open the PID file (%s)\n", strerror(errno));
+		ret = 2;
+		goto out;
+	}
+
+	/* create a lock on the pid file */
+	lock.l_type = F_WRLCK;
+	lock.l_whence = SEEK_SET;
+	lock.l_start = 0;
+	lock.l_len = 0;
+
+	if (fcntl(fd, F_SETLK, &lock) == -1) {
+		if (errno == EACCES || errno == EAGAIN) {
+			printf("\"%s\" is already running, pid file (%s) is locked!!\n",
+			       proc_name, pid_file);
+		} else {
+			printf("Failed to lock pid_file (%s): %s\n", pid_file, strerror(errno));
+		}
+
+		ret = 3;
+		goto out;
+	}
+
+	/* We just wanted to test if we already have a running daemon */
+	if (!write_pid) {
+		close(fd);
+		goto out;
+	}
+
+	if (ftruncate(fd, 0) == -1) {
+		printf("Problems with truncate\n");
+		ret = 4;
+		goto out;
+	}
+
+	/* we are the only process running this program */
+	if (asprintf(&pid_str, "%ld", (long)getpid()) == -1) {
+		printf("problems with asprintf for pid\n");
+		ret = 5;
+		goto out;
+	}
+
+	if (write(fd, pid_str, strlen(pid_str)) != (ssize_t)strlen(pid_str)) {
+		printf("Failed to write the pid to the pid file\n");
+		ret = 6;
+	}
+
+	if (ret == 0)
+		control_params.pid_file_fd = fd;
+
+	free(pid_str);
+out:
+	free(pid_file);
+	return ret;
+}
+
 int main(int argc, char **argv)
 {
 	struct sigaction sig_act;
@@ -216,13 +322,17 @@ int main(int argc, char **argv)
 	if (sigaction(SIGINT, &sig_act, NULL) == -1)
 		exit(1);
 
-	/*
-	 * TODO: we should probably implement some file locks to ensure only one instance of the
-	 * daemon is running at any one time.
-	 */
+	/* ensure that only one instance of this program is running */
+	if (check_create_pid_file(argv[0], false))
+		exit(1);
 
 	/* Daemonize if foreground was not requested */
 	if (!arguments.foreground && daemonize())
+		exit(1);
+
+	/* write the PID of the manager process to the pid file and keep the file
+	 * open, hence locked */
+	if (check_create_pid_file(argv[0], true))
 		exit(1);
 
 	/* create a socket pair so the manager and launcher can communicate */

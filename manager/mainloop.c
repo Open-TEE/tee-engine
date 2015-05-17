@@ -79,15 +79,11 @@ int event_close_sock;
  */
 static int init_sock(int *pub_sockfd)
 {
-#ifdef ANDROID
-	const char *sock_path = "/data/open_tee_sock";
-#else
-	const char *sock_path = "/tmp/open_tee_sock";
-#endif
 	struct sockaddr_un sock_addr;
 
-	if (remove(sock_path) == -1 && errno != ENOENT) {
-		OT_LOG(LOG_ERR, "Failed to remove %s : %s", sock_path, strerror(errno));
+	if (remove(WELL_KNOWN_PUBLIC_SOCK_PATH) == -1 && errno != ENOENT) {
+		OT_LOG(LOG_ERR, "Failed to remove %s : %s",
+		       WELL_KNOWN_PUBLIC_SOCK_PATH, strerror(errno));
 		return -1;
 	}
 
@@ -98,7 +94,7 @@ static int init_sock(int *pub_sockfd)
 	}
 
 	memset(&sock_addr, 0, sizeof(struct sockaddr_un));
-	strncpy(sock_addr.sun_path, sock_path, sizeof(sock_addr.sun_path) - 1);
+	strncpy(sock_addr.sun_path, WELL_KNOWN_PUBLIC_SOCK_PATH, sizeof(sock_addr.sun_path) - 1);
 	sock_addr.sun_family = AF_UNIX;
 
 	if (bind(*pub_sockfd, (struct sockaddr *)&sock_addr, sizeof(struct sockaddr_un)) == -1) {
