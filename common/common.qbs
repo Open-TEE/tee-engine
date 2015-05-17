@@ -27,7 +27,7 @@ DynamicLibrary {
         "../include"
     ]
 
-    cpp.defines: ["OT_LOGGING"]
+    cpp.defines: ["OT_LOGGING", "_FORTIFY_SOURCE=2"]
 
     files: [
         "../include/com_protocol.h",
