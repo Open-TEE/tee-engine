@@ -28,6 +28,10 @@
 #define TEE_SIG_HUP		0x00000004
 #define TEE_SIG_INT		0x00000008
 
+/* if running as root then use the /var/run directory, otherwise for R&D just use tmp */
+#define PID_FILE_ROOT "/var/run/opentee"
+#define PID_FILE_USER "/tmp/opentee"
+
 /* clang-format on */
 
 /*!
@@ -45,6 +49,7 @@ struct core_control {
 	void (*fn_cleanup_launher)(void); /* Can be used only when flag GRACEFUL_TERMINATION def*/
 	void (*fn_cleanup_core)(void); /* Can be used only when flag GRACEFUL_TERMINATION def*/
 	int comm_sock_fd;
+	int pid_file_fd;
 };
 
 #endif /* __CORE_CONTROL_RESOURCES_H__ */
