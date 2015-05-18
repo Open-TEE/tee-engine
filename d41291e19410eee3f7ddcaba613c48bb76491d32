@@ -16,6 +16,24 @@
       "revId": "d41291e19410eee3f7ddcaba613c48bb76491d32",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_7840e507",
+        "filename": "Makefile.am",
+        "patchSetId": 2
+      },
+      "lineNbr": 7,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-05-18T10:28:29Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1a106d94_bdcfef56",
+      "revId": "d41291e19410eee3f7ddcaba613c48bb76491d32",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
