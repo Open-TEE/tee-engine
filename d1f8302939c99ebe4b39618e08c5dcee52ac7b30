@@ -19,6 +19,24 @@
     },
     {
       "key": {
+        "uuid": "1a106d94_98d84181",
+        "filename": "include/core_control_resources.h",
+        "patchSetId": 1
+      },
+      "lineNbr": 33,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-05-18T10:22:56Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1a106d94_bd240f0f",
+      "revId": "d1f8302939c99ebe4b39618e08c5dcee52ac7b30",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "1a106d94_9df3139f",
         "filename": "opentee-main/main.c",
         "patchSetId": 1
@@ -30,6 +48,24 @@
       "writtenOn": "2015-05-18T09:06:46Z",
       "side": 1,
       "message": "exit with goto",
+      "revId": "d1f8302939c99ebe4b39618e08c5dcee52ac7b30",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_58f7e9f5",
+        "filename": "opentee-main/main.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 228,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-05-18T10:22:56Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1a106d94_9df3139f",
       "revId": "d1f8302939c99ebe4b39618e08c5dcee52ac7b30",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
@@ -53,6 +89,24 @@
     },
     {
       "key": {
+        "uuid": "1a106d94_78f2a507",
+        "filename": "opentee-main/main.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 249,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-05-18T10:22:56Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1a106d94_bd3d2f2f",
+      "revId": "d1f8302939c99ebe4b39618e08c5dcee52ac7b30",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "1a106d94_5d107ba8",
         "filename": "opentee-main/main.c",
         "patchSetId": 1
@@ -64,6 +118,24 @@
       "writtenOn": "2015-05-18T09:06:46Z",
       "side": 1,
       "message": "why to disable on android :/",
+      "revId": "d1f8302939c99ebe4b39618e08c5dcee52ac7b30",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1a106d94_18ed7126",
+        "filename": "opentee-main/main.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 325,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-05-18T10:22:56Z",
+      "side": 1,
+      "message": "because I did not know how it handles PID files :)",
+      "parentUuid": "1a106d94_5d107ba8",
       "revId": "d1f8302939c99ebe4b39618e08c5dcee52ac7b30",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
