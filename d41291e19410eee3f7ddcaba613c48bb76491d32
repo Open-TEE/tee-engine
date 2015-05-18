@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1a106d94_bdcfef56",
+        "filename": "Makefile.am",
+        "patchSetId": 2
+      },
+      "lineNbr": 7,
+      "author": {
+        "id": 1003707
+      },
+      "writtenOn": "2015-05-18T08:47:37Z",
+      "side": 1,
+      "message": "-D_GNU_SOURCE or remove it fully, as this is defined within source where needed, and can create double defined warning",
+      "revId": "d41291e19410eee3f7ddcaba613c48bb76491d32",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
