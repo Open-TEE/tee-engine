@@ -41,6 +41,7 @@
 
 #ifdef ANDROID
 #include "android_defines.h"
+#include <libgen.h>
 #endif
 
 static struct core_control control_params;

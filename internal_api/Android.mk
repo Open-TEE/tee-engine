@@ -28,7 +28,8 @@ LOCAL_CFLAGS       := -rdynamic -DANDROID -DOT_LOGGING
 LOCAL_SHARED_LIBRARIES := libssl libcrypto libc
 
 LOCAL_EXPORT_C_INCLUDE_DIRS :=	\
-				$(LOCAL_PATH)/../include
+				$(LOCAL_PATH)/../include \
+				$(LOCAL_PATH)/../internal_api
 
 ifeq ($(TARGET_ARCH),arm)
 LOCAL_LDFLAGS := -Wl,--hash-style=sysv

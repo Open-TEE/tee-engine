@@ -76,13 +76,17 @@ static struct list_head elements_head;
 
 static bool __attribute__((constructor)) storage_ext_init()
 {
+#ifdef ANDROID
+	char *home = "/data";
+#else
 	char *home = getenv("HOME");
+#endif
 
 	if (asprintf(&secure_storage_path, "%s/%s", home, ".TEE_secure_storage/") == -1) {
 		OT_LOG(LOG_ERR, "Failed to malloc secure storage path\n");
 		return false;
 	}
-
+	OT_LOG(LOG_ERR, "storage path(%s)\n", secure_storage_path);
 	INIT_LIST(&elements_head);
 
 	return true;
