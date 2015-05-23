@@ -161,7 +161,7 @@ static int daemonize(void)
 int load_lib(char *path, main_loop_cb *callback)
 {
 	void *lib;
-	char *err = NULL;
+	const char *err = NULL;
 	int ret = 0;
 
 	dlerror();

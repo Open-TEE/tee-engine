@@ -1148,7 +1148,7 @@ static TEE_Result mgr_cmd_start_persist_obj_enum(struct com_mgr_invoke_cmd_paylo
 	out = out;
 
 	if (in->size == (sizeof(struct com_mrg_enum_command) + sizeof(storageID))) {
-		memcpy(&storageID, in->data + sizeof(struct com_mrg_enum_command),
+		memcpy(&storageID, (char *)in->data + sizeof(struct com_mrg_enum_command),
 		       sizeof(storageID));
 
 		enumHandle->ID = enumCommand->ID;
@@ -1173,7 +1173,7 @@ static TEE_Result mgr_cmd_get_next_persist_obj_enum(struct com_mgr_invoke_cmd_pa
 		return TEE_ERROR_OUT_OF_MEMORY;
 
 	if (in->size == sizeof(struct com_mrg_enum_command_next)) {
-		memcpy(&storageID, in->data + sizeof(struct com_mrg_enum_command),
+		memcpy(&storageID, (char *)in->data + sizeof(struct com_mrg_enum_command),
 		       sizeof(storageID));
 
 		enumHandle->ID = enumNext->ID;
@@ -1244,7 +1244,7 @@ static TEE_Result mgr_cmd_write_obj_data(struct com_mgr_invoke_cmd_payload *in,
 	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
 
 	memcpy(&size, writePtr, sizeof(size_t));
-	writePtr += sizeof(size_t);
+	writePtr = (char *)writePtr + sizeof(size_t);
 
 	ret = MGR_TEE_WriteObjectData(handle, writePtr, size);
 
@@ -1307,7 +1307,7 @@ static TEE_Result mgr_cmd_seek_obj_data(struct com_mgr_invoke_cmd_payload *in,
 
 	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
 	memcpy(&offset, writePtr, sizeof(int32_t));
-	writePtr += sizeof(int32_t);
+	writePtr = (char *)writePtr + sizeof(size_t);
 	memcpy(&copyWhence, writePtr, sizeof(uint32_t));
 
 	ret = MGR_TEE_SeekObjectData(handle, offset, copyWhence);

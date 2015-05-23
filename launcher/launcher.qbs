@@ -21,6 +21,7 @@ DynamicLibrary {
     destinationDirectory: '.'
 
     cpp.dynamicLibraries: ["dl", "pthread", "rt"]
+    cpp.commonCompilerFlags: ["-Wpointer-arith"]
 
     cpp.includePaths: [
         "../core",

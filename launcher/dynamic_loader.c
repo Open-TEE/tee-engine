@@ -42,7 +42,7 @@ static void fill_internal_api_callbacks(struct internal_api_callbacks *calls)
 TEE_Result load_ta(const char *path, struct ta_interface **callbacks)
 {
 	struct ta_interface tmp_cb;
-	char *err = NULL;
+	const char *err = NULL;
 	struct internal_api_callbacks internal_api_calls;
 
 	memset((void *)&tmp_cb, 0, sizeof(struct ta_interface));

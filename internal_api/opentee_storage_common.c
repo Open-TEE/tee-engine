@@ -86,10 +86,11 @@ size_t calculate_object_handle_size(TEE_ObjectHandle object_handle)
 	return size;
 }
 
-void *pack_object_handle(TEE_ObjectHandle handle, void *mem)
+void *pack_object_handle(TEE_ObjectHandle handle, void *mem_in)
 {
 	uint32_t count = handle->attrs_count;
 	uint32_t n = 0;
+	char *mem = (char *)mem_in;
 
 	memcpy(mem, &handle->per_object, sizeof(handle->per_object));
 	mem += sizeof(handle->per_object);
@@ -123,15 +124,16 @@ void *pack_object_handle(TEE_ObjectHandle handle, void *mem)
 				mem += sizeof(uintptr_t) - padding;
 		}
 	}
-	return mem;
+	return (void *)mem;
 }
 
-void *unpack_and_alloc_object_handle(TEE_ObjectHandle *returnHandle, void *mem)
+void *unpack_and_alloc_object_handle(TEE_ObjectHandle *returnHandle, void *mem_in)
 {
 	*returnHandle = calloc(1, sizeof(struct __TEE_ObjectHandle));
 	TEE_ObjectHandle handle = *returnHandle;
 	uint32_t count = 0;
 	uint32_t n = 0;
+	char *mem = mem_in;
 
 	memcpy(&handle->per_object, mem, sizeof(handle->per_object));
 	mem += sizeof(handle->per_object);
@@ -150,7 +152,7 @@ void *unpack_and_alloc_object_handle(TEE_ObjectHandle *returnHandle, void *mem)
 		handle->attrs = calloc(count, sizeof(TEE_Attribute));
 		for (; n < count; ++n) {
 			TEE_Attribute *attribute = &handle->attrs[n];
-			TEE_Attribute *attributePipe = mem;
+			TEE_Attribute *attributePipe = (TEE_Attribute *)mem;
 			if (is_value_attribute(attributePipe->attributeID)) {
 				memcpy(attribute, mem, sizeof(TEE_Attribute));
 				mem += sizeof(TEE_Attribute);
@@ -176,7 +178,8 @@ void *unpack_and_alloc_object_handle(TEE_ObjectHandle *returnHandle, void *mem)
 			}
 		}
 	}
-	return mem;
+
+	return (void *)mem;
 }
 
 static bool WEAK_RANDOM_bytes(unsigned char *buf, int num)

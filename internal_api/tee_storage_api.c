@@ -1370,7 +1370,7 @@ TEE_Result TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumer
 	if (payload.data) {
 		enumParams = payload.data;
 		enumParams->ID = objectEnumerator->ID;
-		memcpy(payload.data + sizeof(struct com_mrg_enum_command),
+		memcpy((char *)payload.data + sizeof(struct com_mrg_enum_command),
 		       &storageID,
 		       sizeof(storageID));
 
@@ -1482,7 +1482,7 @@ TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t siz
 		writePtr = pack_object_handle(object, writePtr);
 
 		memcpy(writePtr, &size, sizeof(size_t));
-		writePtr += sizeof(size_t);
+		writePtr = (char *)writePtr + sizeof(size_t);
 		memcpy(writePtr, buffer, size);
 
 		retVal = TEE_InvokeMGRCommand(TEE_TIMEOUT_INFINITE,
@@ -1558,7 +1558,7 @@ TEE_Result TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whenc
 
 		writePtr = pack_object_handle(object, writePtr);
 		memcpy(writePtr, &offset, sizeof(int32_t));
-		writePtr += sizeof(int32_t);
+		writePtr = (char *)writePtr + sizeof(size_t);
 		memcpy(writePtr, &copyWhence, sizeof(uint32_t));
 
 		retVal = TEE_InvokeMGRCommand(TEE_TIMEOUT_INFINITE, COM_MGR_CMD_ID_SEEK_OBJ_DATA,
