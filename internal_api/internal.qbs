@@ -23,6 +23,8 @@ DynamicLibrary {
 
     cpp.defines: ["OT_LOGGING", "_FORTIFY_SOURCE=2"]
 
+    cpp.commonCompilerFlags: ["-Wpointer-arith"]
+
     destinationDirectory: '.'
 
     files: [
