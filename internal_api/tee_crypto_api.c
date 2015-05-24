@@ -41,6 +41,7 @@
 #include <string.h>
 #include <limits.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "tee_crypto_api.h"
 #include "tee_memory.h"
