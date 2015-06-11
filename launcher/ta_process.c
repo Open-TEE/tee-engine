@@ -14,8 +14,6 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#define _GNU_SOURCE
-
 #include <errno.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -132,7 +130,7 @@ int ta_process_loop(void *arg)
 	int event_count, i;
 	char proc_name[MAX_PR_NAME] = {0}; /* For now */
 	sigset_t sig_empty_set;
-	char *path = NULL;
+	char path[MAX_PATH_NAME] = {0};
 	struct core_control *ctl_params = ((struct ta_loop_arg *)arg)->ctl_params;
 	struct com_msg_open_session *open_msg = ((struct ta_loop_arg *)arg)->recv_open_msg;
 	int man_sockfd = ((struct ta_loop_arg *)arg)->com_sock;
@@ -149,9 +147,9 @@ int ta_process_loop(void *arg)
 
 	openlog(proc_name, 0, LOG_USER);
 
-	if (asprintf(&path, "%s/%s", ctl_params->opentee_conf->ta_dir_path,
-		     open_msg->ta_so_name) == -1) {
-		OT_LOG(LOG_ERR, "out of memory");
+	if (snprintf(path, MAX_PATH_NAME, "%s/%s", ctl_params->opentee_conf->ta_dir_path,
+		     open_msg->ta_so_name) == MAX_PATH_NAME) {
+		OT_LOG(LOG_ERR, "too long ta path location");
 		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 
@@ -161,9 +159,6 @@ int ta_process_loop(void *arg)
 		OT_LOG(LOG_ERR, "Failed to load the TA");
 		exit(TA_EXIT_LAUNCH_FAILED);
 	}
-
-	/* Finished with the library path name so clean it up */
-	free(path);
 
 	/* Note: All signal are blocked. Prepare allow set when we can accept signals */
 	if (sigemptyset(&sig_empty_set)) {

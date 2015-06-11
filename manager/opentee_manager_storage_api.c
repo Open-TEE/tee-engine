@@ -14,8 +14,6 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#define _GNU_SOURCE
-
 #include <string.h>
 #include <sys/stat.h>
 
@@ -160,8 +158,10 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 	for (i = 0; i < obj->attrs_count; ++i) {
 		if (ext_read_stream(obj->per_object.storage_blob_id, obj->per_object.data_begin,
 				    &obj->attrs[i], sizeof(TEE_Attribute))
-		    != sizeof(TEE_Attribute))
+		    != sizeof(TEE_Attribute)) {
+			OT_LOG(LOG_ERR, "read_stream returned incorrect size for TEE_attribute");
 			goto err_at_read;
+		}
 
 		obj->per_object.data_begin += sizeof(TEE_Attribute);
 
@@ -177,8 +177,11 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 					    obj->per_object.data_begin,
 					    obj->attrs[i].content.ref.buffer,
 					    obj->attrs[i].content.ref.length)
-			    != obj->attrs[i].content.ref.length)
+			    != obj->attrs[i].content.ref.length) {
+				OT_LOG(LOG_ERR, "read_stream returned incorrect size buf(%zu)",
+						obj->attrs[i].content.ref.length);
 				goto err_at_read;
+			}
 
 			obj->per_object.data_begin += obj->attrs[i].content.ref.length;
 		}

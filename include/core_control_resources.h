@@ -22,6 +22,7 @@
 
 /* clang-format off */
 #define MAX_PR_NAME		16
+#define MAX_PATH_NAME		512
 
 #define TEE_SIG_CHILD		0x00000001
 #define TEE_SIG_TERM		0x00000002
