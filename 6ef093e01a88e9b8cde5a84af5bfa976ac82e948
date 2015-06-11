@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "facab960_c71625f1",
+        "filename": "internal_api/opentee_storage_common.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 186,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-06-11T10:46:26Z",
+      "side": 1,
+      "message": "without being seeded isn\u0027t rand a really really terrible source of randomness, i.e. exact same results every time",
+      "range": {
+        "startLine": 186,
+        "startChar": 26,
+        "endLine": 186,
+        "endChar": 30
+      },
+      "revId": "6ef093e01a88e9b8cde5a84af5bfa976ac82e948",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "facab960_07bf2dd1",
+        "filename": "manager/ext_storage_stream_api_posix.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 143,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-06-11T10:46:26Z",
+      "side": 1,
+      "message": "in the convention that we have used, generally the \u003d\u003d is on the previous line, and the wrapping occurs after that",
+      "range": {
+        "startLine": 143,
+        "startChar": 5,
+        "endLine": 143,
+        "endChar": 7
+      },
+      "revId": "6ef093e01a88e9b8cde5a84af5bfa976ac82e948",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
