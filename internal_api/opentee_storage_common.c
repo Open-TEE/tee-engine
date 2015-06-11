@@ -179,14 +179,11 @@ void *unpack_and_alloc_object_handle(TEE_ObjectHandle *returnHandle, void *mem)
 	return mem;
 }
 
-static bool WEAK_RANDOM_bytes(unsigned char *buf, int num)
+static bool WEAK_RANDOM_bytes(unsigned char *buf, int size)
 {
-	unsigned char foo = num;
-	while (--num) {
-		foo |= foo * num + (num >> 1);
-		buf[num] |= foo;
-	}
-	buf[num] |= foo;
+	int n;
+	for (n = 0; n < size; n++)
+		buf[n] = (unsigned char)rand();
 	return true;
 }
 

@@ -15,11 +15,10 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#define _GNU_SOURCE
-
 #include "conf_parser.h"
 #include "ini.h"
 #include "tee_logging.h"
+#include "core_control_resources.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -61,10 +60,10 @@ static int ini_handler(void *user, const char *section, const char *name, const 
  */
 static int fixup_lib_path(const char *path, char **lib_name)
 {
-	char *tmp = NULL;
+	char tmp[MAX_PATH_NAME] = {0};
 	int ret = 0;
 
-	if (asprintf(&tmp, "%s/%s", path, *lib_name) == -1) {
+	if (snprintf(tmp, MAX_PATH_NAME, "%s/%s", path, *lib_name) == MAX_PATH_NAME) {
 		OT_LOG(LOG_ERR, "Failed to make %s path", *lib_name);
 		ret = -1;
 		goto out;
@@ -75,7 +74,6 @@ static int fixup_lib_path(const char *path, char **lib_name)
 	*lib_name = strdup(tmp);
 
 out:
-	free(tmp);
 	return ret;
 }
 

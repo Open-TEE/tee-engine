@@ -15,8 +15,6 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#define _GNU_SOURCE
-
 #include <dirent.h>
 #include <errno.h>
 #include <gelf.h>
@@ -176,7 +174,7 @@ end:
 
 static void add_new_ta(char *name)
 {
-	char *ta_with_path = NULL;
+	char ta_with_path[MAX_PATH_NAME] = {0};
 	struct loaded_ta *new_ta_propertie = NULL;
 	size_t ta_user_config_size = sizeof(struct gpd_ta_config);
 
@@ -185,9 +183,9 @@ static void add_new_ta(char *name)
 		return;
 	}
 
-	if (asprintf(&ta_with_path, "%s/%s",
-		     control_params->opentee_conf->ta_dir_path, name) == -1) {
-		OT_LOG(LOG_ERR, "Out of memory");
+	if (snprintf(ta_with_path, MAX_PATH_NAME, "%s/%s",
+		     control_params->opentee_conf->ta_dir_path, name) == MAX_PATH_NAME) {
+		OT_LOG(LOG_ERR, "ta path name overflow");
 		goto err;
 	}
 
@@ -223,12 +221,10 @@ static void add_new_ta(char *name)
 
 	ta_dir_watch_unlock_mutex();
 
-	free(ta_with_path);
 	return;
 
 err:
 	OT_LOG(LOG_ERR, "TA \"%s\" rejected", name);
-	free(ta_with_path);
 	free(new_ta_propertie);
 }
 
