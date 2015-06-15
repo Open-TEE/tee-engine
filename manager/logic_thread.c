@@ -181,7 +181,9 @@ static void free_proc(proc_t del_proc)
 			goto skip;
 		}
 
-		list_unlink(&del_proc->list);
+		/* ugly hack to prevent second unlinking */
+		if (del_proc->list.next)
+			list_unlink(&del_proc->list);
 
 		if (pthread_mutex_unlock(&CA_table_mutex))
 			OT_LOG(LOG_ERR, "Failed to unlock the mutex");
@@ -189,7 +191,9 @@ static void free_proc(proc_t del_proc)
 	} else if (del_proc->p_type == proc_t_TA) {
 		/* Trusted process spesific operations */
 		release_ta_file_locks(del_proc);
-		list_unlink(&del_proc->list);
+		/* ugly hack to prevent second unlinking */
+		if (del_proc->list.next)
+			list_unlink(&del_proc->list);
 	}
 skip:
 	add_and_notify_io_sock_to_close(del_proc->sockfd);
