@@ -41,8 +41,8 @@
 #include "tee_logging.h"
 
 /* we have 2 threads to synchronize so we can achieve this with static condition and statix mutex */
-pthread_mutex_t todo_list_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t done_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t tasks_in_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t tasks_out_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
 
 /* Blocking internal thread while waiting response message */
@@ -79,10 +79,10 @@ int event_fd;
 #endif
 
 /* These are for tasks received from the caller going to the TA */
-struct ta_task tasks_todo;
+struct list_head tasks_in_list;
 
 /* These are for tasks that are complete and are being returned to the caller */
-struct ta_task tasks_done;
+struct list_head tasks_out_list;
 
 /* Interal API cancel functionality */
 bool cancellation_mask;
@@ -100,9 +100,9 @@ static void clear_queues()
 	/* Mutex not needed, bevause logic thread is ended its execution */
 
 	/* Done Queue */
-	if (!list_is_empty(&tasks_done.list)) {
+	if (!list_is_empty(&tasks_out_list)) {
 
-		LIST_FOR_EACH_SAFE(pos, la, &tasks_done.list) {
+		LIST_FOR_EACH_SAFE(pos, la, &tasks_out_list) {
 			queue_task = LIST_ENTRY(pos, struct ta_task, list);
 			list_unlink(&queue_task->list);
 			free_task(queue_task);
@@ -110,9 +110,9 @@ static void clear_queues()
 	}
 
 	/* Todo queue */
-	if (!list_is_empty(&tasks_todo.list)) {
+	if (!list_is_empty(&tasks_in_list)) {
 
-		LIST_FOR_EACH_SAFE(pos, la, &tasks_todo.list) {
+		LIST_FOR_EACH_SAFE(pos, la, &tasks_in_list) {
 			queue_task = LIST_ENTRY(pos, struct ta_task, list);
 			list_unlink(&queue_task->list);
 			free_task(queue_task);
@@ -182,9 +182,9 @@ int ta_process_loop(void *arg)
 		exit(TA_EXIT_LAUNCH_FAILED);
 	}
 #endif
-	/* Initializations of TODO and DONE queues*/
-	INIT_LIST(&tasks_todo.list);
-	INIT_LIST(&tasks_done.list);
+	/* Initializations of IN and OUT queues*/
+	INIT_LIST(&tasks_in_list);
+	INIT_LIST(&tasks_out_list);
 
 	/* Note: Launcher has inited epoll.
 	 * Listen to inbound connections from the manager */
@@ -285,8 +285,8 @@ termination:
 	clear_queues();
 
 	/* Assuming that mutex will be destroyed. If not, this process will be terminated anyway */
-	pthread_mutex_destroy(&todo_list_mutex);
-	pthread_mutex_destroy(&done_list_mutex);
+	pthread_mutex_destroy(&tasks_in_list_mutex);
+	pthread_mutex_destroy(&tasks_out_list_mutex);
 	pthread_mutex_destroy(&block_internal_thread_mutex);
 	pthread_mutex_destroy(&executed_operation_id_mutex);
 

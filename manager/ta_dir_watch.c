@@ -76,7 +76,7 @@ static void free_ta(struct trusted_app_propertie *ta)
 	memcpy(&((struct com_msg_ta_rem_from_dir *)new_man_msg->msg)->uuid,
 	       &ta->user_config.appID, sizeof(TEE_UUID));
 
-	if (add_man_msg_todo_queue_and_notify(new_man_msg))
+	if (add_man_msg_inbound_queue_and_notify(new_man_msg))
 		free_manager_msg(new_man_msg);
 }
 

@@ -39,28 +39,28 @@
 #define MAX_CURR_EVENTS 5
 
 /* These are for tasks received from the caller going to the logic thread */
-struct manager_msg todo_queue;
+struct list_head inbound_queue_list;
 
 /* These are for tasks that are complete and need to send out */
-struct manager_msg done_queue;
+struct list_head outbound_queue_list;
 
 /* Socket need to be closed by IO thread */
-struct sock_to_close socks_to_close;
+struct list_head socks_to_close_list;
 
 /* Client connections */
-struct __proc clientApps;
+struct list_head ca_list;
 
 /* Loaded TAs (ready accept open sessions) */
-struct __proc trustedApps;
+struct list_head ta_list;
 
 pthread_mutex_t CA_table_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TA_table_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t todo_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t done_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t inbound_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t outbound_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t socks_to_close_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* IO thead "signaling": wake up logic thread */
-pthread_cond_t todo_queue_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t inbound_queue_cond = PTHREAD_COND_INITIALIZER;
 
 /* Launcher process fd */
 int launcher_fd;
@@ -117,13 +117,13 @@ err_out:
 static int init_extern_res(int launcher_proc_fd)
 {
 	/* Linked lists */
-	INIT_LIST(&todo_queue.list);
-	INIT_LIST(&done_queue.list);
-	INIT_LIST(&socks_to_close.list);
+	INIT_LIST(&inbound_queue_list);
+	INIT_LIST(&outbound_queue_list);
+	INIT_LIST(&socks_to_close_list);
 
 	/* CA and TA hashtables */
-	INIT_LIST(&clientApps.list);
-	INIT_LIST(&trustedApps.list);
+	INIT_LIST(&ca_list);
+	INIT_LIST(&ta_list);
 
 	/* Launcher fd */
 	launcher_fd = launcher_proc_fd;
@@ -131,7 +131,7 @@ static int init_extern_res(int launcher_proc_fd)
 	/* Done queue event is used in semaphore style */
 	event_out_queue_fd = eventfd(0, EFD_SEMAPHORE);
 	if (event_out_queue_fd == -1) {
-		OT_LOG(LOG_ERR, "Failed to init event_done_queue_fd: %s", strerror(errno));
+		OT_LOG(LOG_ERR, "Failed to init event_out_queue_fd: %s", strerror(errno));
 		return 1;
 	}
 
@@ -248,7 +248,7 @@ int lib_main_loop(struct core_control *control_params)
 				ta_dir_watch_event(&cur_events[i], &event_ta_dir_watch_fd);
 
 			} else {
-				read_fd_and_add_todo_queue(&cur_events[i]);
+				read_fd_and_add_inbound_queue(&cur_events[i]);
 			}
 		}
 	}

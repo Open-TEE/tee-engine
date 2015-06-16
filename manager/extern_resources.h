@@ -54,29 +54,29 @@ struct proc_shm_mem {
 };
 
 /* These are for tasks received from the caller going to the logic thread */
-extern struct manager_msg todo_queue;
+extern struct list_head inbound_queue_list;
 
 /* These are for tasks that are complete and need to send out */
-extern struct manager_msg done_queue;
+extern struct list_head outbound_queue_list;
 
 /* Socket need to be closed by IO thread */
-extern struct sock_to_close socks_to_close;
+extern struct list_head socks_to_close_list;
 
 /* Client connections */
-extern struct __proc clientApps;
+extern struct list_head ca_list;
 
 /* Loaded TAs (ready accept open sessions) */
-extern struct __proc trustedApps;
+extern struct list_head ta_list;
 
 /* Data structures mutex */
 extern pthread_mutex_t CA_table_mutex;
 extern pthread_mutex_t TA_table_mutex;
-extern pthread_mutex_t todo_queue_mutex;
-extern pthread_mutex_t done_queue_mutex;
+extern pthread_mutex_t inbound_queue_mutex;
+extern pthread_mutex_t outbound_queue_mutex;
 extern pthread_mutex_t socks_to_close_mutex;
 
 /* IO thead "signaling": wake up logic thread */
-extern pthread_cond_t todo_queue_cond;
+extern pthread_cond_t inbound_queue_cond;
 
 /* Launcher process fd */
 extern int launcher_fd;
