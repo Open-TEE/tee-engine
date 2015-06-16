@@ -30,17 +30,17 @@ struct ta_task {
 };
 
 /* These are for tasks received from the caller going to the TA */
-extern struct ta_task tasks_todo;
+extern struct list_head tasks_in_list;
 
 /* These are for tasks that are complete and are being returned to the caller */
-extern struct ta_task tasks_done;
+extern struct list_head tasks_out_list;
 
 /* Interface TA funcitons */
 extern struct ta_interface *interface;
 
 /* we have 2 threads to synchronize so we can achieve this with static condition and statix mutex */
-extern pthread_mutex_t todo_list_mutex;
-extern pthread_mutex_t done_list_mutex;
+extern pthread_mutex_t tasks_in_list_mutex;
+extern pthread_mutex_t tasks_out_list_mutex;
 extern pthread_cond_t condition;
 
 /* Blocking internal thread while waiting response message */

@@ -29,7 +29,7 @@
 void free_manager_msg(struct manager_msg *released_msg);
 
 /*!
- * \brief handle_done_queue
+ * \brief handle_out_queue
  * Done queue event fd has triggered epoll and it is sign that there is
  * something in done queue that need to be processed. Processed in this context
  * is meaning that message needs to send out.
@@ -45,11 +45,11 @@ void handle_out_queue(struct epoll_event *event);
 void handle_public_fd(struct epoll_event *event);
 
 /*!
- * \brief read_fd_and_add_todo_queue
+ * \brief read_fd_and_add_inbound_queue
  * Reads message from fd and adding message to do queue.
  * \param event
  */
-void read_fd_and_add_todo_queue(struct epoll_event *event);
+void read_fd_and_add_inbound_queue(struct epoll_event *event);
 
 /*!
  * \brief handle_close_sock
@@ -67,11 +67,11 @@ void handle_close_sock(struct epoll_event *event);
 void manager_check_signal(struct core_control *control_params, struct epoll_event *event);
 
 /*!
- * \brief add_man_msg_todo_queue_and_notify
+ * \brief add_man_msg_inbound_queue_and_notify
  * Adding message to inbound queue
  * \param msg Added message
  * \return in case of message added, return 0
  */
-int add_man_msg_todo_queue_and_notify(struct manager_msg *msg);
+int add_man_msg_inbound_queue_and_notify(struct manager_msg *msg);
 
 #endif /* __IO_THREAD__ */
