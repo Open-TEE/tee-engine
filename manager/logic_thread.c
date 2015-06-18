@@ -183,17 +183,30 @@ static void free_proc(proc_t del_proc)
 
 		list_unlink(&del_proc->list);
 
-		if (pthread_mutex_unlock(&CA_table_mutex))
+		if (pthread_mutex_unlock(&CA_table_mutex)) {
+			/* no action */
 			OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+		}
 
 	} else if (del_proc->p_type == proc_t_TA) {
 		/* Trusted process spesific operations */
+
+		if (pthread_mutex_lock(&TA_table_mutex) == -1) {
+			OT_LOG(LOG_ERR, "Failed to lock mutex");
+			goto skip;
+		}
+
 		release_ta_file_locks(del_proc);
 		list_unlink(&del_proc->list);
+
+		if (pthread_mutex_unlock(&TA_table_mutex)) {
+			/* no action */
+			OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+		}
 	}
 skip:
+	clear_man_msg_from_inbound_outbound_queues(del_proc);
 	add_and_notify_io_sock_to_close(del_proc->sockfd);
-
 	free(del_proc);
 	del_proc = NULL;
 }
@@ -201,6 +214,7 @@ skip:
 void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 {
 	const uint64_t event = 1;
+	int is_valid_proc = 0;
 
 	/* Lock task queue from logic thread */
 	if (pthread_mutex_lock(&outbound_queue_mutex)) {
@@ -209,18 +223,24 @@ void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 		return;
 	}
 
-	/* enqueue the task manager queue */
-	list_add_before(&man_msg->list, &outbound_queue_list);
+	is_valid_proc = check_if_valid_proc_in_msg(man_msg);
+
+	if (is_valid_proc) {
+		/* enqueue the task manager queue */
+		list_add_before(&man_msg->list, &outbound_queue_list);
+
+		/* notify the I/O thread that there is something at output queue */
+		if (write(event_out_queue_fd, &event, sizeof(uint64_t)) == -1) {
+			OT_LOG(LOG_ERR, "Failed to notify the io thread");
+			/* TODO/PLACEHOLDER: notify IO thread */
+		}
+	} else {
+		OT_LOG(LOG_INFO, "outbound proc was not valid");
+	}
 
 	if (pthread_mutex_unlock(&outbound_queue_mutex)) {
 		/* For now, just log error */
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
-	}
-
-	/* notify the I/O thread that there is something at output queue */
-	if (write(event_out_queue_fd, &event, sizeof(uint64_t)) == -1) {
-		OT_LOG(LOG_ERR, "Failed to notify the io thread");
-		/* TODO/PLACEHOLDER: notify IO thread */
 	}
 }
 
@@ -350,6 +370,39 @@ unlock:
 	return ret;
 }
 
+static struct sesLink *get_sesLink_by_ID(proc_t proc, uint64_t get_sess_id)
+{
+	struct list_head *pos;
+	struct sesLink *sess;
+
+	if (list_is_empty(&proc->links.list))
+		return NULL;
+
+	LIST_FOR_EACH(pos, &proc->links.list) {
+
+		sess = LIST_ENTRY(pos, struct sesLink, list);
+
+		if (sess->session_id == get_sess_id)
+			return sess;
+	}
+
+	return NULL;
+}
+
+static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
+{
+	struct sesLink *session;
+
+	session = get_sesLink_by_ID(owner, sess_id);
+	list_unlink(&session->list);
+	free_sess(session);
+
+	session = get_sesLink_by_ID(to, sess_id);
+	list_unlink(&session->list);
+	free_sess(session);
+}
+
+
 static void send_close_sess_msg(struct sesLink *ta_sess)
 {
 	struct manager_msg *man_msg = NULL;
@@ -381,6 +434,9 @@ static void send_close_sess_msg(struct sesLink *ta_sess)
 	((struct com_msg_close_session *)man_msg->msg)->msg_hdr.msg_type = COM_TYPE_QUERY;
 	((struct com_msg_close_session *)man_msg->msg)->sess_ctx = ta_sess->sess_ctx;
 
+	/* Remove session */
+	remove_session_between(ta_sess->owner, ta_sess->to->owner, ta_sess->session_id);
+
 	((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy =
 	    should_ta_destroy(ta_sess->owner);
 	if (((struct com_msg_close_session *)man_msg->msg)->should_ta_destroy == -1) {
@@ -389,38 +445,6 @@ static void send_close_sess_msg(struct sesLink *ta_sess)
 	}
 
 	add_msg_out_queue_and_notify(man_msg);
-}
-
-static struct sesLink *get_sesLink_by_ID(proc_t proc, uint64_t get_sess_id)
-{
-	struct list_head *pos;
-	struct sesLink *sess;
-
-	if (list_is_empty(&proc->links.list))
-		return NULL;
-
-	LIST_FOR_EACH(pos, &proc->links.list) {
-
-		sess = LIST_ENTRY(pos, struct sesLink, list);
-
-		if (sess->session_id == get_sess_id)
-			return sess;
-	}
-
-	return NULL;
-}
-
-static void remove_session_between(proc_t owner, proc_t to, uint64_t sess_id)
-{
-	struct sesLink *session;
-
-	session = get_sesLink_by_ID(owner, sess_id);
-	list_unlink(&session->list);
-	free_sess(session);
-
-	session = get_sesLink_by_ID(to, sess_id);
-	list_unlink(&session->list);
-	free_sess(session);
 }
 
 static void open_session_response(struct manager_msg *man_msg)
@@ -1871,14 +1895,15 @@ static void proc_changed_state(struct manager_msg *man_msg)
 static void send_close_msg_to_all_sessions(proc_t ca_proc)
 {
 	struct sesLink *proc_sess;
-	struct list_head *pos;
+	struct list_head *pos, *la;
 
 	if (list_is_empty(&ca_proc->links.list))
 		return;
 
-	LIST_FOR_EACH(pos, &ca_proc->links.list) {
+	LIST_FOR_EACH_SAFE(pos, la, &ca_proc->links.list) {
 
 		proc_sess = LIST_ENTRY(pos, struct sesLink, list);
+
 		send_close_sess_msg(proc_sess->to);
 	}
 }

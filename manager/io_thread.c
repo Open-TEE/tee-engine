@@ -476,9 +476,60 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 	}
 }
 
+int check_if_valid_proc_in_msg(struct manager_msg *msg)
+{
+
+	struct list_head *pos;
+	proc_t proc;
+	int is_valid_proc = 0;
+
+	/* check that we have valid inbound proc to receive message */
+	if (pthread_mutex_lock(&CA_table_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		goto skip;
+	}
+	LIST_FOR_EACH(pos, &ca_list) {
+
+		proc = LIST_ENTRY(pos, struct __proc, list);
+		if (proc == msg->proc) {
+			is_valid_proc = 1;
+			break;
+		}
+	}
+	if (pthread_mutex_unlock(&CA_table_mutex)) {
+		/* no action */
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+	}
+
+	if (pthread_mutex_lock(&TA_table_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		goto skip;
+	}
+	LIST_FOR_EACH(pos, &ta_list) {
+
+		proc = LIST_ENTRY(pos, struct __proc, list);
+		if (proc == msg->proc) {
+			is_valid_proc = 2;
+			break;
+		}
+	}
+	if (pthread_mutex_unlock(&TA_table_mutex)) {
+		/* no action */
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+	}
+	if (msg->proc == NULL) {
+		/* message is generated with null proc, that that is ok */
+		is_valid_proc = 3;
+	}
+skip:
+	return is_valid_proc;
+}
+
 int add_man_msg_inbound_queue_and_notify(struct manager_msg *msg)
 {
 	int ret = 0;
+
+	int is_valid_proc = 0;
 
 	/* Lock task queue from logic thread */
 	if (pthread_mutex_lock(&inbound_queue_mutex)) {
@@ -486,21 +537,90 @@ int add_man_msg_inbound_queue_and_notify(struct manager_msg *msg)
 		return 1;
 	}
 
-	/* enqueue the task manager queue */
-	list_add_before(&msg->list, &inbound_queue_list);
+	is_valid_proc = check_if_valid_proc_in_msg(msg);
+
+	if (is_valid_proc) {
+		/* enqueue the task manager queue */
+		list_add_before(&msg->list, &inbound_queue_list);
+
+		/* Signal to logic thread */
+		if (pthread_cond_signal(&inbound_queue_cond)) {
+			OT_LOG(LOG_ERR, "Manager msg queue signal fail");
+			/* Function only should fail if inbound_queue_cond is not initialized
+			 * Therefore, this function call *should* not fails */
+			ret = 1; /* error return, because no granti if message get handeled! */
+		}
+	} else {
+		OT_LOG(LOG_INFO, "inbound proc was not valid");
+	}
 
 	if (pthread_mutex_unlock(&inbound_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
 		ret = 1;
 	}
 
-	/* Signal to logic thread */
-	if (pthread_cond_signal(&inbound_queue_cond)) {
-		OT_LOG(LOG_ERR, "Manager msg queue signal fail");
-		/* Function only should fail if inbound_queue_cond is not initialized
-		 * Therefore, this function call *should* not fails */
-		ret = 1; /* error return, because no granti if message get handeled! */
+	return ret;
+}
+
+void clear_man_msg_from_inbound_outbound_queues(proc_t proc_to_clear)
+{
+
+	struct manager_msg *handled_msg = NULL;
+	struct list_head *pos, *la;
+
+	/* Lock task queue from logic thread */
+	if (pthread_mutex_lock(&inbound_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		goto end;
+	}
+	/* Lock from logic thread */
+	if (pthread_mutex_lock(&outbound_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		/* Lets hope that errot clear it shelf.. */
+		goto end1;
 	}
 
-	return ret;
+	/* removing messages from the proc */
+
+	if (!list_is_empty(&outbound_queue_list)) {
+
+		LIST_FOR_EACH_SAFE(pos, la, &outbound_queue_list) {
+			handled_msg = LIST_ENTRY(pos, struct manager_msg, list);
+			if (!handled_msg)
+				continue;
+
+			if (handled_msg->proc == proc_to_clear) {
+				list_unlink(&handled_msg->list);
+				free_manager_msg(handled_msg);
+			}
+		}
+	}
+
+	if (!list_is_empty(&inbound_queue_list)) {
+
+		LIST_FOR_EACH_SAFE(pos, la, &inbound_queue_list) {
+			handled_msg = LIST_ENTRY(pos, struct manager_msg, list);
+			if (!handled_msg)
+				continue;
+
+			if (handled_msg->proc == proc_to_clear) {
+				list_unlink(&handled_msg->list);
+				free_manager_msg(handled_msg);
+			}
+		}
+	}
+
+	if (pthread_mutex_unlock(&outbound_queue_mutex)) {
+		/* no action */
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+	}
+end1:
+
+	if (pthread_mutex_unlock(&inbound_queue_mutex)) {
+		/* no action */
+		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+	}
+
+end:
+	return;
 }
