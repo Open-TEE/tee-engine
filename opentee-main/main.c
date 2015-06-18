@@ -15,6 +15,7 @@
 *****************************************************************************/
 
 #define _GNU_SOURCE
+
 #include <stdio.h>
 #include <string.h>
 
@@ -199,8 +200,8 @@ int load_lib(char *path, main_loop_cb *callback)
 int check_create_pid_file(char *proc_name_a0, bool write_pid)
 {
 	struct stat st = {0};
-	char *pid_file = NULL;
-	char *pid_str = NULL;
+	char pid_file[MAX_PATH_NAME] = {0};
+	char pid_str[MAX_PATH_NAME] = {0};
 	int fd, ret = 0;
 	struct flock lock;
 	char pid_dir[100] = {0};
@@ -224,8 +225,8 @@ int check_create_pid_file(char *proc_name_a0, bool write_pid)
 		memcpy(pid_dir, PID_FILE_ROOT, strnlen(PID_FILE_ROOT, sizeof(pid_dir) - 1));
 	}
 
-	if (asprintf(&pid_file, "%s/%s.pid", pid_dir, proc_name) == -1) {
-		printf("problems with asprintf\n");
+	if (snprintf(pid_file, MAX_PATH_NAME, "%s/%s.pid", pid_dir, proc_name) == MAX_PATH_NAME) {
+		printf("problems with snprintf, overflow\n");
 		goto out;
 	}
 
@@ -267,8 +268,8 @@ int check_create_pid_file(char *proc_name_a0, bool write_pid)
 	}
 
 	/* we are the only process running this program */
-	if (asprintf(&pid_str, "%ld", (long)getpid()) == -1) {
-		printf("problems with asprintf for pid\n");
+	if (snprintf(pid_str, MAX_PATH_NAME, "%ld", (long)getpid()) == MAX_PATH_NAME) {
+		printf("problems with snprintf for pid, overflow\n");
 		ret = 5;
 		goto out;
 	}
@@ -281,9 +282,7 @@ int check_create_pid_file(char *proc_name_a0, bool write_pid)
 	if (ret == 0)
 		control_params.pid_file_fd = fd;
 
-	free(pid_str);
 out:
-	free(pid_file);
 	return ret;
 }
 

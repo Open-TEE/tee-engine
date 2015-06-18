@@ -14,8 +14,6 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#define _GNU_SOURCE
-
 #include <string.h>
 #include <sys/stat.h>
 
@@ -43,6 +41,7 @@
 #include "ext_storage_stream_api.h"
 
 #include "opentee_manager_storage_api.h"
+#include "core_control_resources.h"
 
 
 struct storage_element {
@@ -53,13 +52,13 @@ struct storage_element {
 	FILE *file;
 };
 
-
+#define MAX_EXT_PATH_NAME MAX_PATH_NAME
 
 #define TEE_OBJ_ID_LEN_HEX (TEE_OBJECT_ID_MAX_LEN * 2 + 1)
 #define TEE_UUID_LEN_HEX (sizeof(TEE_UUID) * 2 + 1)
 #define ADD_NULL_CHAR_END_TO_HEX(obj_id_len) ((obj_id_len * 2) + 1)
 static uint32_t next_enum_ID; /* provide unique ID for enumerators */
-static char *secure_storage_path;
+static char secure_storage_path[MAX_EXT_PATH_NAME] = {0};
 
 static uint32_t next_storage_id = 1;
 
@@ -82,7 +81,8 @@ static bool __attribute__((constructor)) storage_ext_init()
 	char *home = getenv("HOME");
 #endif
 
-	if (asprintf(&secure_storage_path, "%s/%s", home, ".TEE_secure_storage/") == -1) {
+	if (snprintf(secure_storage_path, MAX_EXT_PATH_NAME, "%s/%s", home, ".TEE_secure_storage/")
+	    == MAX_EXT_PATH_NAME) {
 		OT_LOG(LOG_ERR, "Failed to malloc secure storage path\n");
 		return false;
 	}
@@ -90,11 +90,6 @@ static bool __attribute__((constructor)) storage_ext_init()
 	INIT_LIST(&elements_head);
 
 	return true;
-}
-
-static void __attribute__((destructor)) storage_ext_cleanup()
-{
-	free(secure_storage_path);
 }
 
 /*!
@@ -140,14 +135,30 @@ static TEE_Result alloc_storage_path(void *objectID,
 	for (i = 0; i < objectIDLen; ++i)
 		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
-	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1)
+	dir_path = calloc(1, MAX_EXT_PATH_NAME);
+	if (dir_path == NULL)
 		return TEE_ERROR_OUT_OF_MEMORY;
+
+	if (snprintf(dir_path, MAX_EXT_PATH_NAME, "%s%s/", secure_storage_path, UUID)
+	    == MAX_EXT_PATH_NAME){
+		OT_LOG(LOG_ERR, "secure storage dir path is too long\n");
+		return TEE_ERROR_OVERFLOW;
+	}
 
 
 	if (name_with_dir_path) {
-		if (asprintf(name_with_dir_path, "%s%s", dir_path, hex_ID) == -1) {
+		*name_with_dir_path = calloc(1, MAX_EXT_PATH_NAME);
+		if (*name_with_dir_path == NULL) {
 			free(dir_path);
 			return TEE_ERROR_OUT_OF_MEMORY;
+		}
+
+
+		if (snprintf(*name_with_dir_path, MAX_EXT_PATH_NAME, "%s%s", dir_path, hex_ID)
+		    == MAX_EXT_PATH_NAME) {
+			OT_LOG(LOG_ERR, "secure storage name path is too long\n");
+			free(dir_path);
+			return TEE_ERROR_OVERFLOW;
 		}
 	}
 
@@ -408,8 +419,10 @@ uint32_t ext_read_stream(uint32_t storage_blob_id, uint32_t offset, void *data, 
 	FILE *file = storage_id_to_file(storage_blob_id);
 	uint32_t readed = 0;
 
-	if (fseek(file, offset, SEEK_SET) != 0)
+	if (fseek(file, offset, SEEK_SET) != 0) {
+		OT_LOG(LOG_ERR, "fseek failed\n");
 		return readed;
+	}
 
 	readed = fread(data, 1, datalen, file);
 	return readed;
@@ -421,8 +434,10 @@ uint32_t ext_write_stream(uint32_t storage_blob_id, uint32_t offset, void *data,
 	FILE *file = storage_id_to_file(storage_blob_id);
 	uint32_t written = 0;
 
-	if (fseek(file, offset, SEEK_SET) != 0)
+	if (fseek(file, offset, SEEK_SET) != 0) {
+		OT_LOG(LOG_ERR, "fseek failed\n");
 		return written;
+	}
 
 	written = fwrite(data, 1, datalen, file);
 
@@ -533,14 +548,15 @@ static struct storage_enumerator *get_enum(uint32_t ID)
 
 bool ext_start_enumerator(uint32_t start_enum_ID)
 {
-	char *dir_path = NULL;
+	char dir_path[MAX_EXT_PATH_NAME] = {0};
 	char UUID[TEE_UUID_LEN_HEX];
 	struct storage_enumerator *start_enum;
 
 	if (!get_uuid(UUID))
 		return false;
 
-	if (asprintf(&dir_path, "%s%s/", secure_storage_path, UUID) == -1) {
+	if (snprintf(dir_path, MAX_EXT_PATH_NAME, "%s%s/", secure_storage_path, UUID)
+	    == MAX_EXT_PATH_NAME) {
 		/* TEE_ERROR_OUT_OF_MEMORY */
 		return false;
 	}
@@ -561,11 +577,9 @@ bool ext_start_enumerator(uint32_t start_enum_ID)
 	}
 
 	if (is_directory_empty(dir_path)) {
-		free(dir_path);
 		return false; /* FALSE == directory empty -> tee_error_item_not_found */
 	}
 
-	free(dir_path);
 	return true;
 }
 
@@ -598,7 +612,7 @@ void ext_reset_enumerator(uint32_t reset_enum_ID)
 bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 				       struct storage_obj_meta_data *recv_data_to_caller)
 {
-	char *name_with_path = NULL;
+	char name_with_path[MAX_EXT_PATH_NAME] = {0};
 	char UUID[TEE_UUID_LEN_HEX];
 	struct storage_enumerator *get_from_enum;
 	struct dirent *entry;
@@ -634,15 +648,14 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 			return false;
 		}
 
-		if (asprintf(&name_with_path, "%s%s/%s", secure_storage_path, UUID,
-			     entry->d_name) == -1) {
-			OT_LOG(LOG_ERR, "Enumerator: Out of memory\n");
+		if (snprintf(name_with_path, MAX_EXT_PATH_NAME, "%s%s/%s",
+			     secure_storage_path, UUID, entry->d_name) == MAX_EXT_PATH_NAME) {
+
+			OT_LOG(LOG_ERR, "Enumerator: name path size overflow\n");
 			return false; /* TEE_ERROR_GENERIC */
 		}
 
 		next_object = fopen(name_with_path, "rb");
-
-		free(name_with_path);
 
 		if (next_object == NULL)
 			continue;

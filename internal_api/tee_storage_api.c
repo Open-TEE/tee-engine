@@ -14,8 +14,6 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#define _GNU_SOURCE
-
 #include <openssl/rand.h>
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
