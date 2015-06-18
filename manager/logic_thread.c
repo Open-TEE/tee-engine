@@ -183,17 +183,30 @@ static void free_proc(proc_t del_proc)
 
 		list_unlink(&del_proc->list);
 
-		if (pthread_mutex_unlock(&CA_table_mutex))
+		if (pthread_mutex_unlock(&CA_table_mutex)) {
+			/* no action */
 			OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+		}
 
 	} else if (del_proc->p_type == proc_t_TA) {
 		/* Trusted process spesific operations */
+
+		if (pthread_mutex_lock(&TA_table_mutex) == -1) {
+			OT_LOG(LOG_ERR, "Failed to lock mutex");
+			goto skip;
+		}
+
 		release_ta_file_locks(del_proc);
 		list_unlink(&del_proc->list);
+
+		if (pthread_mutex_unlock(&TA_table_mutex)) {
+			/* no action */
+			OT_LOG(LOG_ERR, "Failed to unlock the mutex");
+		}
 	}
 skip:
+	clear_man_msg_from_inbound_outbound_queues(del_proc);
 	add_and_notify_io_sock_to_close(del_proc->sockfd);
-
 	free(del_proc);
 	del_proc = NULL;
 }
@@ -201,6 +214,7 @@ skip:
 void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 {
 	const uint64_t event = 1;
+	int is_valid_proc = 0;
 
 	/* Lock task queue from logic thread */
 	if (pthread_mutex_lock(&outbound_queue_mutex)) {
@@ -209,18 +223,22 @@ void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 		return;
 	}
 
-	/* enqueue the task manager queue */
-	list_add_before(&man_msg->list, &outbound_queue_list);
+	is_valid_proc = check_if_valid_proc_in_msg(man_msg);
+
+	if (is_valid_proc) {
+		/* enqueue the task manager queue */
+		list_add_before(&man_msg->list, &outbound_queue_list);
+
+		/* notify the I/O thread that there is something at output queue */
+		if (write(event_out_queue_fd, &event, sizeof(uint64_t)) == -1) {
+			OT_LOG(LOG_ERR, "Failed to notify the io thread");
+			/* TODO/PLACEHOLDER: notify IO thread */
+		}
+	}
 
 	if (pthread_mutex_unlock(&outbound_queue_mutex)) {
 		/* For now, just log error */
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
-	}
-
-	/* notify the I/O thread that there is something at output queue */
-	if (write(event_out_queue_fd, &event, sizeof(uint64_t)) == -1) {
-		OT_LOG(LOG_ERR, "Failed to notify the io thread");
-		/* TODO/PLACEHOLDER: notify IO thread */
 	}
 }
 
