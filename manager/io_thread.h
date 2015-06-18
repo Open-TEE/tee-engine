@@ -67,6 +67,14 @@ void handle_close_sock(struct epoll_event *event);
 void manager_check_signal(struct core_control *control_params, struct epoll_event *event);
 
 /*!
+ * \brief check_if_valid_proc_in_msg
+ * message->proc is checked against CA and TA tables, if it is found there
+ * \param msg Message to be checked
+ * \return 0 if not found, 1 if CA is found, 2 if TA is found
+ */
+int check_if_valid_proc_in_msg(struct manager_msg *msg);
+
+/*!
  * \brief add_man_msg_inbound_queue_and_notify
  * Adding message to inbound queue
  * \param msg Added message
@@ -74,4 +82,11 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
  */
 int add_man_msg_inbound_queue_and_notify(struct manager_msg *msg);
 
+
+/*!
+ * \brief clear_man_msg_from_inbound_outbound_queues
+ * Removes and clears manager_msg structs from inbould and outbound queues matching the given proc
+ * \param struct __proc* or proc, messages are check agaist this proc to be removed
+ */
+void clear_man_msg_from_inbound_outbound_queues(struct __proc *proc_to_clear);
 #endif /* __IO_THREAD__ */
