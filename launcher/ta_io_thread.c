@@ -67,10 +67,10 @@ static void cancel_from_todo(struct ta_task *task)
 	struct ta_task *todo_queue_task;
 	uint8_t msg_name;
 
-	if (list_is_empty(&tasks_todo.list))
+	if (list_is_empty(&tasks_in_list))
 		return;
 
-	LIST_FOR_EACH_SAFE(pos, la, &tasks_todo.list) {
+	LIST_FOR_EACH_SAFE(pos, la, &tasks_in_list) {
 
 		todo_queue_task = LIST_ENTRY(pos, struct ta_task, list);
 
@@ -90,7 +90,7 @@ static void cancel_from_todo(struct ta_task *task)
 					TEE_ORIGIN_TEE;
 
 			list_unlink(&todo_queue_task->list);
-			list_add_before(&todo_queue_task->list, &tasks_done.list);
+			list_add_before(&todo_queue_task->list, &tasks_out_list);
 
 		} else if (msg_name == COM_MSG_NAME_INVOKE_CMD &&
 		    ((struct com_msg_invoke_cmd *)todo_queue_task->msg)->operation.operation_id ==
@@ -103,7 +103,7 @@ static void cancel_from_todo(struct ta_task *task)
 					TEE_ORIGIN_TEE;
 
 			list_unlink(&todo_queue_task->list);
-			list_add_before(&todo_queue_task->list, &tasks_done.list);
+			list_add_before(&todo_queue_task->list, &tasks_out_list);
 		}
 	}
 }
@@ -111,12 +111,12 @@ static void cancel_from_todo(struct ta_task *task)
 static void request_cancel_msg(struct ta_task *task)
 {
 	/* acquire mutexes */
-	if (pthread_mutex_lock(&todo_list_mutex)) {
+	if (pthread_mutex_lock(&tasks_in_list_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 		goto err_1;
 	}
 
-	if (pthread_mutex_lock(&done_list_mutex)) {
+	if (pthread_mutex_lock(&tasks_out_list_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 		goto err_2;
 	}
@@ -138,10 +138,10 @@ static void request_cancel_msg(struct ta_task *task)
 	if (pthread_mutex_unlock(&executed_operation_id_mutex))
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 err_3:
-	if (pthread_mutex_unlock(&done_list_mutex))
+	if (pthread_mutex_unlock(&tasks_out_list_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
 err_2:
-	if (pthread_mutex_unlock(&todo_list_mutex))
+	if (pthread_mutex_unlock(&tasks_in_list_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
 err_1:
 	free_task(task);
@@ -149,16 +149,16 @@ err_1:
 
 static void add_task_todo_queue_and_notify(struct ta_task *task)
 {
-	if (pthread_mutex_lock(&todo_list_mutex)) {
+	if (pthread_mutex_lock(&tasks_in_list_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno));
 		free_task(task);
 		return;
 	}
 
 	/* enqueue the task in our todo list */
-	list_add_before(&task->list, &tasks_todo.list);
+	list_add_before(&task->list, &tasks_in_list);
 
-	if (pthread_mutex_unlock(&todo_list_mutex)) {
+	if (pthread_mutex_unlock(&tasks_in_list_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex: %s", strerror(errno));
 		return;
 	}
@@ -286,17 +286,17 @@ void reply_to_manager(struct epoll_event *event, int man_sockfd)
 	}
 
 	/* Lock from logic thread */
-	if (pthread_mutex_lock(&done_list_mutex)) {
+	if (pthread_mutex_lock(&tasks_out_list_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno));
 		/* Lets hope that errot clear it shelf.. */
 		return;
 	}
 
 	/* Queue is FIFO and therefore get just fist message */
-	out_task = LIST_ENTRY(tasks_done.list.next, struct ta_task, list);
+	out_task = LIST_ENTRY(tasks_out_list.next, struct ta_task, list);
 	list_unlink(&out_task->list);
 
-	if (pthread_mutex_unlock(&done_list_mutex)) {
+	if (pthread_mutex_unlock(&tasks_out_list_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex: %s", strerror(errno));
 	}
 

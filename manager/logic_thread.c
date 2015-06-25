@@ -124,7 +124,7 @@ static void add_and_notify_io_sock_to_close(int fd)
 		return;
 	}
 
-	list_add_after(&fd_to_close->list, &socks_to_close.list);
+	list_add_after(&fd_to_close->list, &socks_to_close_list);
 
 	if (pthread_mutex_unlock(&socks_to_close_mutex)) {
 		/* For now, just log error */
@@ -203,16 +203,16 @@ void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 	const uint64_t event = 1;
 
 	/* Lock task queue from logic thread */
-	if (pthread_mutex_lock(&done_queue_mutex)) {
+	if (pthread_mutex_lock(&outbound_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 		free_manager_msg(man_msg);
 		return;
 	}
 
 	/* enqueue the task manager queue */
-	list_add_before(&man_msg->list, &done_queue.list);
+	list_add_before(&man_msg->list, &outbound_queue_list);
 
-	if (pthread_mutex_unlock(&done_queue_mutex)) {
+	if (pthread_mutex_unlock(&outbound_queue_mutex)) {
 		/* For now, just log error */
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 	}
@@ -528,10 +528,10 @@ static proc_t get_ta_by_uuid(TEE_UUID *uuid)
 	struct list_head *pos;
 	proc_t ta = NULL;
 
-	if (list_is_empty(&trustedApps.list))
+	if (list_is_empty(&ta_list))
 		return ta;
 
-	LIST_FOR_EACH(pos, &trustedApps.list) {
+	LIST_FOR_EACH(pos, &ta_list) {
 
 		ta = LIST_ENTRY(pos, struct __proc, list);
 
@@ -774,7 +774,7 @@ static int launch_and_init_ta(struct manager_msg *man_msg, TEE_UUID *ta_uuid, pr
 	if (epoll_reg_data((*new_ta_proc)->sockfd, EPOLLIN, *new_ta_proc))
 		goto err_3;
 
-	list_add_before(&(*new_ta_proc)->list, &trustedApps.list);
+	list_add_before(&(*new_ta_proc)->list, &ta_list);
 
 	/* TA initialization is going on */
 	(*new_ta_proc)->status = proc_initialized;
@@ -1769,10 +1769,10 @@ static void ta_status_change(pid_t ta_pid, int status)
 	struct list_head *pos;
 	proc_t ta = NULL;
 
-	if (list_is_empty(&trustedApps.list))
+	if (list_is_empty(&ta_list))
 		return;
 
-	LIST_FOR_EACH(pos, &trustedApps.list) {
+	LIST_FOR_EACH(pos, &ta_list) {
 
 		ta = LIST_ENTRY(pos, struct __proc, list);
 
@@ -1939,10 +1939,10 @@ static void ta_rem_from_dir(struct manager_msg *man_msg)
 	struct list_head *pos, *la;
 	proc_t ta;
 
-	if (list_is_empty(&trustedApps.list))
+	if (list_is_empty(&ta_list))
 		return;
 
-	LIST_FOR_EACH_SAFE(pos, la, &trustedApps.list) {
+	LIST_FOR_EACH_SAFE(pos, la, &ta_list) {
 
 		ta = LIST_ENTRY(pos, struct __proc, list);
 
@@ -2024,9 +2024,9 @@ static void manager_termination(struct manager_msg *man_msg)
 	 * would be left "open" after process terminaiton. This are shared memorys and file locks */
 
 	/* Unlink all TAs shm and release file locks */
-	if (!list_is_empty(&trustedApps.list)) {
+	if (!list_is_empty(&ta_list)) {
 
-		LIST_FOR_EACH(pos, &trustedApps.list) {
+		LIST_FOR_EACH(pos, &ta_list) {
 
 			proc = LIST_ENTRY(pos, struct __proc, list);
 			unlink_all_shm_region(proc);
@@ -2035,9 +2035,9 @@ static void manager_termination(struct manager_msg *man_msg)
 	}
 
 	/* Unlink all CAs shm */
-	if (!list_is_empty(&clientApps.list)) {
+	if (!list_is_empty(&ca_list)) {
 
-		LIST_FOR_EACH(pos, &clientApps.list) {
+		LIST_FOR_EACH(pos, &ca_list) {
 
 			proc = LIST_ENTRY(pos, struct __proc, list);
 			unlink_all_shm_region(proc);
@@ -2055,24 +2055,24 @@ void *logic_thread_mainloop(void *arg)
 
 	while (1) {
 
-		if (pthread_mutex_lock(&todo_queue_mutex)) {
+		if (pthread_mutex_lock(&inbound_queue_mutex)) {
 			OT_LOG(LOG_ERR, "Failed to lock the mutex");
 			continue;
 		}
 
 		/* Wait for message */
-		while (list_is_empty(&todo_queue.list)) {
-			if (pthread_cond_wait(&todo_queue_cond, &todo_queue_mutex)) {
+		while (list_is_empty(&inbound_queue_list)) {
+			if (pthread_cond_wait(&inbound_queue_cond, &inbound_queue_mutex)) {
 				OT_LOG(LOG_ERR, "Failed to wait for condition");
 				continue;
 			}
 		}
 
 		/* Queue is FIFO and therefore get just fist message */
-		handled_msg = LIST_ENTRY(todo_queue.list.next, struct manager_msg, list);
+		handled_msg = LIST_ENTRY(inbound_queue_list.next, struct manager_msg, list);
 		list_unlink(&handled_msg->list);
 
-		if (pthread_mutex_unlock(&todo_queue_mutex)) {
+		if (pthread_mutex_unlock(&inbound_queue_mutex)) {
 			OT_LOG(LOG_ERR, "Failed to lock the mutex");
 			continue;
 		}

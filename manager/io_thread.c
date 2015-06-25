@@ -56,7 +56,7 @@ static void notify_logic_fd_err(int err_nro, proc_t proc)
 	((struct com_msg_fd_err *)new_man_msg->msg)->err_no = err_nro;
 	((struct com_msg_fd_err *)new_man_msg->msg)->proc_ptr = proc;
 
-	if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
+	if (add_man_msg_inbound_queue_and_notify(new_man_msg)) {
 		OT_LOG(LOG_ERR, "Failed to add out queue");
 		free_manager_msg(new_man_msg);
 	}
@@ -125,7 +125,7 @@ static void io_fd_err(int err_nro, int fd)
 
 /*!
  * \brief check_event_fd_epoll_status
- * Checks event fd status and acts according to status. For example event_done_queue_fd.
+ * Checks event fd status and acts according to status. For example event_outbound_queue_fd.
  * \param event
  * \return
  */
@@ -210,7 +210,7 @@ static int add_client_to_ca_table(proc_t add_client)
 		return 1;
 	}
 
-	list_add_before(&add_client->list, &clientApps.list);
+	list_add_before(&add_client->list, &ca_list);
 
 	if (pthread_mutex_unlock(&CA_table_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
@@ -256,15 +256,15 @@ void handle_out_queue(struct epoll_event *event)
 	}
 
 	/* Lock from logic thread */
-	if (pthread_mutex_lock(&done_queue_mutex)) {
+	if (pthread_mutex_lock(&outbound_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 		/* Lets hope that errot clear it shelf.. */
 		return;
 	}
 
-	if (!list_is_empty(&done_queue.list)) {
+	if (!list_is_empty(&outbound_queue_list)) {
 
-		LIST_FOR_EACH_SAFE(pos, la, &done_queue.list) {
+		LIST_FOR_EACH_SAFE(pos, la, &outbound_queue_list) {
 			handled_msg = LIST_ENTRY(pos, struct manager_msg, list);
 			if (!handled_msg)
 				continue;
@@ -275,7 +275,7 @@ void handle_out_queue(struct epoll_event *event)
 		}
 	}
 
-	if (pthread_mutex_unlock(&done_queue_mutex))
+	if (pthread_mutex_unlock(&outbound_queue_mutex))
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
 }
 
@@ -315,7 +315,7 @@ err_1:
 	close(accept_fd);
 }
 
-void read_fd_and_add_todo_queue(struct epoll_event *event)
+void read_fd_and_add_inbound_queue(struct epoll_event *event)
 {
 	struct manager_msg *new_man_msg = NULL;
 	struct com_msg_hdr *msg_header;
@@ -361,7 +361,7 @@ void read_fd_and_add_todo_queue(struct epoll_event *event)
 	msg_header->shareable_fd_count = 0;
 
 	/* Add task to manager message queue */
-	if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
+	if (add_man_msg_inbound_queue_and_notify(new_man_msg)) {
 		OT_LOG(LOG_ERR, "Failed to add inbound queue");
 		goto err;
 	}
@@ -394,9 +394,9 @@ void handle_close_sock(struct epoll_event *event)
 		return;
 	}
 
-	if (!list_is_empty(&socks_to_close.list)) {
+	if (!list_is_empty(&socks_to_close_list)) {
 
-		LIST_FOR_EACH_SAFE(pos, la, &socks_to_close.list) {
+		LIST_FOR_EACH_SAFE(pos, la, &socks_to_close_list) {
 			fd_to_close = LIST_ENTRY(pos, struct sock_to_close, list);
 			list_unlink(&fd_to_close->list);
 			close(fd_to_close->sockfd);
@@ -441,7 +441,7 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 		((struct com_msg_proc_status_change *)new_man_msg->msg)->msg_hdr.msg_name =
 				COM_MSG_NAME_PROC_STATUS_CHANGE;
 
-		if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
+		if (add_man_msg_inbound_queue_and_notify(new_man_msg)) {
 			OT_LOG(LOG_ERR, "Failed to add inbound queue");
 			free_manager_msg(new_man_msg);
 		}
@@ -469,35 +469,35 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 		((struct com_msg_proc_status_change *)new_man_msg->msg)->msg_hdr.msg_name =
 				COM_MSG_NAME_MANAGER_TERMINATION;
 
-		if (add_man_msg_todo_queue_and_notify(new_man_msg)) {
+		if (add_man_msg_inbound_queue_and_notify(new_man_msg)) {
 			OT_LOG(LOG_ERR, "Failed to add inbound queue");
 			free_manager_msg(new_man_msg);
 		}
 	}
 }
 
-int add_man_msg_todo_queue_and_notify(struct manager_msg *msg)
+int add_man_msg_inbound_queue_and_notify(struct manager_msg *msg)
 {
 	int ret = 0;
 
 	/* Lock task queue from logic thread */
-	if (pthread_mutex_lock(&todo_queue_mutex)) {
+	if (pthread_mutex_lock(&inbound_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 		return 1;
 	}
 
 	/* enqueue the task manager queue */
-	list_add_before(&msg->list, &todo_queue.list);
+	list_add_before(&msg->list, &inbound_queue_list);
 
-	if (pthread_mutex_unlock(&todo_queue_mutex)) {
+	if (pthread_mutex_unlock(&inbound_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
 		ret = 1;
 	}
 
 	/* Signal to logic thread */
-	if (pthread_cond_signal(&todo_queue_cond)) {
+	if (pthread_cond_signal(&inbound_queue_cond)) {
 		OT_LOG(LOG_ERR, "Manager msg queue signal fail");
-		/* Function only should fail if todo_queue_cond is not initialized
+		/* Function only should fail if inbound_queue_cond is not initialized
 		 * Therefore, this function call *should* not fails */
 		ret = 1; /* error return, because no granti if message get handeled! */
 	}

@@ -104,15 +104,15 @@ static void add_msg_done_queue_and_notify(struct ta_task *out_task)
 	const uint64_t event = 1;
 
 	/* Lock task queue from logic thread */
-	if (pthread_mutex_lock(&done_list_mutex)) {
+	if (pthread_mutex_lock(&tasks_out_list_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno));
 		return;
 	}
 
 	/* enqueue the task manager queue */
-	list_add_before(&out_task->list, &tasks_done.list);
+	list_add_before(&out_task->list, &tasks_out_list);
 
-	if (pthread_mutex_unlock(&done_list_mutex)) {
+	if (pthread_mutex_unlock(&tasks_out_list_mutex)) {
 		/* For now, just log error */
 		OT_LOG(LOG_ERR, "Failed to lock the mutex: %s", strerror(errno));
 		return;
@@ -1293,27 +1293,27 @@ void *ta_internal_thread(void *arg)
 	first_open_session_msg(arg);
 
 	for (;;) {
-		ret = pthread_mutex_lock(&todo_list_mutex);
+		ret = pthread_mutex_lock(&tasks_in_list_mutex);
 		if (ret != 0) {
 			OT_LOG(LOG_ERR, "Failed to lock the mutex");
 			continue;
 		}
 
 		/* Wait for a task to become available */
-		while (list_is_empty(&tasks_todo.list)) {
-			ret = pthread_cond_wait(&condition, &todo_list_mutex);
+		while (list_is_empty(&tasks_in_list)) {
+			ret = pthread_cond_wait(&condition, &tasks_in_list_mutex);
 			if (ret != 0) {
 				OT_LOG(LOG_ERR, "Failed to wait for condition");
 				continue;
 			}
 		}
 
-		task = LIST_ENTRY(tasks_todo.list.next, struct ta_task, list);
+		task = LIST_ENTRY(tasks_in_list.next, struct ta_task, list);
 		if (task)
 			list_unlink(&task->list);
 
 		/* free the lock so more tasks can be added */
-		ret = pthread_mutex_unlock(&todo_list_mutex);
+		ret = pthread_mutex_unlock(&tasks_in_list_mutex);
 		if (ret != 0) {
 			OT_LOG(LOG_ERR, "Failed to unlock the mutex");
 			continue;
