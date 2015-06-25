@@ -140,6 +140,10 @@ int ta_process_loop(void *arg)
 	prctl(PR_SET_PDEATHSIG, SIGKILL);
 	closelog();
 
+	/* epoll doesn't clone properly, re init per TA process */
+	cleanup_epoll();
+	init_epoll();
+
 	/* Set new ta process name */
 	strncpy(proc_name, open_msg->ta_so_name, ctl_params->argv0_len);
 	prctl(PR_SET_NAME, (unsigned long)proc_name);
