@@ -125,15 +125,9 @@ static TEE_Result alloc_storage_path(void *objectID,
 	char UUID[TEE_UUID_LEN_HEX];
 	char *dir_path;
 
-	if ((objectIDLen > TEE_OBJECT_ID_MAX_LEN) ||
-	    (objectID == NULL) ||
-	    (!get_uuid(UUID)) ||
+	if ((!get_uuid(UUID)) ||
 	    (name_with_dir_path == NULL && return_dir_path == NULL))
 		return TEE_ERROR_BAD_PARAMETERS;
-
-
-	for (i = 0; i < objectIDLen; ++i)
-		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
 	dir_path = calloc(1, MAX_EXT_PATH_NAME);
 	if (dir_path == NULL)
@@ -142,22 +136,31 @@ static TEE_Result alloc_storage_path(void *objectID,
 	if (snprintf(dir_path, MAX_EXT_PATH_NAME, "%s%s/", secure_storage_path, UUID)
 	    == MAX_EXT_PATH_NAME){
 		OT_LOG(LOG_ERR, "secure storage dir path is too long\n");
+		free(dir_path);
 		return TEE_ERROR_OVERFLOW;
 	}
 
-
 	if (name_with_dir_path) {
+		if ((objectIDLen > TEE_OBJECT_ID_MAX_LEN) || (objectID == NULL)) {
+			free(dir_path);
+			return TEE_ERROR_BAD_PARAMETERS;
+		}
+
+		for (i = 0; i < objectIDLen; ++i)
+			sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
+
 		*name_with_dir_path = calloc(1, MAX_EXT_PATH_NAME);
 		if (*name_with_dir_path == NULL) {
 			free(dir_path);
 			return TEE_ERROR_OUT_OF_MEMORY;
 		}
 
-
 		if (snprintf(*name_with_dir_path, MAX_EXT_PATH_NAME, "%s%s", dir_path, hex_ID)
 		    == MAX_EXT_PATH_NAME) {
 			OT_LOG(LOG_ERR, "secure storage name path is too long\n");
 			free(dir_path);
+			free(*name_with_dir_path);
+			*name_with_dir_path = NULL;
 			return TEE_ERROR_OVERFLOW;
 		}
 	}
@@ -473,7 +476,7 @@ bool ext_alloc_for_enumerator(uint32_t *ID)
 		return false;
 
 	/* MAlloc for handle and fill */
-	new_enumerator = calloc(sizeof(struct storage_enumerator), 1);
+	new_enumerator = calloc(1, sizeof(struct storage_enumerator));
 	if (new_enumerator == NULL) {
 		OT_LOG(LOG_ERR, "Cannot malloc for enumerator: Out of memory\n");
 		return false;
@@ -548,23 +551,16 @@ static struct storage_enumerator *get_enum(uint32_t ID)
 
 bool ext_start_enumerator(uint32_t start_enum_ID)
 {
-	char dir_path[MAX_EXT_PATH_NAME] = {0};
-	char UUID[TEE_UUID_LEN_HEX];
+	char *dir_path = NULL;
 	struct storage_enumerator *start_enum;
 
-	if (!get_uuid(UUID))
+	if ((alloc_storage_path(NULL, 0, NULL, &dir_path) != TEE_SUCCESS) && (!dir_path))
 		return false;
-
-	if (snprintf(dir_path, MAX_EXT_PATH_NAME, "%s%s/", secure_storage_path, UUID)
-	    == MAX_EXT_PATH_NAME) {
-		/* TEE_ERROR_OUT_OF_MEMORY */
-		return false;
-	}
 
 	start_enum = get_enum(start_enum_ID);
 	if (start_enum == NULL) {
 		OT_LOG(LOG_ERR, "Enumerator: Enumerator not valid\n");
-		return false;
+		goto ret_false;
 	}
 
 	if (start_enum->dir != NULL)
@@ -573,14 +569,24 @@ bool ext_start_enumerator(uint32_t start_enum_ID)
 	start_enum->dir = opendir(dir_path);
 	if (start_enum->dir == NULL) {
 		OT_LOG(LOG_ERR, "Enumerator: Something went wrong (dirent failure)\n");
-		return false; /* NULL == directory empty */
+		/* NULL == directory empty */
+		goto ret_false;
 	}
 
 	if (is_directory_empty(dir_path)) {
-		return false; /* FALSE == directory empty -> tee_error_item_not_found */
+		/* FALSE == directory empty -> tee_error_item_not_found */
+		goto ret_false;
 	}
 
+	free(dir_path);
+	dir_path = NULL;
 	return true;
+
+ret_false:
+	free(dir_path);
+	dir_path = NULL;
+	return false;
+
 }
 
 
@@ -668,10 +674,6 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 			next_object = NULL;
 			continue;
 		}
-
-		/* meta size - object meta info == attributes (structs) + buffers == all Attrs */
-		recv_data_to_caller->info.objectSize =
-		    recv_data_to_caller->meta_size - sizeof(struct storage_obj_meta_data);
 
 		/* calculate data size */
 		if (fseek(next_object, 0, SEEK_END) != 0)
