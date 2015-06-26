@@ -165,6 +165,7 @@ static void delete_ta(char *name)
 		/* Found */
 		list_unlink(&ta->list);
 		free_ta(&ta->ta);
+		free(ta);
 		break;
 	}
 

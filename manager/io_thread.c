@@ -552,6 +552,7 @@ int add_man_msg_inbound_queue_and_notify(struct manager_msg *msg)
 		}
 	} else {
 		OT_LOG(LOG_INFO, "inbound proc was not valid");
+		ret = 1;
 	}
 
 	if (pthread_mutex_unlock(&inbound_queue_mutex)) {
