@@ -131,10 +131,6 @@ static TEE_Result alloc_storage_path(void *objectID,
 	    (name_with_dir_path == NULL && return_dir_path == NULL))
 		return TEE_ERROR_BAD_PARAMETERS;
 
-
-	for (i = 0; i < objectIDLen; ++i)
-		sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
-
 	dir_path = calloc(1, MAX_EXT_PATH_NAME);
 	if (dir_path == NULL)
 		return TEE_ERROR_OUT_OF_MEMORY;
@@ -142,6 +138,7 @@ static TEE_Result alloc_storage_path(void *objectID,
 	if (snprintf(dir_path, MAX_EXT_PATH_NAME, "%s%s/", secure_storage_path, UUID)
 	    == MAX_EXT_PATH_NAME){
 		OT_LOG(LOG_ERR, "secure storage dir path is too long\n");
+		free(dir_path);
 		return TEE_ERROR_OVERFLOW;
 	}
 
@@ -153,11 +150,15 @@ static TEE_Result alloc_storage_path(void *objectID,
 			return TEE_ERROR_OUT_OF_MEMORY;
 		}
 
+		for (i = 0; i < objectIDLen; ++i)
+			sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
 
 		if (snprintf(*name_with_dir_path, MAX_EXT_PATH_NAME, "%s%s", dir_path, hex_ID)
 		    == MAX_EXT_PATH_NAME) {
 			OT_LOG(LOG_ERR, "secure storage name path is too long\n");
 			free(dir_path);
+			free(*name_with_dir_path);
+			*name_with_dir_path = NULL;
 			return TEE_ERROR_OVERFLOW;
 		}
 	}
@@ -371,30 +372,35 @@ bool ext_change_object_ID(uint32_t storage_blob_id,
 	struct list_head *pos;
 	struct storage_element *current_element;
 
-	char *name_with_dir_path;
-	char *new_name_with_dir_path;
+	char *name_with_dir_path = NULL;
+	char *new_name_with_dir_path = NULL;
+
+	bool ret_val = true;
 
 	if (alloc_storage_path(objectID, objectIDLen, &name_with_dir_path, NULL)) {
 		OT_LOG(LOG_ERR, "Bad parameters\n");
-		return false;
+		ret_val = false;
+		goto exit;
 	}
 
 	if (alloc_storage_path(new_objectID, new_objectIDLen, &new_name_with_dir_path, NULL)) {
 		OT_LOG(LOG_ERR, "Bad parameters\n");
-		free(name_with_dir_path);
-		return false;
+		ret_val = false;
+		goto exit;
 	}
 
 	/* TODO: Check if TA can change object ID */
 
 	if (access(new_name_with_dir_path, F_OK) == 0) {
 		OT_LOG(LOG_ERR, "Cannot change object ID, because new ID is in use\n");
-		return false;
+		ret_val = false;
+		goto exit;
 	}
 
 	if (rename(name_with_dir_path, new_name_with_dir_path) != 0) {
 		OT_LOG(LOG_ERR, "Rename function failed\n");
-		return false;
+		ret_val = false;
+		goto exit;
 	}
 
 	/* update info */
@@ -409,9 +415,11 @@ bool ext_change_object_ID(uint32_t storage_blob_id,
 		}
 	}
 
+exit:
+
 	free(name_with_dir_path);
 	free(new_name_with_dir_path);
-	return true;
+	return ret_val;
 }
 
 uint32_t ext_read_stream(uint32_t storage_blob_id, uint32_t offset, void *data, size_t datalen)
