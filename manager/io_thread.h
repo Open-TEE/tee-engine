@@ -80,7 +80,7 @@ int check_if_valid_proc_in_msg(struct manager_msg *msg);
  * \param msg Added message
  * \return in case of message added, return 0
  */
-int add_man_msg_inbound_queue_and_notify(struct manager_msg *msg);
+void add_man_msg_inbound_queue_and_notify(struct manager_msg *msg);
 
 
 /*!

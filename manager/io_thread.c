@@ -56,10 +56,7 @@ static void notify_logic_fd_err(int err_nro, proc_t proc)
 	((struct com_msg_fd_err *)new_man_msg->msg)->err_no = err_nro;
 	((struct com_msg_fd_err *)new_man_msg->msg)->proc_ptr = proc;
 
-	if (add_man_msg_inbound_queue_and_notify(new_man_msg)) {
-		OT_LOG(LOG_ERR, "Failed to add out queue");
-		free_manager_msg(new_man_msg);
-	}
+	add_man_msg_inbound_queue_and_notify(new_man_msg);
 }
 
 /*!
@@ -361,10 +358,7 @@ void read_fd_and_add_inbound_queue(struct epoll_event *event)
 	msg_header->shareable_fd_count = 0;
 
 	/* Add task to manager message queue */
-	if (add_man_msg_inbound_queue_and_notify(new_man_msg)) {
-		OT_LOG(LOG_ERR, "Failed to add inbound queue");
-		goto err;
-	}
+	add_man_msg_inbound_queue_and_notify(new_man_msg);
 
 	return; /* Msg recv OK */
 
@@ -441,10 +435,7 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 		((struct com_msg_proc_status_change *)new_man_msg->msg)->msg_hdr.msg_name =
 				COM_MSG_NAME_PROC_STATUS_CHANGE;
 
-		if (add_man_msg_inbound_queue_and_notify(new_man_msg)) {
-			OT_LOG(LOG_ERR, "Failed to add inbound queue");
-			free_manager_msg(new_man_msg);
-		}
+		add_man_msg_inbound_queue_and_notify(new_man_msg);
 	}
 
 	if (cpy_sig_vec & (TEE_SIG_TERM | TEE_SIG_INT)) {
@@ -469,10 +460,7 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 		((struct com_msg_proc_status_change *)new_man_msg->msg)->msg_hdr.msg_name =
 				COM_MSG_NAME_MANAGER_TERMINATION;
 
-		if (add_man_msg_inbound_queue_and_notify(new_man_msg)) {
-			OT_LOG(LOG_ERR, "Failed to add inbound queue");
-			free_manager_msg(new_man_msg);
-		}
+		add_man_msg_inbound_queue_and_notify(new_man_msg);
 	}
 }
 
@@ -525,16 +513,14 @@ skip:
 	return is_valid_proc;
 }
 
-int add_man_msg_inbound_queue_and_notify(struct manager_msg *msg)
+void add_man_msg_inbound_queue_and_notify(struct manager_msg *msg)
 {
-	int ret = 0;
-
 	int is_valid_proc = 0;
 
 	/* Lock task queue from logic thread */
 	if (pthread_mutex_lock(&inbound_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
-		return 1;
+		free_manager_msg(msg);
 	}
 
 	is_valid_proc = check_if_valid_proc_in_msg(msg);
@@ -548,18 +534,16 @@ int add_man_msg_inbound_queue_and_notify(struct manager_msg *msg)
 			OT_LOG(LOG_ERR, "Manager msg queue signal fail");
 			/* Function only should fail if inbound_queue_cond is not initialized
 			 * Therefore, this function call *should* not fails */
-			ret = 1; /* error return, because no granti if message get handeled! */
 		}
 	} else {
 		OT_LOG(LOG_INFO, "inbound proc was not valid");
+		free_manager_msg(msg);
 	}
 
 	if (pthread_mutex_unlock(&inbound_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
-		ret = 1;
+		/* no action here */
 	}
-
-	return ret;
 }
 
 void clear_man_msg_from_inbound_outbound_queues(proc_t proc_to_clear)

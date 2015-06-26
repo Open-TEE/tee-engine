@@ -236,6 +236,7 @@ void add_msg_out_queue_and_notify(struct manager_msg *man_msg)
 		}
 	} else {
 		OT_LOG(LOG_INFO, "outbound proc was not valid");
+		free_manager_msg(man_msg);
 	}
 
 	if (pthread_mutex_unlock(&outbound_queue_mutex)) {
