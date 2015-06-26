@@ -548,38 +548,16 @@ void add_man_msg_inbound_queue_and_notify(struct manager_msg *msg)
 
 void clear_man_msg_from_inbound_outbound_queues(proc_t proc_to_clear)
 {
-
 	struct manager_msg *handled_msg = NULL;
 	struct list_head *pos, *la;
 
-	/* Lock task queue from logic thread */
+	/* clear inbound queue */
 	if (pthread_mutex_lock(&inbound_queue_mutex)) {
 		OT_LOG(LOG_ERR, "Failed to lock the mutex");
 		goto end;
 	}
-	/* Lock from logic thread */
-	if (pthread_mutex_lock(&outbound_queue_mutex)) {
-		OT_LOG(LOG_ERR, "Failed to lock the mutex");
-		/* Lets hope that errot clear it shelf.. */
-		goto end1;
-	}
 
-	/* removing messages from the proc */
-
-	if (!list_is_empty(&outbound_queue_list)) {
-
-		LIST_FOR_EACH_SAFE(pos, la, &outbound_queue_list) {
-			handled_msg = LIST_ENTRY(pos, struct manager_msg, list);
-			if (!handled_msg)
-				continue;
-
-			if (handled_msg->proc == proc_to_clear) {
-				list_unlink(&handled_msg->list);
-				free_manager_msg(handled_msg);
-			}
-		}
-	}
-
+	/* removing messages for the proc */
 	if (!list_is_empty(&inbound_queue_list)) {
 
 		LIST_FOR_EACH_SAFE(pos, la, &inbound_queue_list) {
@@ -594,13 +572,34 @@ void clear_man_msg_from_inbound_outbound_queues(proc_t proc_to_clear)
 		}
 	}
 
-	if (pthread_mutex_unlock(&outbound_queue_mutex)) {
+	if (pthread_mutex_unlock(&inbound_queue_mutex)) {
 		/* no action */
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
 	}
-end1:
 
-	if (pthread_mutex_unlock(&inbound_queue_mutex)) {
+	/* clear outbound queue */
+	if (pthread_mutex_lock(&outbound_queue_mutex)) {
+		OT_LOG(LOG_ERR, "Failed to lock the mutex");
+		/* Lets hope that errot clear it shelf.. */
+		goto end;
+	}
+
+	/* removing messages from the proc */
+	if (!list_is_empty(&outbound_queue_list)) {
+
+		LIST_FOR_EACH_SAFE(pos, la, &outbound_queue_list) {
+			handled_msg = LIST_ENTRY(pos, struct manager_msg, list);
+			if (!handled_msg)
+				continue;
+
+			if (handled_msg->proc == proc_to_clear) {
+				list_unlink(&handled_msg->list);
+				free_manager_msg(handled_msg);
+			}
+		}
+	}
+
+	if (pthread_mutex_unlock(&outbound_queue_mutex)) {
 		/* no action */
 		OT_LOG(LOG_ERR, "Failed to unlock the mutex");
 	}
