@@ -197,7 +197,7 @@ int load_lib(char *path, main_loop_cb *callback)
  * to the pid file and keep the file handle to the pid file open, hence holding the lock.
  * \return 0 on success
  */
-int check_create_pid_file(char *proc_name_a0, bool write_pid)
+int check_create_pid_file(char *proc_name_a0, char *def_pid_dir, bool write_pid)
 {
 	struct stat st = {0};
 	char pid_file[MAX_PATH_NAME] = {0};
@@ -209,21 +209,19 @@ int check_create_pid_file(char *proc_name_a0, bool write_pid)
 
 	/* determine if the directory /var/run/opentee exists, this is the preferred place
 	 * for daemon run files, i.e. when running in production this is where we will
-	 * store the information, but when developing Open-TEE engine itself we will just use the
-	 * /tmp dir for fast and easy starts and stops of the processes
+	 * store the information, but when developing Open-TEE engine itself or on Android we will just 
+	 * use the dir provided either via runtime arguments (-p) or the one provided via compile 
+	 * argument -DDEFAULT_PID_FILE for fast and easy starts and stops of processes.
 	 */
-	if (stat(PID_FILE_ROOT, &st) == -1) {
-		/* we will use the tmp dir for the pid_file */
-		memcpy(pid_dir, PID_FILE_USER, strnlen(PID_FILE_USER, sizeof(pid_dir) - 1));
+	memcpy(pid_dir, def_pid_dir, strnlen(def_pid_dir, sizeof(pid_dir) - 1));
+	/* if the pid directory doesn't exist, try to create it. */
+	if (stat(def_pid_dir, &st) == -1) {
 		if (mkdir(pid_dir, 0755) == -1 && errno != EEXIST) {
 			printf("Error mkdir %s\n", strerror(errno));
 			ret = -1;
 			goto out;
 		}
-	} else {
-		/* either a wrapper program or init script has created the PID_FILE_ROOT for us */
-		memcpy(pid_dir, PID_FILE_ROOT, strnlen(PID_FILE_ROOT, sizeof(pid_dir) - 1));
-	}
+	}	
 
 	if (snprintf(pid_file, MAX_PATH_NAME, "%s/%s.pid", pid_dir, proc_name) == MAX_PATH_NAME) {
 		printf("problems with snprintf, overflow\n");
@@ -323,7 +321,7 @@ int main(int argc, char **argv)
 		exit(1);
 
 	/* ensure that only one instance of this program is running */
-	if (check_create_pid_file(argv[0], false))
+	if (check_create_pid_file(argv[0], arguments.pid_dir, false))
 		exit(1);
 
 	/* Daemonize if foreground was not requested */
@@ -332,7 +330,7 @@ int main(int argc, char **argv)
 
 	/* write the PID of the manager process to the pid file and keep the file
 	 * open, hence locked */
-	if (check_create_pid_file(argv[0], true))
+	if (check_create_pid_file(argv[0], arguments.pid_dir, true))
 		exit(1);
 
 	/* create a socket pair so the manager and launcher can communicate */
