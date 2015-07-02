@@ -22,15 +22,21 @@
 struct arguments {
 	bool foreground;
 	char *config_file;
+    char *pid_dir;
 };
 
-/* Allow this to be sepecified on the compile line -D */
+/* Allow these to be specified on the compile line -D */
 #ifndef DEFAULT_CONFIG_FILE
 #define DEFAULT_CONFIG_FILE "/etc/opentee.conf"
 #endif
 
+#ifndef DEFAULT_PID_FILE
+#define DEFAULT_PID_FILE "/var/run/opentee"
+#endif
+
 #define DEFAULT_ARGUMENTS {.foreground = false, \
-			   .config_file = DEFAULT_CONFIG_FILE}
+			   .config_file = DEFAULT_CONFIG_FILE, \
+               .pid_dir = DEFAULT_PID_FILE}
 
 void args_parse(int argc, char **argv, struct arguments *args);
 
