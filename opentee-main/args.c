@@ -23,6 +23,9 @@ static const char usage[] =
 "Usage: %s [OPTION...]\n"
 "Open-TEE Core Process -- A program which runs Trusted Applications\n"
 "\n"
+"  -p, --pid-dir=PID_DIR      Specify path to keep pid file. Defaults to:\n"
+"                             /var/run/opentee when run by root, or \n"
+"                             /tmp/opentee when run by a non-root user.\n"
 "  -c, --config=CONFIG_FILE   Specify path to configuration file. Defaults to:\n"
 "                             /etc/opentee.conf\n"
 "  -f, --foreground           Do not daemonize but start the process in\n"
@@ -42,6 +45,7 @@ void args_parse(int argc, char **argv, struct arguments *args)
 	int option_index = 0;
 
 	struct option long_options[] = {
+		{"pid-dir", required_argument, 0, 'p'},
 		{"config", required_argument, 0, 'c'},
 		{"foreground", no_argument, 0, 'f'},
 		{"help", no_argument, 0, '?'},
@@ -49,9 +53,12 @@ void args_parse(int argc, char **argv, struct arguments *args)
 	};
 
 	do {
-		c = getopt_long(argc, argv, "fc:h", long_options, &option_index);
+		c = getopt_long(argc, argv, "fp:c:h", long_options, &option_index);
 
 		switch (c) {
+		case 'p':
+			args->pid_dir = optarg;
+			break;
 		case 'c':
 			args->config_file = optarg;
 			break;
