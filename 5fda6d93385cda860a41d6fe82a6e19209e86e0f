@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9ad9bd40_b330d957",
+        "filename": "opentee-main/args.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 34,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-07-02T15:11:57Z",
+      "side": 1,
+      "message": "that is only the default if you are running as root. If running as user use the other default USER location as previously mentioned, so the default should be /tmp/opentee and if an init script is starting the process, it can then both create the \"proper\" pid file dir (/var/..) AND pass that as a -p param",
+      "range": {
+        "startLine": 34,
+        "startChar": 8,
+        "endLine": 34,
+        "endChar": 24
+      },
+      "revId": "5fda6d93385cda860a41d6fe82a6e19209e86e0f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_f388a1e9",
+        "filename": "opentee-main/main.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 219,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-07-02T15:11:57Z",
+      "side": 1,
+      "message": "move this before if (stat(...)) and then you can get rid of the else statement below. the if (stat(...)) can then be used just to create the pid_dir",
+      "range": {
+        "startLine": 219,
+        "startChar": 0,
+        "endLine": 219,
+        "endChar": 74
+      },
+      "revId": "5fda6d93385cda860a41d6fe82a6e19209e86e0f",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
