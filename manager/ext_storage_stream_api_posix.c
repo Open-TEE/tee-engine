@@ -75,17 +75,28 @@ static struct list_head elements_head;
 
 static bool __attribute__((constructor)) storage_ext_init()
 {
-#ifdef ANDROID
-	char *home = "/data";
-#else
-	char *home = getenv("HOME");
-#endif
+	char *tee_storage_dir = getenv("OPENTEE_STORAGE_PATH");
+	int res;
 
-	if (snprintf(secure_storage_path, MAX_EXT_PATH_NAME, "%s/%s", home, ".TEE_secure_storage/")
-	    == MAX_EXT_PATH_NAME) {
+	if (tee_storage_dir != NULL) {
+		/* if it doesn't end with a backslash, add it */
+		char *pathspec = (tee_storage_dir[strlen(tee_storage_dir) - 1] != '/') ? "%s/" : "%s" ;
+		res = snprintf(secure_storage_path, MAX_EXT_PATH_NAME, pathspec, tee_storage_dir);
+	} else {
+		/* fallback to $HOME or /data if OPENTEE_STORAGE_PATH isn't defined */
+		#ifndef ANDROID
+		tee_storage_dir = getenv("HOME");
+		#else
+		tee_storage_dir = "/data";
+		#endif
+		res = snprintf(secure_storage_path, MAX_EXT_PATH_NAME, "%s/%s", tee_storage_dir, ".TEE_secure_storage/");
+	}
+
+	if (res == MAX_EXT_PATH_NAME) {
 		OT_LOG(LOG_ERR, "Failed to malloc secure storage path\n");
 		return false;
 	}
+
 	OT_LOG(LOG_ERR, "storage path(%s)\n", secure_storage_path);
 	INIT_LIST(&elements_head);
 
