@@ -75,11 +75,7 @@ static struct list_head elements_head;
 
 static bool __attribute__((constructor)) storage_ext_init()
 {
-#ifdef ANDROID
-	char *home = "/data";
-#else
 	char *home = getenv("HOME");
-#endif
 
 	if (snprintf(secure_storage_path, MAX_EXT_PATH_NAME, "%s/%s", home, ".TEE_secure_storage/")
 	    == MAX_EXT_PATH_NAME) {
