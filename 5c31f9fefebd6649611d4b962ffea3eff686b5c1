@@ -16,6 +16,24 @@
       "revId": "5c31f9fefebd6649611d4b962ffea3eff686b5c1",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9ad9bd40_b67882f3",
+        "filename": "manager/ext_storage_stream_api_posix.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 78,
+      "author": {
+        "id": 1004151
+      },
+      "writtenOn": "2015-08-05T12:36:15Z",
+      "side": 1,
+      "message": "Is /storage/sdcard0 guaranteed to exist even on devices that might not have sdcards or do they all have that directory mapped to the internal storage? \nGenerally the assumption I\u0027m making is that whatever script or program is initiating opentee-engine will also set $HOME to the proper directory before calling the binary. \nAt least that\u0027s what I do in my java/android wrapper. \nIt would also allow more flexibility to tee developers that would like to do tests with multiple tee instances.",
+      "parentUuid": "9ad9bd40_cb71fde1",
+      "revId": "5c31f9fefebd6649611d4b962ffea3eff686b5c1",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
     }
   ]
 }
