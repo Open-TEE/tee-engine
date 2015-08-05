@@ -81,9 +81,13 @@ static int init_sock(int *pub_sockfd)
 {
 	struct sockaddr_un sock_addr;
 
-	if (remove(WELL_KNOWN_PUBLIC_SOCK_PATH) == -1 && errno != ENOENT) {
+	/* Try to get socket path from environment variable, otherwise fallback to hardcoded one. */
+	char *known_socket_path = getenv("OPENTEE_SOCKET_FILE_PATH");
+	if (known_socket_path == NULL)
+		known_socket_path = WELL_KNOWN_PUBLIC_SOCK_PATH;
+	if (remove(known_socket_path) == -1 && errno != ENOENT) {
 		OT_LOG(LOG_ERR, "Failed to remove %s : %s",
-		       WELL_KNOWN_PUBLIC_SOCK_PATH, strerror(errno));
+		       known_socket_path, strerror(errno));
 		return -1;
 	}
 
@@ -94,7 +98,7 @@ static int init_sock(int *pub_sockfd)
 	}
 
 	memset(&sock_addr, 0, sizeof(struct sockaddr_un));
-	strncpy(sock_addr.sun_path, WELL_KNOWN_PUBLIC_SOCK_PATH, sizeof(sock_addr.sun_path) - 1);
+	strncpy(sock_addr.sun_path, known_socket_path, sizeof(sock_addr.sun_path) - 1);
 	sock_addr.sun_family = AF_UNIX;
 
 	if (bind(*pub_sockfd, (struct sockaddr *)&sock_addr, sizeof(struct sockaddr_un)) == -1) {
