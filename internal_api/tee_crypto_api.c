@@ -38,6 +38,12 @@
 #include <openssl/cmac.h>
 #include <openssl/hmac.h>
 
+/* EC */
+#include <openssl/obj_mac.h>
+#include <openssl/ec.h>
+#include <openssl/ecdsa.h>
+/* EC end */
+
 #include <string.h>
 #include <limits.h>
 #include <stdint.h>
@@ -57,6 +63,7 @@
 #define RSA_key(OPERATION_HANDLE) ((RSA *)(OPERATION_HANDLE->key.key))
 #define DSA_key(OPERATION_HANDLE) ((DSA *)(OPERATION_HANDLE->key.key))
 #define DH_key(OPERATION_HANDLE) ((DH *)(OPERATION_HANDLE->key.key))
+#define EC_key(OPERATION_HANDLE) ((EC_KEY *)(OPERATION_HANDLE->key.key))
 #define SYM_ctx(OPERATION_HANDLE) ((EVP_CIPHER_CTX *)(OPERATION_HANDLE->key.ctx))
 #define SYM_key(OPERATION_HANDLE) (OPERATION_HANDLE->key.key)
 #define SYM_key_len(OPERATION_HANDLE) (OPERATION_HANDLE->key.key_len)
@@ -179,6 +186,11 @@ static bool supported_algorithms(uint32_t alg, uint32_t key_size)
 	case TEE_ALG_HMAC_SHA256:
 	case TEE_ALG_HMAC_SHA384:
 	case TEE_ALG_HMAC_SHA512:
+	case TEE_ALG_ECDSA_P192:
+	case TEE_ALG_ECDSA_P224:
+	case TEE_ALG_ECDSA_P256:
+	case TEE_ALG_ECDSA_P384:
+	case TEE_ALG_ECDSA_P521:
 		return true;
 	default:
 		return false;
@@ -252,6 +264,11 @@ static bool valid_mode_and_algorithm(uint32_t alg, TEE_OperationMode mode)
 		case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 		case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		case TEE_ALG_DSA_SHA1:
+		case TEE_ALG_ECDSA_P192:
+		case TEE_ALG_ECDSA_P224:
+		case TEE_ALG_ECDSA_P256:
+		case TEE_ALG_ECDSA_P384:
+		case TEE_ALG_ECDSA_P521:
 			return true;
 		default:
 			return false;
@@ -271,6 +288,11 @@ static bool valid_mode_and_algorithm(uint32_t alg, TEE_OperationMode mode)
 		case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 		case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		case TEE_ALG_DSA_SHA1:
+		case TEE_ALG_ECDSA_P192:
+		case TEE_ALG_ECDSA_P224:
+		case TEE_ALG_ECDSA_P256:
+		case TEE_ALG_ECDSA_P384:
+		case TEE_ALG_ECDSA_P521:
 			return true;
 		default:
 			return false;
@@ -430,6 +452,31 @@ static bool valid_key_size_for_algorithm(uint32_t alg, uint32_t key)
 			return true;
 		break;
 
+	case TEE_ALG_ECDSA_P192:
+		if (key == 192)
+			return true;
+		break;
+
+	case TEE_ALG_ECDSA_P224:
+		if (key == 224)
+			return true;
+		break;
+
+	case TEE_ALG_ECDSA_P256:
+		if (key == 256)
+			return true;
+		break;
+
+	case TEE_ALG_ECDSA_P384:
+		if (key == 384)
+			return true;
+		break;
+
+	case TEE_ALG_ECDSA_P521:
+		if (key == 521)
+			return true;
+		break;
+
 	default:
 		break;
 	}
@@ -505,10 +552,22 @@ static void free_key_and_ctx(TEE_OperationHandle operation)
 
 	} else if (operation->operation_info.operationClass == TEE_OPERATION_ASYMMETRIC_SIGNATURE) {
 
-		if (operation->operation_info.algorithm == TEE_ALG_DSA_SHA1)
+		switch (operation->operation_info.algorithm) {
+		case TEE_ALG_DSA_SHA1:
 			DSA_free(DSA_key(operation));
-		else
+			break;
+		case TEE_ALG_ECDSA_P192:
+		case TEE_ALG_ECDSA_P224:
+		case TEE_ALG_ECDSA_P256:
+		case TEE_ALG_ECDSA_P384:
+		case TEE_ALG_ECDSA_P521:
+			EC_KEY_free(EC_key(operation));
+			break;
+		default:
+			/* The RSA algos */
 			RSA_free(RSA_key(operation));
+			break;
+		}
 
 	} else if (operation->operation_info.operationClass == TEE_OPERATION_KEY_DERIVATION) {
 
@@ -645,6 +704,11 @@ static uint32_t get_operation_class(uint32_t alg)
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
+	case TEE_ALG_ECDSA_P192:
+	case TEE_ALG_ECDSA_P224:
+	case TEE_ALG_ECDSA_P256:
+	case TEE_ALG_ECDSA_P384:
+	case TEE_ALG_ECDSA_P521:
 		return TEE_OPERATION_ASYMMETRIC_SIGNATURE;
 
 	case TEE_ALG_DH_DERIVE_SHARED_SECRET:
@@ -766,6 +830,19 @@ static bool valid_key_type_for_operation_algorithm(uint32_t key_type, uint32_t o
 		if (op_algorithm == TEE_ALG_DH_DERIVE_SHARED_SECRET)
 			return true;
 		return false;
+
+	case TEE_TYPE_ECDSA_PUBLIC_KEY:
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		switch (op_algorithm) {
+		case TEE_ALG_ECDSA_P192:
+		case TEE_ALG_ECDSA_P224:
+		case TEE_ALG_ECDSA_P256:
+		case TEE_ALG_ECDSA_P384:
+		case TEE_ALG_ECDSA_P521:
+			return true;
+		default:
+			return false;
+		}
 
 	default:
 		return false;
@@ -1802,6 +1879,46 @@ TEE_Result dsa_ver(TEE_OperationHandle operation, void *digest, uint32_t digestL
 	return TEE_SUCCESS;
 }
 
+TEE_Result ecdsa_sign(TEE_OperationHandle operation, void *digest, uint32_t digestLen,
+		      void *signature, uint32_t *signatureLen)
+{
+	unsigned int sig_len = *signatureLen;
+
+	if (!digest || !signature) {
+		OT_LOG(LOG_ERR, "ecdsa_sign: Digest or Sig buf NULL\n");
+		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+	}
+
+	if (uint322int(*signatureLen) < ECDSA_size(EC_key(operation))) {
+		OT_LOG(LOG_ERR, "ecdsa_sign: ECDSA sig buf too small\n");
+		return TEE_ERROR_SHORT_BUFFER;
+	}
+
+	if (1 != ECDSA_sign(0, digest, digestLen, signature, &sig_len, EC_key(operation))) {
+		OT_LOG(LOG_ERR, "ecdsa_sign: ECDSA signing error\n");
+		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+	}
+
+	*signatureLen = sig_len;
+	return TEE_SUCCESS;
+}
+
+TEE_Result ecdsa_ver(TEE_OperationHandle operation, void *digest, uint32_t digestLen,
+		     void *signature, uint32_t signatureLen)
+{
+	if (!digest || !signature) {
+		OT_LOG(LOG_ERR, "ecdsa_ver: Digest or Sig buf NULL\n");
+		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+	}
+
+	if (!ECDSA_verify(0, digest, digestLen, signature, signatureLen, EC_key(operation))) {
+		OT_LOG(LOG_ERR, "ecdsa_ver: ECDSA verify error\n");
+		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+	}
+
+	return TEE_SUCCESS;
+}
+
 static void dup_rsa_key(TEE_OperationHandle dstOperation, TEE_OperationHandle srcOperation)
 {
 	if (RSA_key(srcOperation)->d) {
@@ -1965,6 +2082,101 @@ static void dup_dh_key(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 err:
 	OT_LOG(LOG_ERR, "dup_dh_key: out of memory\n");
 	TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+}
+
+static TEE_Result malloc_and_cpy_ecdsa_key(TEE_OperationHandle operation, TEE_ObjectHandle key)
+{
+	TEE_Result ret = 0;
+	uint32_t curve = 0;
+
+	BIGNUM *priv_key = NULL;
+	BIGNUM *pub_key_x = NULL;
+	BIGNUM *pub_key_y = NULL;
+	EC_GROUP *ec_group = NULL;
+
+	if (!operation || !key) {
+		OT_LOG(LOG_ERR, "malloc_and_cpy_ecdsa_key: Operation or key NULL\n");
+		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+	}
+
+	priv_key = BN_new();
+	pub_key_x = BN_new();
+	pub_key_y = BN_new();
+
+	if (priv_key == NULL ||
+	    pub_key_x == NULL ||
+	    pub_key_y == NULL) {
+		OT_LOG(LOG_ERR, "Out of memory (openssl failure)");
+		ret = TEE_ERROR_OUT_OF_MEMORY;
+		goto out;
+	}
+
+	/* Copy the key components from the key object into temp variables */
+	if (!cpy_key_comp_to_bn(&pub_key_x, TEE_ATTR_ECC_PUBLIC_VALUE_X, key) ||
+	    !cpy_key_comp_to_bn(&pub_key_y, TEE_ATTR_ECC_PUBLIC_VALUE_Y, key)) {
+		OT_LOG(LOG_ERR, "malloc_and_cpy_ecdsa_key: Missing ECDSA components");
+		ret = TEE_ERROR_BAD_PARAMETERS;
+		goto out;
+	}
+
+	/* Copy the curve component from the key object into temp variable */
+	ret = TEE_GetObjectValueAttribute(key, TEE_ATTR_ECC_CURVE, &curve, NULL);
+
+	if (ret) {
+		OT_LOG(LOG_ERR, "malloc_and_cpy_ecdsa_key: Missing EC curve");
+		goto out;
+	}
+
+	if (key->objectInfo.objectType == TEE_TYPE_ECDSA_KEYPAIR &&
+	    !cpy_key_comp_to_bn(&priv_key, TEE_ATTR_ECC_PRIVATE_VALUE, key)) {
+		OT_LOG(LOG_ERR, "malloc_and_cpy_ecdsa_key: Missing EC private component");
+		ret = TEE_ERROR_BAD_PARAMETERS;
+		goto out;
+	}
+
+	/* Now fill up the operation struct */
+	/* Set the curve and configure it on the key */
+	ec_group = EC_GROUP_new_by_curve_name(curve);
+
+	if (ec_group == NULL) {
+		OT_LOG(LOG_ERR, "Out of memory (openssl failure)");
+		ret = TEE_ERROR_OUT_OF_MEMORY;
+		goto out;
+	}
+
+	if (!EC_KEY_set_group(EC_key(operation), ec_group)) {
+		OT_LOG(LOG_ERR, "malloc_and_cpy_ecdsa_key: Setting EC group failed (openssl failure");
+		ret = TEE_ERROR_OUT_OF_MEMORY; /*what's the correct error here */
+		goto out;
+	}
+
+	/* Set public key */
+	if (!EC_KEY_set_public_key_affine_coordinates(EC_key(operation), pub_key_x, pub_key_y)) {
+		OT_LOG(LOG_ERR, "malloc_and_cpy_ecdsa_key: Setting EC pubkey failed (openssl failure)");
+		ret = TEE_ERROR_OUT_OF_MEMORY; /* again what is right */
+		goto out;
+	}
+	/* Set private if applicable */
+	if (key->objectInfo.objectType == TEE_TYPE_ECDSA_KEYPAIR) {
+		if (!EC_KEY_set_private_key(EC_key(operation), priv_key)) {
+			OT_LOG(LOG_ERR, "malloc_and_cpy_ecdsa_key: Setting EC privkey failed (openssl failure)");
+			ret = TEE_ERROR_OUT_OF_MEMORY; /* again */
+			goto out;
+		}
+	}
+
+out:
+	if (priv_key != NULL)
+		BN_free(priv_key);
+	if (pub_key_x != NULL)
+		BN_free(pub_key_x);
+	if (pub_key_y != NULL)
+		BN_free(pub_key_y);
+	if (ec_group != NULL)
+		EC_GROUP_free(ec_group);
+	if (ret)
+		TEE_Panic(ret);
+	return TEE_SUCCESS;
 }
 
 /*********************************************************************************************
@@ -2192,6 +2404,20 @@ static TEE_Result init_operation_meta_info(TEE_OperationHandle operation, uint32
 		/* Special: Derive do not have INIT -function */
 		operation->operation_info.handleState |= TEE_HANDLE_FLAG_INITIALIZED;
 
+		break;
+
+	case TEE_ALG_ECDSA_P192:
+	case TEE_ALG_ECDSA_P224:
+	case TEE_ALG_ECDSA_P256:
+	case TEE_ALG_ECDSA_P384:
+	case TEE_ALG_ECDSA_P521:
+		operation->key.key = (EC_KEY *)EC_KEY_new();
+		if (!EC_key(operation)) {
+			OT_LOG(LOG_ERR, "Init key meta: ECDSA malloc (openssl failure)\n");
+			ret = TEE_ERROR_OUT_OF_MEMORY;
+		}
+		/* Special: Asymmetric function do not have INIT -function */
+		operation->operation_info.handleState |= TEE_HANDLE_FLAG_INITIALIZED;
 		break;
 
 	default:
@@ -2538,6 +2764,14 @@ TEE_Result TEE_SetOperationKey(TEE_OperationHandle operation, TEE_ObjectHandle k
 		ret = malloc_and_cpy_dh_key(operation, key);
 		break;
 
+	case TEE_ALG_ECDSA_P192:
+	case TEE_ALG_ECDSA_P224:
+	case TEE_ALG_ECDSA_P256:
+	case TEE_ALG_ECDSA_P384:
+	case TEE_ALG_ECDSA_P521:
+		ret = malloc_and_cpy_ecdsa_key(operation, key);
+		break;
+
 	default:
 		OT_LOG(LOG_ERR, "Set op key: Algorithm not supported\n");
 		ret = TEE_ERROR_NOT_SUPPORTED;
@@ -2730,10 +2964,22 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
 
 	} else if (srcOperation->operation_info.operationClass == TEE_OPERATION_ASYMMETRIC_SIGNATURE) {
 
-		if (srcOperation->operation_info.algorithm == TEE_ALG_DSA_SHA1)
+		switch (srcOperation->operation_info.algorithm) {
+		case TEE_ALG_DSA_SHA1:
 			dup_dsa_key(dstOperation, srcOperation);
-		else
+			break;
+		case TEE_ALG_ECDSA_P192:
+		case TEE_ALG_ECDSA_P224:
+		case TEE_ALG_ECDSA_P256:
+		case TEE_ALG_ECDSA_P384:
+		case TEE_ALG_ECDSA_P521:
+			EC_KEY_copy(EC_key(dstOperation), EC_key(srcOperation));
+			break;
+		default:
+			/* The RSA algos */
 			dup_rsa_key(dstOperation, srcOperation);
+			break;
+		}
 
 	} else if (srcOperation->operation_info.operationClass == TEE_OPERATION_KEY_DERIVATION) {
 
@@ -3423,16 +3669,28 @@ TEE_Result TEE_AsymmetricSignDigest(TEE_OperationHandle operation, TEE_Attribute
 	if (operation->operation_info.operationClass != TEE_OPERATION_ASYMMETRIC_SIGNATURE ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_INITIALIZED) ||
 	    !(operation->operation_info.handleState & TEE_HANDLE_FLAG_KEY_SET)) {
-		OT_LOG(LOG_ERR, "TEE_AsymmetricSignDigest: Not a asymetric sign op "
+		OT_LOG(LOG_ERR, "TEE_AsymmetricSignDigest: Not a asymmetric sign op "
 				"or not initialized or no key\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
-	if (operation->operation_info.algorithm == TEE_ALG_DSA_SHA1)
+	switch (operation->operation_info.algorithm) {
+	case TEE_ALG_DSA_SHA1:
 		ret = dsa_sign(operation, digest, digestLen, signature, signatureLen);
-	else
+		break;
+	case TEE_ALG_ECDSA_P192:
+	case TEE_ALG_ECDSA_P224:
+	case TEE_ALG_ECDSA_P256:
+	case TEE_ALG_ECDSA_P384:
+	case TEE_ALG_ECDSA_P521:
+		ret = ecdsa_sign(operation, digest, digestLen, signature, signatureLen);
+		break;
+	default:
+		/* The RSA algos */
 		ret = rsa_sign(operation, params, paramCount, digest, digestLen, signature,
 			       signatureLen);
+		break;
+	}
 
 	return ret;
 }
@@ -3457,11 +3715,23 @@ TEE_Result TEE_AsymmetricVerifyDigest(TEE_OperationHandle operation, TEE_Attribu
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
 
-	if (operation->operation_info.algorithm == TEE_ALG_DSA_SHA1)
+	switch (operation->operation_info.algorithm) {
+	case TEE_ALG_DSA_SHA1:
 		ret = dsa_ver(operation, digest, digestLen, signature, signatureLen);
-	else
+		break;
+	case TEE_ALG_ECDSA_P192:
+	case TEE_ALG_ECDSA_P224:
+	case TEE_ALG_ECDSA_P256:
+	case TEE_ALG_ECDSA_P384:
+	case TEE_ALG_ECDSA_P521:
+		ret = ecdsa_ver(operation, digest, digestLen, signature, signatureLen);
+		break;
+	default:
+		/* The RSA algos */
 		ret = rsa_ver(operation, params, paramCount, digest, digestLen, signature,
 			      signatureLen);
+		break;
+	}
 
 	return ret;
 }

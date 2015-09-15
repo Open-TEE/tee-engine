@@ -2,7 +2,7 @@
 #define __OPENTEE_STORAGE_COMMON__
 
 /* functions to check properties */
-int keysize_in_bits(uint32_t key_in_bits);
+int keysize_in_bytes(uint32_t key_in_bits);
 bool is_value_attribute(uint32_t attr_ID);
 
 /* internal handle memory helpers */

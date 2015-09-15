@@ -462,7 +462,7 @@ TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size
 
 	/* Reproduct/fill rest of object parameters */
 	new_object->per_object.storage_blob_id = storage_blob_id;
-	new_object->maxObjSizeBytes = keysize_in_bits(new_object->objectInfo.maxObjectSize);
+	new_object->maxObjSizeBytes = keysize_in_bytes(new_object->objectInfo.maxObjectSize);
 
 
 	/* Load object attributes */

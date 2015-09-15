@@ -11,7 +11,7 @@
 #include "tee_logging.h"
 #include "opentee_storage_common.h"
 
-int keysize_in_bits(uint32_t key_in_bits)
+int keysize_in_bytes(uint32_t key_in_bits)
 {
 	if (key_in_bits <= UINT_MAX - 7)
 		key_in_bits += 7;
@@ -58,6 +58,9 @@ int valid_obj_type_and_attr_count(object_type obj)
 
 	case TEE_TYPE_DH_KEYPAIR:
 		return 5;
+
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		return 4;
 
 	default:
 		return -1;

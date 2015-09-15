@@ -21,6 +21,12 @@
 #include <openssl/dh.h>
 #include <openssl/des.h>
 
+/* EC */
+#include <openssl/obj_mac.h>
+#include <openssl/ec.h>
+#include <openssl/ecdsa.h>
+/* EC end */
+
 #include <limits.h>
 #include <stdbool.h>
 #include <string.h>
@@ -125,10 +131,11 @@ static bool copy_attr_from_attrArr_to_object(TEE_Attribute *params, uint32_t par
 
 static bool bn_to_obj_ref_attr(BIGNUM *bn, uint32_t atrr_ID, TEE_ObjectHandle obj, int obj_index)
 {
-	/* add suslog */
 	obj->attrs[obj_index].content.ref.length = BN_num_bytes(bn);
-	if (obj->attrs[obj_index].content.ref.length > obj->maxObjSizeBytes)
+	if (obj->attrs[obj_index].content.ref.length > obj->maxObjSizeBytes) {
+		OT_LOG(LOG_ERR, "object size too large");
 		return false;
+	}
 
 	obj->attrs[obj_index].attributeID = atrr_ID;
 	if (BN_bn2bin(bn, obj->attrs[obj_index].content.ref.buffer) == 0) {
@@ -175,13 +182,13 @@ static TEE_Result gen_des_key(TEE_ObjectHandle object, uint32_t keySize)
 
 static TEE_Result gen_symmetric_key(TEE_ObjectHandle object, uint32_t keySize)
 {
-	if (!RAND_bytes(object->attrs->content.ref.buffer, keysize_in_bits(keySize))) {
+	if (!RAND_bytes(object->attrs->content.ref.buffer, keysize_in_bytes(keySize))) {
 		OT_LOG(LOG_ERR, "Cannot create random bytes (openssl failure)\n");
 		return TEE_ERROR_GENERIC;
 	}
 
 	object->attrs->attributeID = TEE_ATTR_SECRET_VALUE;
-	object->attrs->content.ref.length = keysize_in_bits(keySize);
+	object->attrs->content.ref.length = keysize_in_bytes(keySize);
 
 	return TEE_SUCCESS;
 }
@@ -386,6 +393,147 @@ ret:
 	return ret_val;
 }
 
+/* Converts GP EC curve enum to OpenSSL NID */
+/* Returns -1 on fail */
+/* GP only supports the NIST curves */
+static int gp_curve2nid(obj_ecc_curve curve)
+{
+	switch (curve) {
+	case TEE_ECC_CURVE_NIST_P192:
+		return NID_X9_62_prime192v1;
+	case TEE_ECC_CURVE_NIST_P224:
+		return NID_secp224r1;
+	case TEE_ECC_CURVE_NIST_P256:
+		return NID_X9_62_prime256v1;
+	case TEE_ECC_CURVE_NIST_P384:
+		return NID_secp384r1;
+	case TEE_ECC_CURVE_NIST_P521:
+		return NID_secp521r1;
+	default:
+		return -1;
+	}
+}
+
+static TEE_Result gen_ecc_keypair(TEE_ObjectHandle object, TEE_Attribute *params,
+				    uint32_t paramCount)
+{
+	int curve = -1;
+	int curve_index = -1;
+	TEE_Result ret = TEE_SUCCESS;
+	int i = 0;
+
+	EC_GROUP *ec_group = NULL;
+
+	BIGNUM *priv_key = NULL;
+	BIGNUM *pub_key_x = NULL;
+	BIGNUM *pub_key_y = NULL;
+
+	pub_key_x = BN_new();
+	pub_key_y = BN_new();
+
+	if (pub_key_x == NULL ||
+	    pub_key_y == NULL) {
+		OT_LOG(LOG_ERR, "Out of memory (openssl failure)");
+		ret = TEE_ERROR_OUT_OF_MEMORY;
+		goto out;
+	}
+
+	/* Get the curve to be used and convert it to OpenSSL NID */
+	curve_index = get_attr_index_from_attrArr(TEE_ATTR_ECC_CURVE, params, paramCount);
+
+	if (curve_index == -1) {
+		OT_LOG(LOG_ERR, "Could not find curve definition for ECC in params");
+		ret = TEE_ERROR_BAD_PARAMETERS;
+		goto out;
+	}
+
+	curve = gp_curve2nid(params[curve_index].content.value.a);
+
+	if (curve == -1) {
+		OT_LOG(LOG_ERR, "Non-supported curve defined for ECC");
+		ret = TEE_ERROR_GENERIC;
+		goto out;
+	}
+
+	EC_KEY *ec_key = EC_KEY_new();
+
+	if (ec_key == NULL) {
+		OT_LOG(LOG_ERR, "EC keypair malloc failed (openssl failure)");
+		ret = TEE_ERROR_GENERIC;
+		goto out;
+	}
+
+	ec_group = EC_GROUP_new_by_curve_name(curve);
+
+	if (ec_group == NULL) {
+		OT_LOG(LOG_ERR, "EC group malloc failed (openssl failure)");
+		ret = TEE_ERROR_GENERIC;
+		goto out;
+	}
+
+	if (!EC_KEY_set_group(ec_key, ec_group)) {
+		OT_LOG(LOG_ERR, "EC group assign failed (openssl failure)");
+		ret = TEE_ERROR_GENERIC;
+		goto out;
+	}
+
+	if (!EC_KEY_generate_key(ec_key)) {
+		OT_LOG(LOG_ERR, "EC keypair generation failed (openssl failure)");
+		ret = TEE_ERROR_GENERIC;
+		goto out;
+	}
+
+	/* NOTE: bn_dup allocates memory for priv_key so that needs to be freed later */
+	priv_key = BN_dup(EC_KEY_get0_private_key(ec_key));
+	if (priv_key == NULL) {
+		OT_LOG(LOG_ERR, "failed privkey copy from ec_key (openssl error)");
+		ret = TEE_ERROR_GENERIC;
+		goto out;
+	}
+
+	const EC_POINT *pub_key = EC_KEY_get0_public_key(ec_key);
+
+	if (pub_key == NULL) {
+		OT_LOG(LOG_ERR, "failed getting pubkey from ec_key (openssl error)");
+		ret = TEE_ERROR_GENERIC;
+		goto out;
+	}
+
+	if (!EC_POINT_get_affine_coordinates_GFp(ec_group, pub_key, pub_key_x, pub_key_y, NULL)) {
+		OT_LOG(LOG_ERR, "failed getting affine coordinates (openssl error)");
+		ret = TEE_ERROR_GENERIC;
+		goto out;
+	}
+
+	/* Copy the ec_key fields to the object */
+	if (!bn_to_obj_ref_attr(priv_key, TEE_ATTR_ECC_PRIVATE_VALUE, object, i++) ||
+	   !bn_to_obj_ref_attr(pub_key_x, TEE_ATTR_ECC_PUBLIC_VALUE_X, object, i++) ||
+	   !bn_to_obj_ref_attr(pub_key_y, TEE_ATTR_ECC_PUBLIC_VALUE_Y, object, i++)) {
+		OT_LOG(LOG_ERR, "failed copying attributes to object");
+		ret = TEE_ERROR_GENERIC;
+		goto out;
+	}
+
+	/* Copy the curve into the object */
+	/* NOTE: we store the OpenSSL curve NID instead of the GP one */
+	TEE_InitValueAttribute(&(object->attrs[i]), TEE_ATTR_ECC_CURVE, curve, 0);
+
+
+out:
+	if (ec_key != NULL)
+		EC_KEY_free(ec_key);
+	if (priv_key != NULL)
+		BN_free(priv_key);
+	if (pub_key_x != NULL)
+		BN_free(pub_key_x);
+	if (pub_key_y != NULL)
+		BN_free(pub_key_y);
+	if (ec_group != NULL)
+		EC_GROUP_free(ec_group);
+
+	return ret;
+}
+
 static bool multiple_of_8(uint32_t number)
 {
 	return !(number % 8) ? true : false;
@@ -494,6 +642,11 @@ static bool valid_object_max_size(object_type obj, uint32_t size)
 			return true;
 		return false;
 
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		if (size == 192 || size == 224 || size == 256 || size == 384 || size == 521)
+			return true;
+		return false;
+
 	default:
 		return false;
 	}
@@ -521,14 +674,21 @@ static uint32_t key_raw_size(uint32_t objectType, uint32_t key)
 	case TEE_TYPE_AES:
 	case TEE_TYPE_DES:
 		/* Always 56 bit 8 parity bit = 64bit */
-		return keysize_in_bits(key) + 1;
+		return keysize_in_bytes(key) + 1;
 
 	case TEE_TYPE_DES3:
 		if (key == 112)
-			return keysize_in_bits(key) + 2;
+			return keysize_in_bytes(key) + 2;
 
 		if (key == 168)
-			return keysize_in_bits(key) + 3;
+			return keysize_in_bytes(key) + 3;
+
+	case TEE_TYPE_ECDSA_KEYPAIR:
+	case TEE_TYPE_ECDSA_PUBLIC_KEY:
+		/* For the odd sized key we need to add a byte for the remainder */
+		if (key == 521)
+			return keysize_in_bytes(key) + 1;
+		return keysize_in_bytes(key);
 
 	case TEE_TYPE_HMAC_MD5:
 	case TEE_TYPE_HMAC_SHA1:
@@ -543,7 +703,7 @@ static uint32_t key_raw_size(uint32_t objectType, uint32_t key)
 	case TEE_TYPE_DSA_KEYPAIR:
 	case TEE_TYPE_DH_KEYPAIR:
 	default:
-		return keysize_in_bits(key);
+		return keysize_in_bytes(key);
 	}
 }
 
@@ -777,7 +937,8 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 		break;
 
 	case TEE_TYPE_DH_KEYPAIR:
-		/* -1, because DH contains one value attribute */
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		/* -1, because DH and ECDSA contains one value attribute */
 		if (!malloc_for_attrs(tmp_handle, attr_count - 1))
 			goto out_of_mem;
 		break;
@@ -928,6 +1089,13 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute *a
 		}
 
 		break;
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		if (!copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_ECC_PRIVATE_VALUE, object, dest_index++) ||
+		    !copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_ECC_PUBLIC_VALUE_X, object, dest_index++) ||
+		    !copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_ECC_PUBLIC_VALUE_Y, object, dest_index++) ||
+		    !copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_ECC_CURVE, object, dest_index++))
+			goto bad_paras;
+		break;
 
 	default:
 		/* should never get here */
@@ -1018,6 +1186,14 @@ void TEE_CopyObjectAttributes(TEE_ObjectHandle destObject, TEE_ObjectHandle srcO
 			OT_LOG(LOG_ERR, "Can not copy objects, because something went wrong\n");
 			TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 		}
+	} else if (destObject->objectInfo.objectType == TEE_TYPE_ECDSA_PUBLIC_KEY &&
+		   srcObject->objectInfo.objectType == TEE_TYPE_ECDSA_KEYPAIR) {
+		if (!copy_attr_from_obj_to_obj(srcObject, TEE_ATTR_ECC_PUBLIC_VALUE_X, destObject, dest_index++) ||
+		    !copy_attr_from_obj_to_obj(srcObject, TEE_ATTR_ECC_PUBLIC_VALUE_Y, destObject, dest_index++) ||
+		    !copy_attr_from_obj_to_obj(srcObject, TEE_ATTR_ECC_CURVE, destObject, dest_index++)) {
+			OT_LOG(LOG_ERR, "Can not copy objects, because something went wrong\n");
+			TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+		}
 	} else {
 		OT_LOG(LOG_ERR, "Error in copying attributes: Problem with compatibles\n");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
@@ -1080,6 +1256,10 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 
 	case TEE_TYPE_DH_KEYPAIR:
 		ret_val = gen_dh_keypair(object, params, paramCount);
+		break;
+
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		ret_val = gen_ecc_keypair(object, params, paramCount);
 		break;
 
 	default:
