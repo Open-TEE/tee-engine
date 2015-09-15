@@ -38,6 +38,12 @@
 #include <openssl/cmac.h>
 #include <openssl/hmac.h>
 
+/* EC */
+#include <openssl/obj_mac.h>
+#include <openssl/ec.h>
+#include <openssl/ecdsa.h>
+/* EC end */
+
 #include <string.h>
 #include <limits.h>
 #include <stdint.h>
@@ -179,6 +185,11 @@ static bool supported_algorithms(uint32_t alg, uint32_t key_size)
 	case TEE_ALG_HMAC_SHA256:
 	case TEE_ALG_HMAC_SHA384:
 	case TEE_ALG_HMAC_SHA512:
+	case TEE_ALG_ECDSA_P192:
+	case TEE_ALG_ECDSA_P224:
+	case TEE_ALG_ECDSA_P256:
+	case TEE_ALG_ECDSA_P384:
+	case TEE_ALG_ECDSA_P512:
 		return true;
 	default:
 		return false;
@@ -252,6 +263,11 @@ static bool valid_mode_and_algorithm(uint32_t alg, TEE_OperationMode mode)
 		case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 		case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		case TEE_ALG_DSA_SHA1:
+		case TEE_ALG_ECDSA_P192:
+		case TEE_ALG_ECDSA_P224:
+		case TEE_ALG_ECDSA_P256:
+		case TEE_ALG_ECDSA_P384:
+		case TEE_ALG_ECDSA_P512:
 			return true;
 		default:
 			return false;
@@ -271,6 +287,11 @@ static bool valid_mode_and_algorithm(uint32_t alg, TEE_OperationMode mode)
 		case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 		case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		case TEE_ALG_DSA_SHA1:
+		case TEE_ALG_ECDSA_P192:
+		case TEE_ALG_ECDSA_P224:
+		case TEE_ALG_ECDSA_P256:
+		case TEE_ALG_ECDSA_P384:
+		case TEE_ALG_ECDSA_P512:
 			return true;
 		default:
 			return false;
@@ -427,6 +448,31 @@ static bool valid_key_size_for_algorithm(uint32_t alg, uint32_t key)
 
 	case TEE_ALG_DH_DERIVE_SHARED_SECRET:
 		if (key >= 256 && key <= 2048)
+			return true;
+		break;
+
+	case TEE_ALG_ECDSA_P192:
+		if (key == 192)
+			return true;
+		break;
+
+	case TEE_ALG_ECDSA_P224:
+		if (key == 224)
+			return true;
+		break;
+
+	case TEE_ALG_ECDSA_P256:
+		if (key == 256)
+			return true;
+		break;
+
+	case TEE_ALG_ECDSA_P384:
+		if (key == 384)
+			return true;
+		break;
+
+	case TEE_ALG_ECDSA_P512:
+		if (key == 512)
 			return true;
 		break;
 
@@ -766,6 +812,18 @@ static bool valid_key_type_for_operation_algorithm(uint32_t key_type, uint32_t o
 		if (op_algorithm == TEE_ALG_DH_DERIVE_SHARED_SECRET)
 			return true;
 		return false;
+
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		switch (op_algorithm) {
+		case TEE_ALG_ECDSA_P192:
+		case TEE_ALG_ECDSA_P224:
+		case TEE_ALG_ECDSA_P256:
+		case TEE_ALG_ECDSA_P384:
+		case TEE_ALG_ECDSA_P512:
+			return true;
+		default:
+			return false;
+		}
 
 	default:
 		return false;
@@ -2194,6 +2252,14 @@ static TEE_Result init_operation_meta_info(TEE_OperationHandle operation, uint32
 
 		break;
 
+	case TEE_ALG_ECDSA_P192:
+	case TEE_ALG_ECDSA_P224:
+	case TEE_ALG_ECDSA_P256:
+	case TEE_ALG_ECDSA_P384:
+	case TEE_ALG_ECDSA_P512:
+		OT_LOG(LOG_ERR, "ECDSA meta init");
+		//add the fancy loving here
+		ret = TEE_ERROR_NOT_SUPPORTED;
 	default:
 		OT_LOG(LOG_ERR, "Init key meta: Something very wrong\n");
 		ret = TEE_ERROR_NOT_SUPPORTED;
@@ -2538,6 +2604,12 @@ TEE_Result TEE_SetOperationKey(TEE_OperationHandle operation, TEE_ObjectHandle k
 		ret = malloc_and_cpy_dh_key(operation, key);
 		break;
 
+	case TEE_ALG_ECDSA_P192:
+	case TEE_ALG_ECDSA_P224:
+	case TEE_ALG_ECDSA_P256:
+	case TEE_ALG_ECDSA_P384:
+	case TEE_ALG_ECDSA_P512:
+		//TODO: ret = malloc_cnd_cpy_ecc_key(operation, key);
 	default:
 		OT_LOG(LOG_ERR, "Set op key: Algorithm not supported\n");
 		ret = TEE_ERROR_NOT_SUPPORTED;
