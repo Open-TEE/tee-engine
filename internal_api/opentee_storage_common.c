@@ -59,6 +59,9 @@ int valid_obj_type_and_attr_count(object_type obj)
 	case TEE_TYPE_DH_KEYPAIR:
 		return 5;
 
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		return 4;
+
 	default:
 		return -1;
 	}
