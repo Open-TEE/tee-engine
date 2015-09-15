@@ -21,6 +21,13 @@
 #include <openssl/dh.h>
 #include <openssl/des.h>
 
+/* EC */
+#include <openssl/obj_mac.h>
+#include <openssl/ec.h>
+#include <openssl/ecdsa.h>
+
+/* EC end */
+
 #include <limits.h>
 #include <stdbool.h>
 #include <string.h>
@@ -386,6 +393,124 @@ ret:
 	return ret_val;
 }
 
+/* Converts GP EC curve enum to OpenSSL NID */
+/* Returns 0 on fail */
+/* GP only supports the NIST curves */
+static int gp_curve2nid(obj_ecc_curve curve)
+{
+	switch (curve) {
+	case TEE_ECC_CURVE_NIST_P192:
+		return NID_X9_62_prime192v1;
+	case TEE_ECC_CURVE_NIST_P224:
+		return NID_secp224r1;
+	case TEE_ECC_CURVE_NIST_P256:
+		return NID_X9_62_prime256v1;
+	case TEE_ECC_CURVE_NIST_P384:
+		return NID_secp384r1;
+	case TEE_ECC_CURVE_NIST_P521:
+		return NID_secp521r1;
+	default:
+		return -1;
+	}
+}
+
+static TEE_Result gen_ecc_keypair(TEE_ObjectHandle object, TEE_Attribute *params,
+				    uint32_t paramCount)
+{
+	int curve;
+	int curve_index;
+	EC_GROUP *ec_group;
+
+	BIGNUM *priv_key = BN_new();
+	BIGNUM *pub_key_x = BN_new();
+	BIGNUM *pub_key_y = BN_new();
+
+	if (priv_key == NULL ||
+	    pub_key_x == NULL ||
+	    pub_key_y == NULL) {
+		OT_LOG(LOG_ERR, "Out of memory (openssl failure)");
+		goto ret;
+	}
+
+	TEE_Result ret = 0;
+	int i = 0;
+
+	/* Get the curve to be used and convert it to OpenSSL NID */
+	curve_index = get_attr_index_from_attrArr(TEE_ATTR_ECC_CURVE, params, paramCount);
+	curve = gp_curve2nid(params[curve_index].content.value.a);
+
+	if (curve == -1) {
+		OT_LOG(LOG_ERR, "Non-supported curve defined for ECC");
+		ret = 1;
+		goto ret;
+	}
+
+	EC_KEY *ec_key = EC_KEY_new();
+
+	if (ec_key == NULL) {
+		OT_LOG(LOG_ERR, "EC keypair malloc failed (openssl failure)");
+		ret = 3;
+		goto ret;
+	}
+
+	ec_group = EC_GROUP_new_by_curve_name(curve);
+
+	if (ec_group == NULL) {
+		OT_LOG(LOG_ERR, "EC group malloc failed (openssl failure)");
+		ret = 2;
+		goto ret;
+	}
+
+	ret = EC_KEY_set_group(ec_key, ec_group);
+
+	if (!ret) {
+		OT_LOG(LOG_ERR, "EC group assign failed (openssl failure)");
+		ret = 6;
+		goto ret;
+	}
+
+	ret = EC_KEY_generate_key(ec_key);
+
+	if (!ret) {
+		OT_LOG(LOG_ERR, "EC keypair generation failed (openssl failure)");
+		ret = 4;
+		goto ret;
+	}
+
+	memcpy(priv_key, (void *)EC_KEY_get0_private_key(ec_key), sizeof(BIGNUM));
+	const EC_POINT *pub_key = EC_KEY_get0_public_key(ec_key);
+
+	EC_POINT_get_affine_coordinates_GFp(ec_group, pub_key, pub_key_x, pub_key_y, NULL);
+
+
+	/* Copy the ec_key fields to the object */
+	if (!bn_to_obj_ref_attr(priv_key, TEE_ATTR_ECC_PRIVATE_VALUE, object, i++) ||
+	   !bn_to_obj_ref_attr(pub_key_x, TEE_ATTR_ECC_PUBLIC_VALUE_X, object, i++) ||
+	   !bn_to_obj_ref_attr(pub_key_y, TEE_ATTR_ECC_PUBLIC_VALUE_Y, object, i++)) {
+		OT_LOG(LOG_ERR, "failed copying attributes to object");
+		ret = 5;
+		goto ret;
+	}
+
+	/* Copy the curve into the object */
+	TEE_InitValueAttribute(&(object->attrs[i]), TEE_ATTR_ECC_CURVE, curve, 0);
+
+ret:
+	if (ec_key != NULL)
+		EC_KEY_free(ec_key);
+
+	if (priv_key != NULL)
+		BN_free(priv_key);
+	if (pub_key_x != NULL)
+		BN_free(pub_key_x);
+	if (pub_key_y != NULL)
+		BN_free(pub_key_y);
+	if (ec_group != NULL)
+		EC_GROUP_free(ec_group);
+
+	return ret;
+}
+
 static bool multiple_of_8(uint32_t number)
 {
 	return !(number % 8) ? true : false;
@@ -494,6 +619,16 @@ static bool valid_object_max_size(object_type obj, uint32_t size)
 			return true;
 		return false;
 
+	/* public key size is 2x the field size for the curve
+	 * public key is split into 2 parts x and y
+	 * so the pubkeysize = privkeysize = curve size
+	 * There might be some +1 -1 hokerypokery needed
+	 */
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		if (size >= 192 && size <= 512)
+			return true;
+		return false;
+
 	default:
 		return false;
 	}
@@ -542,6 +677,7 @@ static uint32_t key_raw_size(uint32_t objectType, uint32_t key)
 	case TEE_TYPE_DSA_PUBLIC_KEY:
 	case TEE_TYPE_DSA_KEYPAIR:
 	case TEE_TYPE_DH_KEYPAIR:
+	case TEE_TYPE_ECDSA_KEYPAIR:
 	default:
 		return keysize_in_bits(key);
 	}
@@ -777,7 +913,8 @@ TEE_Result TEE_AllocateTransientObject(uint32_t objectType, uint32_t maxObjectSi
 		break;
 
 	case TEE_TYPE_DH_KEYPAIR:
-		/* -1, because DH contains one value attribute */
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		/* -1, because DH and ECDSA contains one value attribute */
 		if (!malloc_for_attrs(tmp_handle, attr_count - 1))
 			goto out_of_mem;
 		break;
@@ -927,6 +1064,13 @@ TEE_Result TEE_PopulateTransientObject(TEE_ObjectHandle object, TEE_Attribute *a
 				goto bad_paras;
 		}
 
+		break;
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		if (!copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_ECC_PRIVATE_VALUE, object, dest_index++) ||
+		    !copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_ECC_PUBLIC_VALUE_X, object, dest_index++) ||
+		    !copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_ECC_PUBLIC_VALUE_Y, object, dest_index++) ||
+		    !copy_attr_from_attrArr_to_object(attrs, attrCount, TEE_ATTR_ECC_CURVE, object, dest_index++))
+			goto bad_paras;
 		break;
 
 	default:
@@ -1081,6 +1225,9 @@ TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attrib
 	case TEE_TYPE_DH_KEYPAIR:
 		ret_val = gen_dh_keypair(object, params, paramCount);
 		break;
+
+	case TEE_TYPE_ECDSA_KEYPAIR:
+		ret_val = gen_ecc_keypair(object, params, paramCount);
 
 	default:
 		/* Should never get here */
