@@ -145,9 +145,9 @@ int ta_process_loop(void *arg)
 	init_epoll();
 
 	/* Set new ta process name */
-	strncpy(proc_name, open_msg->ta_so_name, ctl_params->argv0_len);
+	strncpy(proc_name, open_msg->ta_so_name, MAX_PR_NAME);
 	prctl(PR_SET_NAME, (unsigned long)proc_name);
-	strncpy(ctl_params->argv0, proc_name, ctl_params->argv0_len);
+	strncpy(ctl_params->argv0, open_msg->ta_so_name, ctl_params->argv0_len);
 
 	openlog(proc_name, 0, LOG_USER);
 
