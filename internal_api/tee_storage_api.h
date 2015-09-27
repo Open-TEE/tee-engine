@@ -314,7 +314,7 @@ TEE_Result TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumer
  */
 TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
 				       TEE_ObjectInfo *objectInfo, void *objectID,
-				       size_t *objectIDLen);
+				       uint32_t *objectIDLen);
 
 /*
  * ## Data Stream Access Functions ##

@@ -1384,7 +1384,7 @@ TEE_Result TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumer
 
 TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
 				       TEE_ObjectInfo *objectInfo, void *objectID,
-				       size_t *objectIDLen)
+				       uint32_t *objectIDLen)
 {
 	struct com_mgr_invoke_cmd_payload payload, returnPayload;
 	struct com_mrg_enum_command_next *enumNext;
