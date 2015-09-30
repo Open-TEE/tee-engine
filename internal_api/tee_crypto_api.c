@@ -1569,8 +1569,8 @@ static TEE_Result rsa_sign_ver_generic_checks_and_setup(TEE_OperationHandle oper
 
 	default:
 		OT_LOG(LOG_ERR, "rsa_sign_ver_generic_checks_and_setup: "
-				"Digest len err (not equal to alg)\n");
-		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
+				"Not sup asym sig alg\n");
+		TEE_Panic(TEE_ERROR_NOT_SUPPORTED);
 	}
 
 	/* Malloc temp buffer */
