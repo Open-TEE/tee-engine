@@ -1318,7 +1318,7 @@ static TEE_Result check_rsa_bufs_len(TEE_OperationHandle operation, const EVP_MD
 		}
 
 		if (src_buf_len > rsa_msg_max_len(operation, hash)) {
-			OT_LOG(LOG_ERR, "check_rsa_bufs_len: Src buf too small\n");
+			OT_LOG(LOG_ERR, "check_rsa_bufs_len: Src buf too large\n");
 			return TEE_ERROR_BAD_PARAMETERS;
 		}
 	}
