@@ -24,6 +24,14 @@
 #define IS_VALID_STORAGE_BLOB(a) (a != 0 && a != 0xFFFFFFFF)
 
 /* !brief
+ * Allocates path to object
+ */
+TEE_Result alloc_storage_path(void *objectID,
+			      size_t objectIDLen,
+			      char **name_with_dir_path,
+			      char **return_dir_path);
+
+/* !brief
  * returns valid storage id on success 0x0 on fail
  */
 uint32_t ext_object_id_to_storage_id(char *objectid, size_t objectid_len);

@@ -505,19 +505,35 @@ TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, si
 	uint32_t storage_blob_id;
 	size_t begin = 0;
 	struct secure_storage_element *current_element;
+	char *file_name_with_path = NULL;
+	int ret;
 
-	TEE_ObjectHandle new_object;
+	storageID = storageID; /* Not used */
 
-	result = MGR_TEE_OpenPersistentObject(storageID, objectID, objectIDLen, flags, &new_object);
+	/* Check if object already exist */
+	if (alloc_storage_path(objectID, objectIDLen, &file_name_with_path, NULL)) {
+		OT_LOG(LOG_ERR, "Bad parameters or random error");
+		return TEE_ERROR_GENERIC;
+	}
 
-	if (result == TEE_SUCCESS) {
+	ret = access(file_name_with_path, F_OK);
+	free(file_name_with_path);
 
-		MGR_TEE_CloseObject(new_object);
+	if (ret != -1) {
+
+		/* File exist */
 		if (!(flags & (TEE_DATA_FLAG_OVERWRITE | TEE_DATA_FLAG_EXCLUSIVE))) {
 			/* it is already existing, we don't have right to over write */
 			return TEE_ERROR_ACCESS_CONFLICT;
 		}
 
+	}
+
+	/* is already open, check that it is allowed to share */
+	storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
+	if (IS_VALID_STORAGE_BLOB(storage_blob_id)) {
+
+		/* Open, lets close it */
 		storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
 		current_element = get_storage_blob_element(storage_blob_id);
 		if (current_element)
@@ -525,8 +541,6 @@ TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, si
 
 		ext_delete_storage_blob(storage_blob_id, objectID, objectIDLen);
 
-	} else if (result != TEE_ERROR_ITEM_NOT_FOUND) {
-		return result;
 	}
 
 	storage_blob_id = ext_open_storage_blob(objectID, objectIDLen, true);

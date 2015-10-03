@@ -126,62 +126,6 @@ static bool get_uuid(char *uuid)
 	return true;
 }
 
-static TEE_Result alloc_storage_path(void *objectID,
-				     size_t objectIDLen,
-				     char **name_with_dir_path,
-				     char **return_dir_path)
-{
-	size_t i;
-	char hex_ID[TEE_OBJ_ID_LEN_HEX] = {0};
-	char UUID[TEE_UUID_LEN_HEX];
-	char *dir_path;
-
-	if ((objectIDLen > TEE_OBJECT_ID_MAX_LEN) ||
-	    (objectID == NULL) ||
-	    (!get_uuid(UUID)) ||
-	    (name_with_dir_path == NULL && return_dir_path == NULL))
-		return TEE_ERROR_BAD_PARAMETERS;
-
-	dir_path = calloc(1, MAX_EXT_PATH_NAME);
-	if (dir_path == NULL)
-		return TEE_ERROR_OUT_OF_MEMORY;
-
-	if (snprintf(dir_path, MAX_EXT_PATH_NAME, "%s%s/", secure_storage_path, UUID)
-	    == MAX_EXT_PATH_NAME){
-		OT_LOG(LOG_ERR, "secure storage dir path is too long\n");
-		free(dir_path);
-		return TEE_ERROR_OVERFLOW;
-	}
-
-
-	if (name_with_dir_path) {
-		*name_with_dir_path = calloc(1, MAX_EXT_PATH_NAME);
-		if (*name_with_dir_path == NULL) {
-			free(dir_path);
-			return TEE_ERROR_OUT_OF_MEMORY;
-		}
-
-		for (i = 0; i < objectIDLen; ++i)
-			sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
-
-		if (snprintf(*name_with_dir_path, MAX_EXT_PATH_NAME, "%s%s", dir_path, hex_ID)
-		    == MAX_EXT_PATH_NAME) {
-			OT_LOG(LOG_ERR, "secure storage name path is too long\n");
-			free(dir_path);
-			free(*name_with_dir_path);
-			*name_with_dir_path = NULL;
-			return TEE_ERROR_OVERFLOW;
-		}
-	}
-
-	if (return_dir_path)
-		*return_dir_path = dir_path;
-	else
-		free(dir_path);
-
-	return TEE_SUCCESS;
-}
-
 static bool is_directory_empty(char *dir_path)
 {
 	struct dirent *entry;
@@ -261,6 +205,62 @@ static void close_object(uint32_t storage_blob_id, void *objectID, size_t object
 
 		free(current_element);
 	}
+}
+
+TEE_Result alloc_storage_path(void *objectID,
+			      size_t objectIDLen,
+			      char **name_with_dir_path,
+			      char **return_dir_path)
+{
+	size_t i;
+	char hex_ID[TEE_OBJ_ID_LEN_HEX] = {0};
+	char UUID[TEE_UUID_LEN_HEX];
+	char *dir_path;
+
+	if ((objectIDLen > TEE_OBJECT_ID_MAX_LEN) ||
+	    (objectID == NULL) ||
+	    (!get_uuid(UUID)) ||
+	    (name_with_dir_path == NULL && return_dir_path == NULL))
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	dir_path = calloc(1, MAX_EXT_PATH_NAME);
+	if (dir_path == NULL)
+		return TEE_ERROR_OUT_OF_MEMORY;
+
+	if (snprintf(dir_path, MAX_EXT_PATH_NAME, "%s%s/", secure_storage_path, UUID)
+	    == MAX_EXT_PATH_NAME){
+		OT_LOG(LOG_ERR, "secure storage dir path is too long\n");
+		free(dir_path);
+		return TEE_ERROR_OVERFLOW;
+	}
+
+
+	if (name_with_dir_path) {
+		*name_with_dir_path = calloc(1, MAX_EXT_PATH_NAME);
+		if (*name_with_dir_path == NULL) {
+			free(dir_path);
+			return TEE_ERROR_OUT_OF_MEMORY;
+		}
+
+		for (i = 0; i < objectIDLen; ++i)
+			sprintf(hex_ID + i * 2, "%02x", *((unsigned char *)objectID + i));
+
+		if (snprintf(*name_with_dir_path, MAX_EXT_PATH_NAME, "%s%s", dir_path, hex_ID)
+		    == MAX_EXT_PATH_NAME) {
+			OT_LOG(LOG_ERR, "secure storage name path is too long\n");
+			free(dir_path);
+			free(*name_with_dir_path);
+			*name_with_dir_path = NULL;
+			return TEE_ERROR_OVERFLOW;
+		}
+	}
+
+	if (return_dir_path)
+		*return_dir_path = dir_path;
+	else
+		free(dir_path);
+
+	return TEE_SUCCESS;
 }
 
 uint32_t ext_object_id_to_storage_id(char *objectid, size_t objectid_len)
