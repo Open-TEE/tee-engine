@@ -595,10 +595,13 @@ static int open_shared_mem(int fd, void **buffer, uint32_t size, bool isOutput)
 		goto unlinkExit;
 	}
 
-	if (file_stat.st_size != size) {
-		OT_LOG(LOG_ERR, "Size mis-match");
+	if (size > file_stat.st_size) {
+		OT_LOG(LOG_ERR, "Memory too big(registered or allocated memory is not big enough)");
 		goto unlinkExit;
 	}
+
+	size = file_stat.st_size;
+
 #endif /* ANDROID */
 
 	address = mmap(NULL, size, ((flag == O_RDONLY) ? PROT_READ : (PROT_WRITE | PROT_READ)),
