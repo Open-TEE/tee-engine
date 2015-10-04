@@ -1253,7 +1253,8 @@ static TEE_Result mgr_cmd_read_obj_data(struct com_mgr_invoke_cmd_payload *in,
 }
 
 static TEE_Result mgr_cmd_write_obj_data(struct com_mgr_invoke_cmd_payload *in,
-					 struct com_mgr_invoke_cmd_payload *out)
+					 struct com_mgr_invoke_cmd_payload *out,
+					 uint8_t write_type)
 {
 	struct com_mrg_transfer_data_persistent *return_transfer_struct;
 	TEE_ObjectHandle handle = NULL;
@@ -1268,7 +1269,7 @@ static TEE_Result mgr_cmd_write_obj_data(struct com_mgr_invoke_cmd_payload *in,
 	memcpy(&size, writePtr, sizeof(size_t));
 	writePtr = (char *)writePtr + sizeof(size_t);
 
-	ret = MGR_TEE_WriteObjectData(handle, writePtr, size);
+	ret = MGR_TEE_WriteObjectData(handle, writePtr, size, write_type);
 
 	if (ret == TEE_SUCCESS) {
 		out->size = sizeof(struct com_mrg_transfer_data_persistent);
@@ -1420,7 +1421,8 @@ static void invoke_mgr_cmd(struct manager_msg *man_msg)
 		retVal = mgr_cmd_read_obj_data(&in, &out);
 		break;
 	case COM_MGR_CMD_ID_WRITE_OBJ_DATA:
-		retVal = mgr_cmd_write_obj_data(&in, &out);
+	case COM_MGR_CMD_ID_WRITE_CREATE_INIT_DATA:
+		retVal = mgr_cmd_write_obj_data(&in, &out, invoke_msg->cmd_id);
 		break;
 	case COM_MGR_CMD_ID_TRUNCATE_OBJ_DATA:
 		retVal = mgr_cmd_truncate_obj_data(&in, &out);

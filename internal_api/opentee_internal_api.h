@@ -48,6 +48,8 @@ struct __TEE_ObjectEnumHandle {
 #define COM_MGR_CMD_ID_TRUNCATE_OBJ_DATA 0x0D
 #define COM_MGR_CMD_ID_SEEK_OBJ_DATA 0x0E
 
+#define COM_MGR_CMD_ID_WRITE_CREATE_INIT_DATA 0x0F
+
 
 
 struct com_mrg_open_persistent {

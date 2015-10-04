@@ -827,7 +827,10 @@ TEE_Result MGR_TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t 
 	return TEE_SUCCESS;
 }
 
-TEE_Result MGR_TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t size)
+TEE_Result MGR_TEE_WriteObjectData(TEE_ObjectHandle object,
+				   void *buffer,
+				   size_t size,
+				   uint8_t write_type)
 {
 	TEE_Result result;
 	size_t write_bytes;
@@ -835,7 +838,8 @@ TEE_Result MGR_TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t
 	if (object == NULL || buffer == NULL)
 		return TEE_ERROR_GENERIC;
 
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE)) {
+	if (write_type == COM_MGR_CMD_ID_WRITE_OBJ_DATA &&
+	    !(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE)) {
 		OT_LOG(LOG_ERR, "Can not write persistent object data: Not proper access rights\n");
 		return TEE_ERROR_ACCESS_DENIED;
 	}
