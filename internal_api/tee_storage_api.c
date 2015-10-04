@@ -1224,23 +1224,21 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t
 
 		if (retVal == TEE_SUCCESS && returnPayload.size > 0) {
 
-			if (initialDataLen > 0 || object) {
-				unpack_and_alloc_object_handle(&tempHandle, returnPayload.data);
+			unpack_and_alloc_object_handle(&tempHandle, returnPayload.data);
 
-				if (object)
-					*object = tempHandle;
+			if (initialDataLen > 0) {
 
-				if (initialDataLen > 0) {
-					/* TODO: should we check if succeeds or not */
-					retVal = write_object_data(tempHandle,
-								   initialData,
-								   initialDataLen,
-								   COM_MGR_CMD_ID_WRITE_CREATE_INIT_DATA);
-
-					if (!object)
-						TEE_CloseObject(tempHandle);
-				}
+				/* TODO: should we check if succeeds or not */
+				retVal = write_object_data(tempHandle,
+							   initialData,
+							   initialDataLen,
+							   COM_MGR_CMD_ID_WRITE_CREATE_INIT_DATA);
 			}
+
+			if (object)
+				*object = tempHandle;
+			else
+				TEE_CloseObject(tempHandle);
 
 			TEE_Free(returnPayload.data);
 		}
