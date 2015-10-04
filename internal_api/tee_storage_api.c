@@ -547,6 +547,47 @@ static uint32_t key_raw_size(uint32_t objectType, uint32_t key)
 	}
 }
 
+static TEE_Result write_object_data(TEE_ObjectHandle object,
+				    void *buffer,
+				    size_t size,
+				    uint8_t write_cmd_type)
+{
+	struct com_mgr_invoke_cmd_payload payload, returnPayload;
+	struct com_mrg_transfer_data_persistent *return_transfer_struct;
+
+	TEE_Result retVal = TEE_ERROR_OUT_OF_MEMORY;
+	void *writePtr;
+
+	if (object == NULL || buffer == NULL)
+		return TEE_ERROR_GENERIC;
+
+	payload.size = calculate_object_handle_size(object) + size + sizeof(size_t);
+	payload.data = TEE_Malloc(payload.size, 0);
+	if (payload.data) {
+		writePtr = payload.data;
+
+		writePtr = pack_object_handle(object, writePtr);
+
+		memcpy(writePtr, &size, sizeof(size_t));
+		writePtr = (char *)writePtr + sizeof(size_t);
+		memcpy(writePtr, buffer, size);
+
+		retVal = TEE_InvokeMGRCommand(TEE_TIMEOUT_INFINITE,
+					      write_cmd_type,
+					      &payload, &returnPayload);
+
+		if (retVal == TEE_SUCCESS && returnPayload.size > 0) {
+			return_transfer_struct = returnPayload.data;
+			object->per_object.data_position = return_transfer_struct->per_data_pos;
+			object->per_object.data_size = return_transfer_struct->per_data_size;
+
+			TEE_Free(returnPayload.data);
+		}
+		TEE_Free(payload.data);
+	}
+	return retVal;
+}
+
 /************************************************************************************************
 *												 *
 *												 *
@@ -1191,9 +1232,10 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t
 
 				if (initialDataLen > 0) {
 					/* TODO: should we check if succeeds or not */
-					retVal = TEE_WriteObjectData(tempHandle,
-								     initialData,
-								     initialDataLen);
+					retVal = write_object_data(tempHandle,
+								   initialData,
+								   initialDataLen,
+								   COM_MGR_CMD_ID_WRITE_CREATE_INIT_DATA);
 
 					if (!object)
 						TEE_CloseObject(tempHandle);
@@ -1463,40 +1505,7 @@ TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size
 
 TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t size)
 {
-	struct com_mgr_invoke_cmd_payload payload, returnPayload;
-	struct com_mrg_transfer_data_persistent *return_transfer_struct;
-
-	TEE_Result retVal = TEE_ERROR_OUT_OF_MEMORY;
-	void *writePtr;
-
-	if (object == NULL || buffer == NULL)
-		return TEE_ERROR_GENERIC;
-
-	payload.size = calculate_object_handle_size(object) + size + sizeof(size_t);
-	payload.data = TEE_Malloc(payload.size, 0);
-	if (payload.data) {
-		writePtr = payload.data;
-
-		writePtr = pack_object_handle(object, writePtr);
-
-		memcpy(writePtr, &size, sizeof(size_t));
-		writePtr = (char *)writePtr + sizeof(size_t);
-		memcpy(writePtr, buffer, size);
-
-		retVal = TEE_InvokeMGRCommand(TEE_TIMEOUT_INFINITE,
-					      COM_MGR_CMD_ID_WRITE_OBJ_DATA,
-					      &payload, &returnPayload);
-
-		if (retVal == TEE_SUCCESS && returnPayload.size > 0) {
-			return_transfer_struct = returnPayload.data;
-			object->per_object.data_position = return_transfer_struct->per_data_pos;
-			object->per_object.data_size = return_transfer_struct->per_data_size;
-
-			TEE_Free(returnPayload.data);
-		}
-		TEE_Free(payload.data);
-	}
-	return retVal;
+	return write_object_data(object, buffer, size, COM_MGR_CMD_ID_WRITE_OBJ_DATA);
 }
 
 TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)

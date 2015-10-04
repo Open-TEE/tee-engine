@@ -37,7 +37,7 @@ void MGR_TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object);
 /* object data handling */
 TEE_Result MGR_TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size,
 				  uint32_t *count);
-TEE_Result MGR_TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t size);
+TEE_Result MGR_TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t size, uint8_t write_type);
 TEE_Result MGR_TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size);
 TEE_Result MGR_TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whence whence);
 
