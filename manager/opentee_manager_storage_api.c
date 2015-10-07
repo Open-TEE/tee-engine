@@ -178,7 +178,7 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 					    obj->attrs[i].content.ref.buffer,
 					    obj->attrs[i].content.ref.length)
 			    != obj->attrs[i].content.ref.length) {
-				OT_LOG(LOG_ERR, "read_stream returned incorrect size buf(%zu)",
+				OT_LOG(LOG_ERR, "read_stream returned incorrect size buf(%u)",
 						obj->attrs[i].content.ref.length);
 				goto err_at_read;
 			}

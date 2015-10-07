@@ -643,7 +643,7 @@ void TEE_RestrictObjectUsage(TEE_ObjectHandle object, uint32_t objectUsage)
 }
 
 TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attributeID, void *buffer,
-					size_t *size)
+					uint32_t *size)
 {
 	int attr_index;
 

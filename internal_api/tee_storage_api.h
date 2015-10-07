@@ -28,7 +28,7 @@ typedef struct {
 	union {
 		struct {
 			void *buffer;
-			size_t length;
+			uint32_t length;
 		} ref;
 		struct {
 			uint32_t a, b;
@@ -132,7 +132,7 @@ void TEE_RestrictObjectUsage(TEE_ObjectHandle object, uint32_t objectUsage);
  * \return
  */
 TEE_Result TEE_GetObjectBufferAttribute(TEE_ObjectHandle object, uint32_t attributeID, void *buffer,
-					size_t *size);
+					uint32_t *size);
 
 /*!
  * \brief TEE_GetObjectValueAttribute
