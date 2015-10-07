@@ -1312,7 +1312,7 @@ static TEE_Result check_rsa_bufs_len(TEE_OperationHandle operation, const EVP_MD
 {
 	if (operation->operation_info.mode == TEE_MODE_ENCRYPT) {
 
-		if (RSA_size(RSA_key(operation)) != uint322int(dst_buf_len)) {
+		if (RSA_size(RSA_key(operation)) > uint322int(dst_buf_len)) {
 			OT_LOG(LOG_ERR, "check_rsa_bufs_len: Dest buf should be rsa mod size\n");
 			return TEE_ERROR_SHORT_BUFFER;
 		}
