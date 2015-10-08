@@ -33,6 +33,12 @@ static int wrap_epoll_ctl(int fd, struct epoll_event *event, int op)
 	return 0;
 }
 
+static do_test()
+{
+	int bob = 0;
+
+}
+
 int init_epoll()
 {
 	epollfd = epoll_create(10);
