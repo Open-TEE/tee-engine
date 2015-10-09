@@ -495,7 +495,7 @@ err:
 	return ret_val;
 }
 
-TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
+TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, uint32_t objectIDLen,
 					  uint32_t flags, TEE_ObjectHandle attributes,
 					  void *initialData, size_t initialDataLen,
 					  TEE_ObjectHandle *object)
@@ -632,8 +632,9 @@ err_at_obj_alloc:
 	return TEE_ERROR_GENERIC;
 }
 
-TEE_Result MGR_TEE_RenamePersistentObject(TEE_ObjectHandle object, void *newObjectID,
-					  size_t newObjectIDLen)
+TEE_Result MGR_TEE_RenamePersistentObject(TEE_ObjectHandle object,
+					  void *newObjectID,
+					  uint32_t newObjectIDLen)
 {
 	struct storage_obj_meta_data meta_info_to_storage;
 	TEE_Result result;
@@ -772,8 +773,9 @@ TEE_Result MGR_TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEn
 }
 
 TEE_Result MGR_TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
-					   TEE_ObjectInfo *objectInfo, void *objectID,
-					   size_t *objectIDLen)
+					   TEE_ObjectInfo *objectInfo,
+					   void *objectID,
+					   uint32_t *objectIDLen)
 {
 	struct storage_obj_meta_data recv_per_obj;
 

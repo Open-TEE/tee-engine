@@ -377,8 +377,10 @@ size_t ext_get_storage_blob_size(uint32_t storage_blob_id)
 }
 
 bool ext_change_object_ID(uint32_t storage_blob_id,
-			  void *objectID, size_t objectIDLen,
-			  void *new_objectID, size_t new_objectIDLen)
+			  void *objectID,
+			  uint32_t objectIDLen,
+			  void *new_objectID,
+			  uint32_t new_objectIDLen)
 {
 	struct list_head *pos;
 	struct storage_element *current_element;

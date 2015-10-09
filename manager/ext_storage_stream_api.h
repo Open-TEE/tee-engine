@@ -65,8 +65,10 @@ size_t ext_get_storage_blob_size(uint32_t storage_blob_id);
  *  storage id remains same for the new object id
  */
 bool ext_change_object_ID(uint32_t storage_blob_id,
-			  void *objectID, size_t objectIDLen,
-			  void *new_objectID, size_t new_objectIDLen);
+			  void *objectID,
+			  uint32_t objectIDLen,
+			  void *new_objectID,
+			  uint32_t new_objectIDLen);
 
 /* !brief reads datalen amount of bytes from offset of storage_blob return bytes read
  *

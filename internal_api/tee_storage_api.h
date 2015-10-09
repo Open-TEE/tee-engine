@@ -269,8 +269,9 @@ void TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object);
  * \param newObjectIDLen
  * \return
  */
-TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void *newObjectID,
-				      size_t newObjectIDLen);
+TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object,
+				      void *newObjectID,
+				      uint32_t newObjectIDLen);
 
 /*
  * ## Persistent Object Enumeration Functions ##
@@ -313,7 +314,8 @@ TEE_Result TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumer
  * \return
  */
 TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
-				       TEE_ObjectInfo *objectInfo, void *objectID,
+				       TEE_ObjectInfo *objectInfo,
+				       void *objectID,
 				       uint32_t *objectIDLen);
 
 /*

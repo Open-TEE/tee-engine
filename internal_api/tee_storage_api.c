@@ -1248,8 +1248,9 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t
 	return retVal;
 }
 
-TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void *newObjectID,
-				      size_t newObjectIDLen)
+TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object,
+				      void *newObjectID,
+				      uint32_t newObjectIDLen)
 {
 	struct com_mgr_invoke_cmd_payload payload, returnPayload;
 	TEE_Result retVal = TEE_ERROR_OUT_OF_MEMORY;
@@ -1278,6 +1279,12 @@ TEE_Result TEE_RenamePersistentObject(TEE_ObjectHandle object, void *newObjectID
 		retVal =
 		    TEE_InvokeMGRCommand(TEE_TIMEOUT_INFINITE, COM_MGR_CMD_ID_RENAME_PERSISTENT,
 					 &payload, &returnPayload);
+
+		if (retVal == TEE_SUCCESS) {
+			memcpy(object->per_object.obj_id, newObjectID, newObjectIDLen);
+			object->per_object.obj_id_len = newObjectIDLen;
+		}
+
 
 		TEE_Free(payload.data);
 	}

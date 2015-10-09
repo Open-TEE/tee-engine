@@ -56,7 +56,7 @@ struct com_mrg_open_persistent {
 	uint32_t storageID;
 	uint32_t flags;
 	char objectID[TEE_OBJECT_ID_MAX_LEN];
-	size_t objectIDLen;
+	uint32_t objectIDLen;
 } __attribute__((aligned));
 
 struct com_mrg_close_persistent {
@@ -67,14 +67,19 @@ struct com_mrg_create_persistent {
 	uint32_t storageID;
 	uint32_t flags;
 	char objectID[TEE_OBJECT_ID_MAX_LEN];
-	size_t objectIDLen;
+	uint32_t objectIDLen;
 	void *attributeHandleOffset;
 } __attribute__((aligned));
 
 struct com_mrg_rename_persistent {
 	char newObjectID[TEE_OBJECT_ID_MAX_LEN];
-	size_t newObjectIDLen;
+	uint32_t newObjectIDLen;
+	uint32_t newStorageID;
 	void *objectHandleOffset;
+} __attribute__((aligned));
+
+struct com_mrg_rename_persistent_resp {
+	uint32_t newStorageID;
 } __attribute__((aligned));
 
 struct com_mrg_transfer_data_persistent {
@@ -91,7 +96,7 @@ struct com_mrg_enum_command {
 struct com_mrg_enum_command_next {
 	uint32_t ID;
 	char objectID[TEE_OBJECT_ID_MAX_LEN];
-	size_t objectIDLen;
+	uint32_t objectIDLen;
 	TEE_ObjectInfo info;
 } __attribute__((aligned));
 
