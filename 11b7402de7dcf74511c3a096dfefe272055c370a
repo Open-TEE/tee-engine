@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "5ac4a560_0ab82bc7",
+        "filename": "internal_api/tee_storage_api.c",
+        "patchSetId": 7
+      },
+      "lineNbr": 399,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-12-15T11:02:08Z",
+      "side": 1,
+      "message": "really ? , looks like -1",
+      "range": {
+        "startLine": 399,
+        "startChar": 2,
+        "endLine": 399,
+        "endChar": 21
+      },
+      "revId": "11b7402de7dcf74511c3a096dfefe272055c370a",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ac4a560_aacd775f",
+        "filename": "internal_api/tee_storage_api.c",
+        "patchSetId": 7
+      },
+      "lineNbr": 492,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2015-12-15T11:02:08Z",
+      "side": 1,
+      "message": "missing a goto out?",
+      "range": {
+        "startLine": 492,
+        "startChar": 8,
+        "endLine": 492,
+        "endChar": 27
+      },
+      "revId": "11b7402de7dcf74511c3a096dfefe272055c370a",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
