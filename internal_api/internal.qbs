@@ -17,6 +17,8 @@ DynamicLibrary {
         cpp.includePaths: ["../include", "."]
     }
 
+    cpp.dynamicLibraries: ["mbedcrypto"]
+
     cpp.includePaths: [
         "../include",
     ]
