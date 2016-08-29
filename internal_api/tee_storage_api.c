@@ -428,6 +428,8 @@ static TEE_Result gen_ecc_keypair(TEE_ObjectHandle object, TEE_Attribute *params
 	BIGNUM *pub_key_x = NULL;
 	BIGNUM *pub_key_y = NULL;
 
+	EC_KEY *ec_key = NULL;
+
 	pub_key_x = BN_new();
 	pub_key_y = BN_new();
 
@@ -455,8 +457,7 @@ static TEE_Result gen_ecc_keypair(TEE_ObjectHandle object, TEE_Attribute *params
 		goto out;
 	}
 
-	EC_KEY *ec_key = EC_KEY_new();
-
+	ec_key = EC_KEY_new();
 	if (ec_key == NULL) {
 		OT_LOG(LOG_ERR, "EC keypair malloc failed (openssl failure)");
 		ret = TEE_ERROR_GENERIC;
