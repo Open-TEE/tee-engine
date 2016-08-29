@@ -62,7 +62,7 @@ libInternalApi_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/internal_api
 
 libInternalApi_la_LDFLAGS = ${AM_LDFLAGS} \
-	-lssl -lcrypto -lmbedcrypto
+	-lmbedcrypto
 
 libInternalApi_la_LIBADD = \
 	libCommonApi.la
