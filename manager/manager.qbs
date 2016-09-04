@@ -11,6 +11,7 @@ DynamicLibrary {
 
     Depends { name: "cpp" }
     Depends { name: "CommonApi" }
+    Depends { name: "InternalApi" }
 
     destinationDirectory: '.'
 
@@ -18,12 +19,13 @@ DynamicLibrary {
         "dl",
         "pthread",
         "rt",
+        "mbedcrypto",
     ]
 
     cpp.includePaths: [
         "../core",
         "../include",
-        "../internal_api",
+        "../internal_api"
     ]
 
     cpp.defines: ["OT_LOGGING", "_FORTIFY_SOURCE=2"]
@@ -45,6 +47,8 @@ DynamicLibrary {
         "ext_storage_stream_api_posix.c",
         "../internal_api/opentee_storage_common.h",
         "../internal_api/opentee_storage_common.c",
+       // "../internal_api/storage/storage_utils.h",
+        //"../internal_api/storage/storage_utils.c",
         "shm_mem.h",
         "shm_mem.c",
         "ta_dir_watch.h",
