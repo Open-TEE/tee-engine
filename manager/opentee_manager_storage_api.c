@@ -165,7 +165,7 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 
 		obj->per_object.data_begin += sizeof(TEE_Attribute);
 
-		if (!is_value_attribute(obj->attrs[i].attributeID)) {
+/*		if (!is_value_attribute(obj->attrs[i].attributeID)) {
 			obj->attrs[i].content.ref.buffer = calloc(1, obj->maxObjSizeBytes);
 			if (obj->attrs[i].content.ref.buffer == NULL) {
 				free_attrs(obj);
@@ -185,6 +185,7 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 
 			obj->per_object.data_begin += obj->attrs[i].content.ref.length;
 		}
+*/
 	}
 
 	return TEE_SUCCESS;
@@ -193,6 +194,7 @@ err_at_read:
 	OT_LOG(LOG_ERR, "Error at fread\n");
 	free_attrs(obj);
 	free(obj->attrs);
+
 	return TEE_ERROR_GENERIC;
 }
 
@@ -222,7 +224,7 @@ static bool serialize_attributes_to_storage(TEE_ObjectHandle object,
 		    != sizeof(TEE_Attribute))
 			return false;
 		(*offset) +=  sizeof(TEE_Attribute);
-
+/*
 		if (!is_value_attribute(object->attrs[i].attributeID)) {
 			if (ext_write_stream(storage_blob_id, *offset,
 					     object->attrs[i].content.ref.buffer,
@@ -232,6 +234,7 @@ static bool serialize_attributes_to_storage(TEE_ObjectHandle object,
 
 			(*offset) +=  object->attrs[i].content.ref.length;
 		}
+*/
 	}
 
 	return true;
@@ -281,7 +284,7 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 		case TEE_TYPE_HMAC_SHA512:
 		case TEE_TYPE_GENERIC_SECRET:
 		case TEE_TYPE_RSA_KEYPAIR:
-                case TEE_TYPE_RSA_PUBLIC_KEY:
+		case TEE_TYPE_RSA_PUBLIC_KEY:
 		case TEE_TYPE_DSA_PUBLIC_KEY:
 		case TEE_TYPE_DSA_KEYPAIR:
 			if (!malloc_for_attrs(cpy_obj, attr_count))
