@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2015 Open-TEE project.	                                    **
 ** Copyright (C) 2015-2021 Tanel Dettenborn                                 **
 ** Copyright (C) 2015-2021 Brian McGillion                                  **
 ** Copyright (C) 2022 Technology Innovation Institute (TII)                 **
@@ -17,31 +17,44 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
+#ifndef __STORAGE_UTILS_H__
+#define __STORAGE_UTILS_H__
+
 #include <stdio.h>
-#include <stdlib.h>
-#include <execinfo.h>
+
+#include "tee_data_types.h"
+#include "tee_storage_api.h"
+#include "crypto/operation_handle.h"
+
+#define BITS2BYTE(bits) ((bits + 7) / 8)
+#define BYTE2BITS(bits) ((bits) * 8)
+
+//TODO: Move this to manager
+//#define TEE_MAX_DATA_SIZE (TEE_DATA_MAX_POSITION - sizeof(struct ss_object_meta_info))
+#define TEE_MAX_DATA_SIZE TEE_DATA_MAX_POSITION
+
+char *get_ss_path(uint32_t *path_len);
+
+int valid_object_type_and_max_size(uint32_t obj_type, uint32_t obj_size);
+
+int is_value_attribute(uint32_t attr_ID);
+
+int expected_object_attr_count(uint32_t obj_type, uint32_t *expected_attr_count);
+
+void free_gp_key(struct gp_key *key);
+
+void free_object_handle(TEE_ObjectHandle object);
+
+void close_persistan_object(void *objectID, uint32_t objectIDLen);
+
+TEE_Attribute *get_attr_from_attrArr(uint32_t ID,
+				     TEE_Attribute *attrs,
+				     uint32_t attrCount);
+
+TEE_Result get_broken_tee_ss_file_name_with_path(void *objectID,
+						 size_t objectIDLen,
+						 char *broken_tee_name_with_path,
+						 uint32_t broken_tee_name_with_path_len);
 
 
-#include "tee_panic.h"
-#include "tee_logging.h"
-
-void TEE_Panic(TEE_Result panicCode)
-{
-	void* callstack[128];
-	int i, frames = backtrace(callstack, 128);
-	char** strs = backtrace_symbols(callstack, frames);
-
-	printf("P A N I C !\n");
-
-	OT_LOG_ERR("TEE_Panic: TA panicked with [%u] panicode\n", panicCode);
-	OT_LOG_ERR("TEE_Panic: Stacktrace START\n");
-
-	for (i = 0; i < frames; ++i) {
-		OT_LOG_ERR("TEE_Panic: %s\n", strs[i]);
-	}
-	free(strs);
-
-	OT_LOG_ERR("TEE_Panic: Stacktrace END\n");
-	
-	exit(panicCode);
-}
+#endif /* __STORAGE_UTILS_H__ */

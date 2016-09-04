@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2015 Open-TEE project.	                                    **
 ** Copyright (C) 2015-2021 Tanel Dettenborn                                 **
 ** Copyright (C) 2015-2021 Brian McGillion                                  **
 ** Copyright (C) 2022 Technology Innovation Institute (TII)                 **
@@ -17,31 +17,37 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <execinfo.h>
+#ifndef __CRYPTO_UTILS_H__
+#define __CRYPTO_UTILS_H__
 
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
 
-#include "tee_panic.h"
-#include "tee_logging.h"
+#include "../tee_crypto_api.h"
+#include "../tee_data_types.h"
 
-void TEE_Panic(TEE_Result panicCode)
-{
-	void* callstack[128];
-	int i, frames = backtrace(callstack, 128);
-	char** strs = backtrace_symbols(callstack, frames);
+#define BITS_TO_BYTES(bits) (bits / 8)
+#define BYTES_TO_BITS(bytes) (bytes * 8)
 
-	printf("P A N I C !\n");
+extern mbedtls_entropy_context ot_mbedtls_entropy;
+extern mbedtls_ctr_drbg_context ot_mbedtls_ctr_drbg;
 
-	OT_LOG_ERR("TEE_Panic: TA panicked with [%u] panicode\n", panicCode);
-	OT_LOG_ERR("TEE_Panic: Stacktrace START\n");
+uint32_t valid_ecc_curve(TEE_Attribute *curve_attr);
 
-	for (i = 0; i < frames; ++i) {
-		OT_LOG_ERR("TEE_Panic: %s\n", strs[i]);
-	}
-	free(strs);
+uint32_t valid_ecc_curve_and_keysize(TEE_Attribute *curve_attr, uint32_t key_size);
 
-	OT_LOG_ERR("TEE_Panic: Stacktrace END\n");
-	
-	exit(panicCode);
-}
+int valid_mode_and_algorithm(uint32_t algorithm, uint32_t mode);
+
+bool valid_key_size_for_algorithm(uint32_t algorithm, uint32_t key);
+
+bool supported_algorithms(uint32_t algorithm, uint32_t key_size, uint32_t *key_count);
+
+uint32_t get_operation_class(uint32_t algorithm);
+
+size_t get_alg_hash_lenght(uint32_t algorithm);
+
+TEE_Result valid_key_and_operation(TEE_ObjectHandle key, TEE_OperationHandle operation);
+
+void print_mbedtls_to_syslog(int mbedtls_error);
+
+#endif
