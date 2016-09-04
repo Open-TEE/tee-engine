@@ -27,9 +27,8 @@ TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size
 					uint32_t flags, TEE_ObjectHandle *object);
 void MGR_TEE_CloseObject(TEE_ObjectHandle object);
 TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, uint32_t objectIDLen,
-					  uint32_t flags, TEE_ObjectHandle attributes,
-					  void *initialData, size_t initialDataLen,
-					  TEE_ObjectHandle *object);
+					  uint32_t flags, TEE_Attribute *attrs,
+					  uint32_t attrs_count, uint8_t persistent_type);
 TEE_Result MGR_TEE_RenamePersistentObject(TEE_ObjectHandle object,
 					  void *newObjectID,
 					  uint32_t newObjectIDLen);

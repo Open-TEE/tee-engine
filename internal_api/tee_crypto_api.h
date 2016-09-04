@@ -61,7 +61,7 @@ typedef struct {
 	uint32_t handleState;
 	uint32_t operationState;
 	uint32_t numberOfKeys;
-	TEE_OperationInfoKey keyInformation[1]; /* why one? */
+	TEE_OperationInfoKey keyInformation[2];
 } TEE_OperationInfoMultiple;
 
 typedef struct __TEE_OperationHandle *TEE_OperationHandle;

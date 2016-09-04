@@ -18,6 +18,7 @@ DynamicLibrary {
         "dl",
         "pthread",
         "rt",
+        "mbedcrypto",
     ]
 
     cpp.includePaths: [
@@ -45,6 +46,8 @@ DynamicLibrary {
         "ext_storage_stream_api_posix.c",
         "../internal_api/opentee_storage_common.h",
         "../internal_api/opentee_storage_common.c",
+        "../internal_api/storage/storage_utils.h",
+        "../internal_api/storage/storage_utils.c",
         "shm_mem.h",
         "shm_mem.c",
         "ta_dir_watch.h",
