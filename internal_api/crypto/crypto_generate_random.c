@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2015 Open-TEE project.	                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,31 +14,20 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <execinfo.h>
+#include <mbedtls/ctr_drbg.h>
 
+#include "../tee_crypto_api.h"
+#include "../tee_panic.h"
+#include "crypto_utils.h"
 
-#include "tee_panic.h"
-#include "tee_logging.h"
-
-void TEE_Panic(TEE_Result panicCode)
+void TEE_GenerateRandom(void *randomBuffer,
+			uint32_t randomBufferLen)
 {
-	void* callstack[128];
-	int i, frames = backtrace(callstack, 128);
-	char** strs = backtrace_symbols(callstack, frames);
+	if (randomBuffer == NULL)
+		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 
-	printf("P A N I C !\n");
-
-	OT_LOG_ERR("TEE_Panic: TA panicked with [%u] panicode\n", panicCode);
-	OT_LOG_ERR("TEE_Panic: Stacktrace START\n");
-
-	for (i = 0; i < frames; ++i) {
-		OT_LOG_ERR("TEE_Panic: %s\n", strs[i]);
-	}
-	free(strs);
-
-	OT_LOG_ERR("TEE_Panic: Stacktrace END\n");
-	
-	exit(panicCode);
+	if (mbedtls_ctr_drbg_random(&ot_mbedtls_ctr_drbg,
+				    (unsigned char *)randomBuffer,
+				    (size_t)randomBufferLen))
+		TEE_Panic(TEE_ERROR_GENERIC);
 }
