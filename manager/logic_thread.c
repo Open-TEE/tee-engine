@@ -1,17 +1,17 @@
 /*****************************************************************************
-** Copyright (C) 2014 Intel Corporation.                                    **
-**                                                                          **
-** Licensed under the Apache License, Version 2.0 (the "License");          **
-** you may not use this file except in compliance with the License.         **
-** You may obtain a copy of the License at                                  **
-**                                                                          **
-**      http://www.apache.org/licenses/LICENSE-2.0                          **
-**                                                                          **
-** Unless required by applicable law or agreed to in writing, software      **
-** distributed under the License is distributed on an "AS IS" BASIS,        **
+** Copyright (C) 2014 Intel Corporation.				    **
+**									    **
+** Licensed under the Apache License, Version 2.0 (the "License");	    **
+** you may not use this file except in compliance with the License.	    **
+** You may obtain a copy of the License at				    **
+**									    **
+**	http://www.apache.org/licenses/LICENSE-2.0			    **
+**									    **
+** Unless required by applicable law or agreed to in writing, software	    **
+** distributed under the License is distributed on an "AS IS" BASIS,	    **
 ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. **
-** See the License for the specific language governing permissions and      **
-** limitations under the License.                                           **
+** See the License for the specific language governing permissions and	    **
+** limitations under the License.					    **
 *****************************************************************************/
 
 #include <errno.h>
@@ -988,22 +988,37 @@ static TEE_Result mgr_cmd_test(struct com_mgr_invoke_cmd_payload *in,
 static TEE_Result mgr_cmd_open_persistent(struct com_mgr_invoke_cmd_payload *in,
 					  struct com_mgr_invoke_cmd_payload *out)
 {
-	struct com_mrg_open_persistent *createMessage = in->data;
-	TEE_ObjectHandle returnHandle = NULL;
-	TEE_Result ret;
+	struct com_mrg_open_persistent *createMessage = in->data, *respMsg = out->data;
+	TEE_Result ret = TEE_ERROR_GENERIC;
+	void *attrs = NULL;
+	uint32_t attrSize = 0;
+	struct persistant_object per_obj = {0};
+	TEE_ObjectInfo obj_info = {0};
 
-	ret = MGR_TEE_OpenPersistentObject(createMessage->storageID, createMessage->objectID,
-					   createMessage->objectIDLen, createMessage->flags,
-					   &returnHandle);
-
-	if (ret == TEE_SUCCESS && returnHandle) {
-		out->size = calculate_object_handle_size(returnHandle);
-		out->data = calloc(1, out->size);
-
-		pack_object_handle(returnHandle, out->data);
-		free_object(returnHandle);
+	ret = MGR_TEE_OpenPersistentObject(createMessage->storageID,
+					   createMessage->objectID,
+					   createMessage->objectIDLen,
+					   createMessage->flags,
+					   &attrs, &attrSize,
+					   &per_obj,
+					   &obj_info);
+	if (ret != TEE_SUCCESS) {
+		return ret;
 	}
 
+	out->size = offsetof(struct com_mrg_open_persistent,attributeOffset) + attrSize;
+	out->data = calloc(1, out->size);
+	if (out->data == NULL) {
+		OT_LOG_ERR("Malloc failed\n");
+		ret = TEE_ERROR_GENERIC;
+		goto err;
+	}
+
+	memcpy(respMsg->attributeOffset, attrs, attrSize);
+	memcpy(&respMsg->info, &obj_info, sizeof(TEE_ObjectInfo));
+	memcpy(&respMsg->per_object, &per_obj, sizeof(struct persistant_object));
+ err:
+	free(attrs);
 	return ret;
 }
 
@@ -1011,14 +1026,10 @@ static TEE_Result mgr_cmd_close_object(struct com_mgr_invoke_cmd_payload *in,
 				       struct com_mgr_invoke_cmd_payload *out)
 {
 	struct com_mrg_close_persistent *closeObject = in->data;
-	TEE_ObjectHandle handle = NULL;
 
 	out = out;
 
-	if (in->size > offsetof(struct com_mrg_close_persistent, openHandleOffset)) {
-		unpack_and_alloc_object_handle(&handle, &closeObject->openHandleOffset);
-		MGR_TEE_CloseObject(handle);
-	}
+	MGR_TEE_CloseObject(closeObject->objectID, closeObject->objectIDLen);
 
 	return TEE_SUCCESS;
 }
@@ -1029,31 +1040,58 @@ static TEE_Result mgr_cmd_close_object(struct com_mgr_invoke_cmd_payload *in,
  *  (invoke_mgr_cmd) will free it
  */
 
+/* Debug printing */
+static void __attribute__((unused)) pri_buf_hex_format(const char *title,
+						       const unsigned char *buf,
+						       int buf_len)
+{
+	int i;
+
+	OT_LOG_ERR("%s:", title);
+	for (i = 0; i < buf_len; ++i) {
+
+		if ((i % 32) == 0)
+			OT_LOG_ERR("\n");
+
+
+			OT_LOG_ERR("%02x ", buf[i]);
+	}
+
+	OT_LOG_ERR("\n");
+}
+
 static TEE_Result mgr_cmd_create_persistent(struct com_mgr_invoke_cmd_payload *in,
 					    struct com_mgr_invoke_cmd_payload *out)
 {
 
-	struct com_mrg_create_persistent *createMessage = in->data;
-	TEE_ObjectHandle handle = NULL;
-	TEE_ObjectHandle returnHandle = NULL;
-	TEE_Result ret;
+	struct com_mrg_create_persistent *createMessage = in->data, *respMsg = NULL;
+	TEE_Result ret = TEE_SUCCESS;
+	TEE_Attribute *attrs = NULL;
+	uint32_t attrs_count = 0;
+	void *gp_attrs = NULL;
+	struct persistant_object per_obj;
 
-	if (in->size > offsetof(struct com_mrg_create_persistent, attributeHandleOffset))
-		unpack_and_alloc_object_handle(&handle, &createMessage->attributeHandleOffset);
-
-	ret = MGR_TEE_CreatePersistentObject(createMessage->storageID, createMessage->objectID,
-					     createMessage->objectIDLen, createMessage->flags,
-					     handle, NULL, 0, &returnHandle);
-
-	if (ret == TEE_SUCCESS && returnHandle) {
-		out->size = calculate_object_handle_size(returnHandle);
-		out->data = calloc(1, out->size);
-
-		pack_object_handle(returnHandle, out->data);
-		free_object(returnHandle);
+	if (createMessage->attributeSize > 0) {
+		gp_attrs = createMessage->attributeOffset;
 	}
 
-	free_object(handle);
+	ret = MGR_TEE_CreatePersistentObject(createMessage->storageID,
+					     createMessage->objectID, createMessage->objectIDLen,
+					     createMessage->flags,
+					     gp_attrs, createMessage->attributeSize,
+					     createMessage->data_object,
+					     &createMessage->info,
+					     &per_obj,
+					     createMessage->initialDataOffset,
+					     createMessage->initialDataLen);
+
+	if (ret == TEE_SUCCESS) {
+		out->size = sizeof(struct com_mrg_create_persistent);
+		out->data = calloc(1, out->size);
+		respMsg = out->data;
+
+		memcpy(&respMsg->perObj, &per_obj, sizeof(struct persistant_object));
+	}
 
 	return ret;
 }
@@ -1069,13 +1107,14 @@ static TEE_Result mgr_cmd_rename_persistent(struct com_mgr_invoke_cmd_payload *i
 	out = out;
 
 	if (in->size > offsetof(struct com_mrg_rename_persistent, objectHandleOffset)) {
-		unpack_and_alloc_object_handle(&object, &renameMessage->objectHandleOffset);
+//		unpack_and_alloc_object_handle(&object, &renameMessage->objectHandleOffset);
 
 		ret = MGR_TEE_RenamePersistentObject(object, renameMessage->newObjectID,
 						     renameMessage->newObjectIDLen);
 
-		if (ret != TEE_ERROR_CORRUPT_OBJECT)
-			free_object(object);
+		//TODO: Not sending object
+		//if (ret != TEE_ERROR_CORRUPT_OBJECT)
+		//	free_object(object);
 	}
 
 	return ret;
@@ -1090,11 +1129,7 @@ static TEE_Result mgr_cmd_close_and_delete_persistent(struct com_mgr_invoke_cmd_
 
 	out = out;
 
-	if (in->size > offsetof(struct com_mrg_close_persistent, openHandleOffset)) {
-		unpack_and_alloc_object_handle(&object, &closeAndDeleteMessage->openHandleOffset);
-
-		MGR_TEE_CloseAndDeletePersistentObject(object);
-	}
+	MGR_TEE_CloseAndDeletePersistentObject(closeAndDeleteMessage->objectID, closeAndDeleteMessage->objectIDLen);
 
 	return TEE_SUCCESS;
 }
@@ -1224,7 +1259,9 @@ static TEE_Result mgr_cmd_read_obj_data(struct com_mgr_invoke_cmd_payload *in,
 	size_t size;
 	void *writePtr = in->data;
 
-	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
+	//TODO: EVerything
+	/*
+//	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
 	memcpy(&size, writePtr, sizeof(size_t));
 
 	out->size = 0;
@@ -1246,10 +1283,13 @@ static TEE_Result mgr_cmd_read_obj_data(struct com_mgr_invoke_cmd_payload *in,
 		}
 	}
 
-	if (ret != TEE_ERROR_CORRUPT_OBJECT)
-		free_object(handle);
+	//TODO: Not sending objectOD
+	//if (ret != TEE_ERROR_CORRUPT_OBJECT)
+	//	free_object(handle);
 
 	return ret;
+	*/
+	return TEE_ERROR_NOT_IMPLEMENTED;
 }
 
 static TEE_Result mgr_cmd_write_obj_data(struct com_mgr_invoke_cmd_payload *in,
@@ -1262,9 +1302,10 @@ static TEE_Result mgr_cmd_write_obj_data(struct com_mgr_invoke_cmd_payload *in,
 	size_t size;
 	void *writePtr = in->data;
 
+	//TODO: Everyhting
 
-
-	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
+	/*
+//	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
 
 	memcpy(&size, writePtr, sizeof(size_t));
 	writePtr = (char *)writePtr + sizeof(size_t);
@@ -1279,10 +1320,14 @@ static TEE_Result mgr_cmd_write_obj_data(struct com_mgr_invoke_cmd_payload *in,
 		return_transfer_struct->per_data_size = handle->per_object.data_size;
 	}
 
-	if (ret != TEE_ERROR_CORRUPT_OBJECT)
-		free_object(handle);
+	//TODO: Not sending objectOC
+	//if (ret != TEE_ERROR_CORRUPT_OBJECT)
+	//	free_object(handle);
 
 	return ret;
+	*/
+
+	return TEE_ERROR_NOT_IMPLEMENTED;
 }
 
 static TEE_Result mgr_cmd_truncate_obj_data(struct com_mgr_invoke_cmd_payload *in,
@@ -1296,7 +1341,9 @@ static TEE_Result mgr_cmd_truncate_obj_data(struct com_mgr_invoke_cmd_payload *i
 
 	out = out;
 
-	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
+	//TODO: everything
+	/*
+//	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
 	memcpy(&size, writePtr, sizeof(size_t));
 
 	ret = MGR_TEE_TruncateObjectData(handle, size);
@@ -1307,13 +1354,14 @@ static TEE_Result mgr_cmd_truncate_obj_data(struct com_mgr_invoke_cmd_payload *i
 		return_transfer_struct = out->data;
 		return_transfer_struct->per_data_pos = handle->per_object.data_position;
 		return_transfer_struct->per_data_size = handle->per_object.data_size;
-
 	}
 
-	if (ret != TEE_ERROR_CORRUPT_OBJECT)
-		free_object(handle);
-
-	return ret;
+	//TODO: Not sending object
+	//if (ret != TEE_ERROR_CORRUPT_OBJECT)
+	//	free_object(handle);
+	*/
+	//return ret;
+	return TEE_ERROR_NOT_IMPLEMENTED;
 }
 
 static TEE_Result mgr_cmd_seek_obj_data(struct com_mgr_invoke_cmd_payload *in,
@@ -1327,8 +1375,10 @@ static TEE_Result mgr_cmd_seek_obj_data(struct com_mgr_invoke_cmd_payload *in,
 	void *writePtr = in->data;
 
 	out = out;
+	//TODO: EVERYTHING
+	/*
 
-	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
+//	writePtr = unpack_and_alloc_object_handle(&handle, writePtr);
 	memcpy(&offset, writePtr, sizeof(int32_t));
 	writePtr = (char *)writePtr + sizeof(size_t);
 	memcpy(&copyWhence, writePtr, sizeof(uint32_t));
@@ -1343,10 +1393,13 @@ static TEE_Result mgr_cmd_seek_obj_data(struct com_mgr_invoke_cmd_payload *in,
 		return_transfer_struct->per_data_size = handle->per_object.data_size;
 	}
 
-	if (ret != TEE_ERROR_CORRUPT_OBJECT)
-		free_object(handle);
+	//TODO: Not sending object
+	//if (ret != TEE_ERROR_CORRUPT_OBJECT)
+	//	free_object(handle);
 
 	return ret;
+	*/
+	return TEE_ERROR_NOT_IMPLEMENTED;
 }
 
 static void invoke_mgr_cmd(struct manager_msg *man_msg)

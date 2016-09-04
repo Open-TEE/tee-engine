@@ -1,17 +1,17 @@
 /*****************************************************************************
-** Copyright (C) 2015 Intel                                                 **
-**                                                                          **
-** Licensed under the Apache License, Version 2.0 (the "License");          **
-** you may not use this file except in compliance with the License.         **
-** You may obtain a copy of the License at                                  **
-**                                                                          **
-**      http://www.apache.org/licenses/LICENSE-2.0                          **
-**                                                                          **
-** Unless required by applicable law or agreed to in writing, software      **
-** distributed under the License is distributed on an "AS IS" BASIS,        **
+** Copyright (C) 2015 Intel						    **
+**									    **
+** Licensed under the Apache License, Version 2.0 (the "License");	    **
+** you may not use this file except in compliance with the License.	    **
+** You may obtain a copy of the License at				    **
+**									    **
+**	http://www.apache.org/licenses/LICENSE-2.0			    **
+**									    **
+** Unless required by applicable law or agreed to in writing, software	    **
+** distributed under the License is distributed on an "AS IS" BASIS,	    **
 ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. **
-** See the License for the specific language governing permissions and      **
-** limitations under the License.                                           **
+** See the License for the specific language governing permissions and	    **
+** limitations under the License.					    **
 *****************************************************************************/
 
 #include <string.h>
@@ -234,7 +234,6 @@ TEE_Result alloc_storage_path(void *objectID,
 		return TEE_ERROR_OVERFLOW;
 	}
 
-
 	if (name_with_dir_path) {
 		*name_with_dir_path = calloc(1, MAX_EXT_PATH_NAME);
 		if (*name_with_dir_path == NULL) {
@@ -275,6 +274,7 @@ uint32_t ext_object_id_to_storage_id(char *objectid, size_t objectid_len)
 			return current_element->storage_blob_id;
 		}
 	}
+	
 	return 0;
 }
 
@@ -336,13 +336,14 @@ uint32_t ext_open_storage_blob(char *objectID, size_t objectIDlen, bool create_i
 			ret_mkdir = mkdir(secure_storage_path, 0777);
 			if (ret_mkdir != 0 && errno != EEXIST) {
 				OT_LOG(LOG_ERR, "Cannot create Secure Storage directory: %s\n",
-						strerror(errno));
+				strerror(errno));
 				goto ret;
 			}
+
 			ret_mkdir = mkdir(dir_path, 0777);
 			if (ret_mkdir != 0 && errno != EEXIST) {
 				OT_LOG(LOG_ERR, "Cannot create UUID directory: %s\n",
-						strerror(errno));
+				strerror(errno));
 				goto ret;
 			}
 
@@ -350,7 +351,6 @@ uint32_t ext_open_storage_blob(char *objectID, size_t objectIDlen, bool create_i
 
 			if (is_directory_empty(dir_path))
 				rmdir(dir_path);
-
 		}
 	}
 
@@ -368,6 +368,7 @@ size_t ext_get_storage_blob_size(uint32_t storage_blob_id)
 {
 	FILE *file = storage_id_to_file(storage_blob_id);
 	struct stat st;
+
 	if (file) {
 		if (fstat(fileno(file), &st))
 			return 0; /* some error occured */
@@ -454,6 +455,11 @@ uint32_t ext_write_stream(uint32_t storage_blob_id, uint32_t offset, void *data,
 {
 	FILE *file = storage_id_to_file(storage_blob_id);
 	uint32_t written = 0;
+
+	if (!file) {
+		OT_LOG(LOG_ERR, "trying to write non-existing storage blob\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
 
 	if (fseek(file, offset, SEEK_SET) != 0) {
 		OT_LOG(LOG_ERR, "fseek failed\n");
@@ -691,8 +697,8 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 		}
 
 		/* meta size - object meta info == attributes (structs) + buffers == all Attrs */
-		recv_data_to_caller->info.objectSize =
-		    recv_data_to_caller->meta_size - sizeof(struct storage_obj_meta_data);
+//		recv_data_to_caller->info.objectSize =
+//		    recv_data_to_caller->meta_size - sizeof(struct storage_obj_meta_data);
 
 		/* calculate data size */
 		if (fseek(next_object, 0, SEEK_END) != 0)

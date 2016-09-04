@@ -16,17 +16,29 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <execinfo.h>
+
 
 #include "tee_panic.h"
 #include "tee_logging.h"
 
 void TEE_Panic(TEE_Result panicCode)
 {
-	panicCode = panicCode;
+	void* callstack[128];
+	int i, frames = backtrace(callstack, 128);
+	char** strs = backtrace_symbols(callstack, frames);
 
 	printf("P A N I C !\n");
 
-	OT_LOG(LOG_DEBUG, "TA panicked and panic func has been reached\n");
+	OT_LOG(LOG_DEBUG, "TA panicked and panic function has been reached with [%u] panicode\n", panicCode);
+	OT_LOG(LOG_DEBUG, "TA panicked: Stacktrace START\n");
 
+	for (i = 0; i < frames; ++i) {
+		OT_LOG(LOG_DEBUG, "%s\n", strs[i]);
+	}
+	free(strs);
+
+	OT_LOG(LOG_DEBUG, "TA panicked: Stacktrace END\n");
+	
 	exit(panicCode);
 }
