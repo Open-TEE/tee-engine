@@ -61,7 +61,7 @@ typedef struct {
 	uint32_t handleState;
 	uint32_t operationState;
 	uint32_t numberOfKeys;
-	TEE_OperationInfoKey keyInformation[1]; /* why one? */
+	TEE_OperationInfoKey keyInformation[2];
 } TEE_OperationInfoMultiple;
 
 typedef struct __TEE_OperationHandle *TEE_OperationHandle;
@@ -170,7 +170,8 @@ TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void *chunk, uint32_
  * \param IV
  * \param IVLen
  */
-void TEE_CipherInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen);
+void TEE_CipherInit(TEE_OperationHandle operation,
+		    void *IV, size_t IVLen);
 
 /*!
  * \brief TEE_CipherUpdate
@@ -181,8 +182,9 @@ void TEE_CipherInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen);
  * \param destLen
  * \return
  */
-TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void *srcData, uint32_t srcLen,
-			    void *destData, uint32_t *destLen);
+TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation,
+			    void *srcData, size_t srcLen,
+			    void *destData, size_t *destLen);
 
 /*!
  * \brief TEE_CipherDoFinal
@@ -193,8 +195,9 @@ TEE_Result TEE_CipherUpdate(TEE_OperationHandle operation, void *srcData, uint32
  * \param destLen
  * \return
  */
-TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void *srcData, uint32_t srcLen,
-			     void *destData, uint32_t *destLen);
+TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation,
+			     void *srcData, size_t srcLen,
+			     void *destData, size_t *destLen);
 
 /*
  * ## MAC Functions ##
@@ -206,7 +209,8 @@ TEE_Result TEE_CipherDoFinal(TEE_OperationHandle operation, void *srcData, uint3
  * \param IV
  * \param IVLen
  */
-void TEE_MACInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen);
+void TEE_MACInit(TEE_OperationHandle operation,
+		 void *IV, size_t IVLen);
 
 /*!
  * \brief TEE_MACUpdate
@@ -214,7 +218,8 @@ void TEE_MACInit(TEE_OperationHandle operation, void *IV, uint32_t IVLen);
  * \param chunk
  * \param chunkSize
  */
-void TEE_MACUpdate(TEE_OperationHandle operation, void *chunk, uint32_t chunkSize);
+void TEE_MACUpdate(TEE_OperationHandle operation,
+		   void *chunk, size_t chunkSize);
 
 /*!
  * \brief TEE_MACComputeFinal
@@ -225,8 +230,9 @@ void TEE_MACUpdate(TEE_OperationHandle operation, void *chunk, uint32_t chunkSiz
  * \param macLen
  * \return
  */
-TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uint32_t messageLen,
-			       void *mac, uint32_t *macLen);
+TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation,
+			       void *message, size_t messageLen,
+			       void *mac, size_t *macLen);
 
 /*!
  * \brief TEE_MACCompareFinal
@@ -237,8 +243,9 @@ TEE_Result TEE_MACComputeFinal(TEE_OperationHandle operation, void *message, uin
  * \param macLen
  * \return
  */
-TEE_Result TEE_MACCompareFinal(TEE_OperationHandle operation, void *message, uint32_t messageLen,
-			       void *mac, uint32_t macLen);
+TEE_Result TEE_MACCompareFinal(TEE_OperationHandle operation,
+			       void *message, size_t messageLen,
+			       void *mac, size_t macLen);
 
 /*
  * ## Authenticated Encryption Functions (GB TEE AE API is not supported!) ##
@@ -453,7 +460,12 @@ typedef enum {
 	TEE_ALG_ECDSA_P224 = 0x70002042,
 	TEE_ALG_ECDSA_P256 = 0x70003042,
 	TEE_ALG_ECDSA_P384 = 0x70004042,
-	TEE_ALG_ECDSA_P521 = 0x70005042
+	TEE_ALG_ECDSA_P521 = 0x70005042,
+	TEE_ALG_ECDH_P192 = 0x80001042,
+	TEE_ALG_ECDH_P224 = 0x80002042,
+	TEE_ALG_ECDH_P256 = 0x80003042,
+	TEE_ALG_ECDH_P384 = 0x80004042,
+	TEE_ALG_ECDH_P521 = 0x80005042
 } algorithm_Identifier;
 
 #endif /* __TEE_CRYPTO_API_H__ */

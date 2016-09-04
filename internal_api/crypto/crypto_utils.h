@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2015 Open-TEE project.	                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,31 +14,32 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <execinfo.h>
+#ifndef __CRYPTO_UTILS_H__
+#define __CRYPTO_UTILS_H__
 
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
 
-#include "tee_panic.h"
-#include "tee_logging.h"
+#include "../tee_crypto_api.h"
+#include "../tee_data_types.h"
 
-void TEE_Panic(TEE_Result panicCode)
-{
-	void* callstack[128];
-	int i, frames = backtrace(callstack, 128);
-	char** strs = backtrace_symbols(callstack, frames);
+extern mbedtls_entropy_context ot_mbedtls_entropy;
+extern mbedtls_ctr_drbg_context ot_mbedtls_ctr_drbg;
 
-	printf("P A N I C !\n");
+int valid_mode_and_algorithm(uint32_t algorithm, uint32_t mode);
 
-	OT_LOG_ERR("TEE_Panic: TA panicked with [%u] panicode\n", panicCode);
-	OT_LOG_ERR("TEE_Panic: Stacktrace START\n");
+bool valid_key_size_for_algorithm(uint32_t algorithm, uint32_t key);
 
-	for (i = 0; i < frames; ++i) {
-		OT_LOG_ERR("TEE_Panic: %s\n", strs[i]);
-	}
-	free(strs);
+bool supported_algorithms(uint32_t algorithm, uint32_t key_size);
 
-	OT_LOG_ERR("TEE_Panic: Stacktrace END\n");
-	
-	exit(panicCode);
-}
+uint32_t get_operation_class(uint32_t algorithm);
+
+bool alg_requires_2_keys(uint32_t algorithm);
+
+uint32_t get_alg_hash_lenght(uint32_t algorithm);
+
+TEE_Result valid_key_and_operation(TEE_ObjectHandle key, TEE_OperationHandle operation);
+
+void print_mbedtls_to_syslog(int mbedtls_error);
+
+#endif
