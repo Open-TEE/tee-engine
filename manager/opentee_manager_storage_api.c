@@ -165,7 +165,7 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 
 		obj->per_object.data_begin += sizeof(TEE_Attribute);
 
-		if (!is_value_attribute(obj->attrs[i].attributeID)) {
+		/*		if (!is_value_attribute(obj->attrs[i].attributeID)) {
 			obj->attrs[i].content.ref.buffer = calloc(1, obj->maxObjSizeBytes);
 			if (obj->attrs[i].content.ref.buffer == NULL) {
 				free_attrs(obj);
@@ -185,6 +185,7 @@ static TEE_Result load_attributes(TEE_ObjectHandle obj)
 
 			obj->per_object.data_begin += obj->attrs[i].content.ref.length;
 		}
+*/
 	}
 
 	return TEE_SUCCESS;
@@ -193,6 +194,7 @@ err_at_read:
 	OT_LOG(LOG_ERR, "Error at fread\n");
 	free_attrs(obj);
 	free(obj->attrs);
+
 	return TEE_ERROR_GENERIC;
 }
 
@@ -222,7 +224,7 @@ static bool serialize_attributes_to_storage(TEE_ObjectHandle object,
 		    != sizeof(TEE_Attribute))
 			return false;
 		(*offset) +=  sizeof(TEE_Attribute);
-
+		/*
 		if (!is_value_attribute(object->attrs[i].attributeID)) {
 			if (ext_write_stream(storage_blob_id, *offset,
 					     object->attrs[i].content.ref.buffer,
@@ -232,6 +234,7 @@ static bool serialize_attributes_to_storage(TEE_ObjectHandle object,
 
 			(*offset) +=  object->attrs[i].content.ref.length;
 		}
+*/
 	}
 
 	return true;
@@ -281,7 +284,7 @@ static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle s
 		case TEE_TYPE_HMAC_SHA512:
 		case TEE_TYPE_GENERIC_SECRET:
 		case TEE_TYPE_RSA_KEYPAIR:
-                case TEE_TYPE_RSA_PUBLIC_KEY:
+		case TEE_TYPE_RSA_PUBLIC_KEY:
 		case TEE_TYPE_DSA_PUBLIC_KEY:
 		case TEE_TYPE_DSA_KEYPAIR:
 			if (!malloc_for_attrs(cpy_obj, attr_count))
@@ -481,7 +484,7 @@ TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size
 	/* Handler flags update */
 	new_object->objectInfo.handleFlags = 0; /* reset flags */
 	new_object->objectInfo.handleFlags |=
-	    (TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED | flags);
+			(TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED | flags);
 
 	*object = new_object;
 
@@ -546,28 +549,6 @@ TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, ui
 	storage_blob_id = ext_open_storage_blob(objectID, objectIDLen, true);
 	add_storage_blob_id(storage_blob_id, flags);
 
-	if (attributes != NULL &&
-	    !(attributes->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED)) {
-		OT_LOG(LOG_ERR, "CAnnot create a persistent object from uninitialised object\n");
-		return TEE_ERROR_BAD_PARAMETERS;
-	}
-
-	/* Access has been granted. Fill needed info for object storing */
-	memset(&meta_info_to_storage, 0, sizeof(struct storage_obj_meta_data));
-
-	if (attributes != NULL) {
-		memcpy(&meta_info_to_storage.info, &attributes->objectInfo, sizeof(TEE_ObjectInfo));
-		meta_info_to_storage.attrs_count = attributes->attrs_count;
-	} else {
-		meta_info_to_storage.attrs_count = 0;
-	}
-
-	meta_info_to_storage.meta_size =
-	    sizeof(struct storage_obj_meta_data) + object_attribute_size(attributes);
-
-	memcpy(meta_info_to_storage.obj_id, objectID, objectIDLen);
-	meta_info_to_storage.obj_id_len = objectIDLen;
-
 	/* Meta info is filled. Write meta info to storage */
 	if (ext_write_stream(storage_blob_id,
 			     begin, &meta_info_to_storage, sizeof(meta_info_to_storage))
@@ -582,32 +563,13 @@ TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, ui
 
 
 	if (initialData != NULL) {
+
 		if (ext_write_stream(storage_blob_id,
 				     begin, initialData, initialDataLen) != initialDataLen)
 			goto err_at_meta_or_init_data_write;
 	}
 
 	if (object != NULL) {
-		result = deep_copy_object(object, attributes);
-		if (result != TEE_SUCCESS)
-			goto err_at_obj_alloc;
-
-		/* update current state to allocated handle */
-		(*object)->objectInfo.handleFlags = 0; /* reset flags */
-		(*object)->objectInfo.handleFlags |=
-		    (TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED | flags);
-
-		(*object)->per_object.data_position = initialDataLen;
-
-		(*object)->per_object.data_begin = begin;
-
-		(*object)->per_object.data_size = initialDataLen;
-
-		/* Cpy obj ID to alloceted object */
-		memcpy((*object)->per_object.obj_id, objectID, objectIDLen);
-		(*object)->per_object.obj_id_len = objectIDLen;
-
-		/* sign storage "location"(=file) */
 		(*object)->per_object.storage_blob_id = storage_blob_id;
 
 	} else {
@@ -894,7 +856,7 @@ TEE_Result MGR_TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)
 		return result;
 
 	result = ext_truncate_storage_blob(object->per_object.storage_blob_id,
-					      object->per_object.data_begin + size);
+					   object->per_object.data_begin + size);
 	if (result != TEE_SUCCESS) {
 		OT_LOG(LOG_ERR, "Could not truncate\n");
 		return result;

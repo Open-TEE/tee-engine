@@ -19,16 +19,17 @@ int keysize_in_bytes(uint32_t key_in_bits)
 	return key_in_bits / 8;
 }
 
+/*
 bool is_value_attribute(uint32_t attr_ID)
 {
 	/* Bit [29]:
 	 * 0: buffer attribute
 	 * 1: value attribute
 	 * TEE_ATTR_FLAG_VALUE == 0x20000000
-	 */
+
 	return attr_ID & TEE_ATTR_FLAG_VALUE;
 }
-
+*/
 int valid_obj_type_and_attr_count(object_type obj)
 {
 	switch (obj) {
@@ -69,24 +70,26 @@ int valid_obj_type_and_attr_count(object_type obj)
 
 size_t calculate_object_handle_size(TEE_ObjectHandle object_handle)
 {
+/*
 	uint32_t n = 0;
 	size_t size = sizeof(struct __TEE_ObjectHandle);
 	size += object_handle->attrs_count * sizeof(TEE_Attribute);
 	for (n = 0; n < object_handle->attrs_count; ++n) {
 		TEE_Attribute *attribute = &object_handle->attrs[n];
 		if (!is_value_attribute(attribute->attributeID)) {
-			/* make allocation size of arrays align with pointer size */
+			/* make allocation size of arrays align with pointer size
 			uint32_t padding = attribute->content.ref.length % sizeof(uintptr_t);
 			size += attribute->content.ref.length;
 			if (padding > 0)
 				size += sizeof(uintptr_t) - padding;
 
-			/* utilizing the pointer size in packing */
+			/* utilizing the pointer size in packing
 			size -= sizeof(uintptr_t);
 		}
 	}
 
 	return size;
+*/
 }
 
 void *pack_object_handle(TEE_ObjectHandle handle, void *mem_in)
@@ -106,7 +109,7 @@ void *pack_object_handle(TEE_ObjectHandle handle, void *mem_in)
 
 	memcpy(mem, &handle->maxObjSizeBytes, sizeof(handle->maxObjSizeBytes));
 	mem += sizeof(handle->maxObjSizeBytes);
-
+/*
 	for (; n < count; ++n) {
 		TEE_Attribute *attribute = &handle->attrs[n];
 		if (is_value_attribute(attribute->attributeID)) {
@@ -127,6 +130,7 @@ void *pack_object_handle(TEE_ObjectHandle handle, void *mem_in)
 				mem += sizeof(uintptr_t) - padding;
 		}
 	}
+*/
 	return (void *)mem;
 }
 
@@ -149,7 +153,7 @@ void *unpack_and_alloc_object_handle(TEE_ObjectHandle *returnHandle, void *mem_i
 
 	memcpy(&handle->maxObjSizeBytes, mem, sizeof(handle->maxObjSizeBytes));
 	mem += sizeof(handle->maxObjSizeBytes);
-
+/*
 	count = handle->attrs_count;
 	if (count > 0) {
 		handle->attrs = calloc(count, sizeof(TEE_Attribute));
@@ -181,7 +185,7 @@ void *unpack_and_alloc_object_handle(TEE_ObjectHandle *returnHandle, void *mem_i
 			}
 		}
 	}
-
+*/
 	return (void *)mem;
 }
 
@@ -196,12 +200,12 @@ static bool WEAK_RANDOM_bytes(unsigned char *buf, int size)
 void free_attrs(TEE_ObjectHandle object)
 {
 	size_t i;
-
+/*
 	for (i = 0; i < object->attrs_count; ++i) {
 		if (!is_value_attribute(object->attrs[i].attributeID)) {
 			if (object->attrs[i].content.ref.buffer != NULL) {
 				/* Fill key buffer with random data. If random function fails,
-				 * zero out key buffer. */
+				 * zero out key buffer.
 				if (!WEAK_RANDOM_bytes(object->attrs[i].content.ref.buffer,
 						       object->maxObjSizeBytes)) {
 					memset(object->attrs[i].content.ref.buffer, 0,
@@ -220,7 +224,7 @@ void free_attrs(TEE_ObjectHandle object)
 			memset(object->attrs, 0, object->attrs_count * sizeof(TEE_Attribute));
 		}
 	}
-	return;
+*/
 }
 
 void free_object(TEE_ObjectHandle object)
@@ -249,8 +253,8 @@ uint32_t object_attribute_size(TEE_ObjectHandle object)
 		return object_attr_size;
 
 	for (i = 0; i < object->attrs_count; ++i) {
-		if (!is_value_attribute(object->attrs[i].attributeID))
-			object_attr_size += object->attrs[i].content.ref.length;
+//		if (!is_value_attribute(object->attrs[i].attributeID))
+//			object_attr_size += object->attrs[i].content.ref.length;
 	}
 
 	return object_attr_size + object->attrs_count * sizeof(TEE_Attribute);
@@ -276,7 +280,7 @@ void cpy_attr(TEE_ObjectHandle srcObj, uint32_t src_index, TEE_ObjectHandle dstO
 {
 	if (srcObj == NULL || dstObj == NULL)
 		return;
-
+/*
 	if (is_value_attribute(srcObj->attrs[src_index].attributeID)) {
 		memcpy(&dstObj->attrs[dst_index], &srcObj->attrs[src_index], sizeof(TEE_Attribute));
 	} else {
@@ -289,6 +293,7 @@ void cpy_attr(TEE_ObjectHandle srcObj, uint32_t src_index, TEE_ObjectHandle dstO
 
 		dstObj->attrs[dst_index].attributeID = srcObj->attrs[src_index].attributeID;
 	}
+*/
 }
 
 void copy_all_attributes(TEE_ObjectHandle srcObj, TEE_ObjectHandle destObj)
