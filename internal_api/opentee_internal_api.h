@@ -50,7 +50,7 @@ struct __TEE_ObjectEnumHandle {
 
 #define COM_MGR_CMD_ID_WRITE_CREATE_INIT_DATA 0x0F
 
-
+#define COM_MGR_PERSISTENT_DATA_OBJECT 0xCD
 
 struct com_mrg_open_persistent {
 	uint32_t storageID;
@@ -64,10 +64,13 @@ struct com_mrg_close_persistent {
 } __attribute__((aligned));
 
 struct com_mrg_create_persistent {
+	char objectID[TEE_OBJECT_ID_MAX_LEN];
+	TEE_ObjectHandle info;
 	uint32_t storageID;
 	uint32_t flags;
-	char objectID[TEE_OBJECT_ID_MAX_LEN];
 	uint32_t objectIDLen;
+	uint32_t attrs_count;
+	uint8_t data_object; //COM_MGR_PERSISTENT_DATA_OBJECT
 	void *attributeHandleOffset;
 } __attribute__((aligned));
 
