@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include "tee_storage_common.h"
+#include "opentee_manager_storage_api.h"
 
 /* checks that storage blob is not illegal */
 #define IS_VALID_STORAGE_BLOB(a) (a != 0 && a != 0xFFFFFFFF)
@@ -111,6 +112,6 @@ bool ext_start_enumerator(uint32_t start_enum_ID);
  * recv_data_to_caller must be valid pointer
  */
 bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
-				       struct storage_obj_meta_data *recv_data_to_caller);
+				       struct ss_object_meta_info *recv_data_to_caller);
 
 #endif /* EMULATOR_MANAGER_EXT_storage_blob_API_H_ */
