@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2015 Open-TEE project.	                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,31 +14,23 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <execinfo.h>
-
-
+#include "tee_crypto_api.h"
 #include "tee_panic.h"
 #include "tee_logging.h"
 
-void TEE_Panic(TEE_Result panicCode)
+void TEE_DeriveKey(TEE_OperationHandle operation,
+		   TEE_Attribute *params,
+		   uint32_t paramCount,
+		   TEE_ObjectHandle derivedKey)
 {
-	void* callstack[128];
-	int i, frames = backtrace(callstack, 128);
-	char** strs = backtrace_symbols(callstack, frames);
-
-	printf("P A N I C !\n");
-
-	OT_LOG_ERR("TEE_Panic: TA panicked with [%u] panicode\n", panicCode);
-	OT_LOG_ERR("TEE_Panic: Stacktrace START\n");
-
-	for (i = 0; i < frames; ++i) {
-		OT_LOG_ERR("TEE_Panic: %s\n", strs[i]);
-	}
-	free(strs);
-
-	OT_LOG_ERR("TEE_Panic: Stacktrace END\n");
+	// TODO: Function
 	
-	exit(panicCode);
+	OT_LOG_ERR("TEE_DeriveKey panics due not implemented");
+
+	operation = operation;
+	params = params;
+	paramCount = paramCount;
+	derivedKey = derivedKey;
+	
+	TEE_Panic(TEE_ERROR_NOT_IMPLEMENTED);
 }

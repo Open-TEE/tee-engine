@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2015 Open-TEE project.	                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,31 +14,24 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
+#ifndef __OBJECT_HANDLE_H__
+#define __OBJECT_HANDLE_H__
+
 #include <stdio.h>
-#include <stdlib.h>
-#include <execinfo.h>
+#include "crypto/operation_handle.h"
 
+struct persistant_object {
+	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
+	uint32_t obj_id_len;
+	uint32_t data_begin;
+	uint32_t data_size;
+	uint32_t data_position;
+};
 
-#include "tee_panic.h"
-#include "tee_logging.h"
+struct __TEE_ObjectHandle {
+	struct persistant_object per_object;
+	TEE_ObjectInfo objectInfo;
+	struct gp_key *key;
+};
 
-void TEE_Panic(TEE_Result panicCode)
-{
-	void* callstack[128];
-	int i, frames = backtrace(callstack, 128);
-	char** strs = backtrace_symbols(callstack, frames);
-
-	printf("P A N I C !\n");
-
-	OT_LOG_ERR("TEE_Panic: TA panicked with [%u] panicode\n", panicCode);
-	OT_LOG_ERR("TEE_Panic: Stacktrace START\n");
-
-	for (i = 0; i < frames; ++i) {
-		OT_LOG_ERR("TEE_Panic: %s\n", strs[i]);
-	}
-	free(strs);
-
-	OT_LOG_ERR("TEE_Panic: Stacktrace END\n");
-	
-	exit(panicCode);
-}
+#endif /* __OBJECT_HANDLE_H__ */
