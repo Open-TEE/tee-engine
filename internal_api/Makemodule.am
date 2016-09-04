@@ -7,7 +7,6 @@ libInternalApi_la_includes = \
 	include/tee_shared_data_types.h \
 	include/tee_logging.h \
 	internal_api/callbacks.h \
-	internal_api/openssl_1_0_2_beta_rsa_oaep.h \
 	internal_api/opentee_internal_api.h \
 	internal_api/opentee_storage_common.h \
 	internal_api/tee_bigint.h \
@@ -21,28 +20,50 @@ libInternalApi_la_includes = \
 	internal_api/tee_storage_api.h \
 	internal_api/tee_storage_common.h \
 	internal_api/tee_ta_interface.h \
-	internal_api/tee_time_api.h
+	internal_api/tee_time_api.h \
+	internal_api/crypto/crypto_ae.h \
+	internal_api/crypto/crypto_asym.h \
+	internal_api/crypto/crypto_cipher.h \
+	internal_api/crypto/crypto_digest.h \
+	internal_api/crypto/crypto_mac.h \
+	internal_api/crypto/crypto_utils.h \
+	internal_api/crypto/operation_handle.h \
+	internal_api/storage/object_handle.h \
+	internal_api/storage/storage_utils.h
 
 libInternalApi_la_SOURCES = ${libInternalApi_la_includes} \
 	internal_api/callbacks.c \
-	internal_api/openssl_1_0_2_beta_rsa_oaep.c \
 	internal_api/opentee_internal_api.c \
 	internal_api/opentee_storage_common.c \
 	internal_api/tee_bigint.c \
 	internal_api/tee_cancellation.c \
-	internal_api/tee_crypto_api.c \
 	internal_api/tee_internal_client_api.c \
 	internal_api/tee_memory.c \
 	internal_api/tee_panic.c \
-	internal_api/tee_storage_api.c \
-	internal_api/tee_time_api.c
+	internal_api/tee_time_api.c \
+	internal_api/crypto/crypto_ae.c \
+	internal_api/crypto/crypto_asym.c \
+	internal_api/crypto/crypto_cipher.c \
+	internal_api/crypto/crypto_digest.c \
+	internal_api/crypto/crypto_mac.c \
+	internal_api/crypto/crypto_utils.c \
+	internal_api/crypto/crypto_key_derive.c \
+	internal_api/crypto/crypto_generate_random.c \
+	internal_api/storage/data_stream_api.c \
+	internal_api/storage/enumerator_api.c \
+	internal_api/storage/persistent_object_api.c \
+	internal_api/storage/storage_utils.c \
+	internal_api/storage/transient_object_api.c \
+	internal_api/new_tee_crypto_api.c \
+	internal_api/new_tee_storage_api.c \
+	common/tee_logging.c
 
 libInternalApi_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/include \
 	-iquote $(top_srcdir)/internal_api
 
 libInternalApi_la_LDFLAGS = ${AM_LDFLAGS} \
-	-lssl -lcrypto
+	-lssl -lcrypto -lmbedcrypto
 
 libInternalApi_la_LIBADD =
 
