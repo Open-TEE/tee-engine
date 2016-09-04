@@ -23,9 +23,10 @@ struct __TEE_ObjectEnumHandle {
 	uint32_t ID;
 };
 
+#include "com_protocol.h"
+#include "storage/object_handle.h"
 #include "tee_data_types.h"
 #include "tee_storage_api.h"
-#include "com_protocol.h"
 
 /* ta to manager commands */
 
@@ -50,25 +51,33 @@ struct __TEE_ObjectEnumHandle {
 
 #define COM_MGR_CMD_ID_WRITE_CREATE_INIT_DATA 0x0F
 
-
+#define COM_MGR_PERSISTENT_DATA_OBJECT 0xCD
 
 struct com_mrg_open_persistent {
+	char objectID[TEE_OBJECT_ID_MAX_LEN];
+	struct persistant_object per_object;
+	TEE_ObjectInfo info;
 	uint32_t storageID;
 	uint32_t flags;
-	char objectID[TEE_OBJECT_ID_MAX_LEN];
 	uint32_t objectIDLen;
 } __attribute__((aligned));
 
 struct com_mrg_close_persistent {
-	void *openHandleOffset;
+	uint32_t ss_id;
 } __attribute__((aligned));
 
 struct com_mrg_create_persistent {
+	uint8_t objectID[TEE_OBJECT_ID_MAX_LEN];
+	TEE_ObjectInfo info;
 	uint32_t storageID;
 	uint32_t flags;
-	char objectID[TEE_OBJECT_ID_MAX_LEN];
 	uint32_t objectIDLen;
-	void *attributeHandleOffset;
+	uint32_t attrs_count;
+	uint32_t ss_id;
+	uint8_t data_object; //COM_MGR_PERSISTENT_DATA_OBJECT
+	uint32_t initialDataLen;
+	void *attributeOffset;
+	void *initialDataOffset;
 } __attribute__((aligned));
 
 struct com_mrg_rename_persistent {
@@ -83,8 +92,8 @@ struct com_mrg_rename_persistent_resp {
 } __attribute__((aligned));
 
 struct com_mrg_transfer_data_persistent {
-	uint32_t per_data_pos;
-	uint32_t per_data_size;
+	uint32_t ss_id;
+	TEE_ObjectHandle info;
 	size_t dataSize;
 	void *dataOffset;
 } __attribute__((aligned));
@@ -109,7 +118,8 @@ struct com_mrg_enum_command_next {
  * returnOrigin - error status from the command executed by manager
  */
 
-TEE_Result TEE_InvokeMGRCommand(uint32_t cancellationRequestTimeout, uint32_t commandID,
+TEE_Result TEE_InvokeMGRCommand(uint32_t cancellationRequestTimeout,
+				uint32_t commandID,
 				struct com_mgr_invoke_cmd_payload *payload,
 				struct com_mgr_invoke_cmd_payload *returnPayload);
 
