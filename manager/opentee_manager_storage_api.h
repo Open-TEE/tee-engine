@@ -23,21 +23,25 @@
 extern TEE_UUID current_TA_uuid;
 
 /* object handling */
-TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
-					uint32_t flags, TEE_ObjectHandle *object);
-void MGR_TEE_CloseObject(TEE_ObjectHandle object);
+TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID,
+                                        void *objectID,
+                                        uint32_t objectIDLen,
+                                        uint32_t flags);
+
+void MGR_TEE_CloseObject(uint32_t ss_id);
+
 TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, uint32_t objectIDLen,
-					  uint32_t flags, TEE_ObjectHandle attributes,
-					  void *initialData, size_t initialDataLen,
-					  TEE_ObjectHandle *object);
+                                          uint32_t flags, TEE_Attribute *attrs,
+                                          uint32_t attrs_count, uint8_t persistent_type,
+                                          uint32_t *ss_id, TEE_ObjectInfo *info);
 TEE_Result MGR_TEE_RenamePersistentObject(TEE_ObjectHandle object,
-					  void *newObjectID,
-					  uint32_t newObjectIDLen);
+                                          void *newObjectID,
+                                          uint32_t newObjectIDLen);
 void MGR_TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object);
 
 /* object data handling */
 TEE_Result MGR_TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size,
-				  uint32_t *count);
+                                  uint32_t *count);
 TEE_Result MGR_TEE_WriteObjectData(TEE_ObjectHandle object, void *buffer, size_t size, uint8_t write_type);
 TEE_Result MGR_TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size);
 TEE_Result MGR_TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whence whence);
@@ -47,9 +51,9 @@ TEE_Result MGR_TEE_AllocatePersistentObjectEnumerator(TEE_ObjectEnumHandle *obje
 void MGR_TEE_FreePersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumerator);
 void MGR_TEE_ResetPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumerator);
 TEE_Result MGR_TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEnumerator,
-						   uint32_t storageID);
+                                                   uint32_t storageID);
 TEE_Result MGR_TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
-					   TEE_ObjectInfo *objectInfo, void *objectID,
-					   uint32_t *objectIDLen);
+                                           TEE_ObjectInfo *objectInfo, void *objectID,
+                                           uint32_t *objectIDLen);
 
 #endif /*__OPENTEE_MANAGER_STORAGE_API_H__*/

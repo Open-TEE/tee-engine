@@ -21,11 +21,11 @@
 #include "tee_storage_api.h"
 
 struct storage_obj_meta_data {
-	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
-	size_t obj_id_len;
-	uint32_t attrs_count;
-	uint32_t meta_size;
-	TEE_ObjectInfo info;
+        char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
+        size_t obj_id_len;
+        uint32_t attrs_count;
+        uint32_t meta_size;
+        TEE_ObjectInfo info;
 };
 
 #endif /* __TEE_OBJECT_ENUM_HANDLE_H__ */
