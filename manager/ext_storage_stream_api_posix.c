@@ -1,17 +1,20 @@
 /*****************************************************************************
-** Copyright (C) 2015 Intel                                                 **
-**                                                                          **
-** Licensed under the Apache License, Version 2.0 (the "License");          **
-** you may not use this file except in compliance with the License.         **
-** You may obtain a copy of the License at                                  **
-**                                                                          **
-**      http://www.apache.org/licenses/LICENSE-2.0                          **
-**                                                                          **
-** Unless required by applicable law or agreed to in writing, software      **
-** distributed under the License is distributed on an "AS IS" BASIS,        **
+** Copyright (C) 2015 Intel						    **
+** Copyright (C) 2015-2021 Tanel Dettenborn                                 **
+** Copyright (C) 2015-2021 Brian McGillion                                  **
+** Copyright (C) 2022 Technology Innovation Institute (TII)                 **
+**									    **
+** Licensed under the Apache License, Version 2.0 (the "License");	    **
+** you may not use this file except in compliance with the License.	    **
+** You may obtain a copy of the License at				    **
+**									    **
+**	http://www.apache.org/licenses/LICENSE-2.0			    **
+**									    **
+** Unless required by applicable law or agreed to in writing, software	    **
+** distributed under the License is distributed on an "AS IS" BASIS,	    **
 ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. **
-** See the License for the specific language governing permissions and      **
-** limitations under the License.                                           **
+** See the License for the specific language governing permissions and	    **
+** limitations under the License.					    **
 *****************************************************************************/
 
 #include <string.h>
@@ -31,7 +34,6 @@
 #include "tee_storage_api.h"
 #include "tee_memory.h"
 #include "tee_storage_common.h"
-#include "tee_object_handle.h"
 #include "tee_logging.h"
 #include "tee_time_api.h" /*TEE_TIMEOUT_INFINITE*/
 #include "com_protocol.h" /*MGR CMD IDs*/
@@ -57,7 +59,7 @@ struct storage_element {
 #define TEE_OBJ_ID_LEN_HEX (TEE_OBJECT_ID_MAX_LEN * 2 + 1)
 #define TEE_UUID_LEN_HEX (sizeof(TEE_UUID) * 2 + 1)
 #define ADD_NULL_CHAR_END_TO_HEX(obj_id_len) ((obj_id_len * 2) + 1)
-static uint32_t next_enum_ID; /* provide unique ID for enumerators */
+static uint32_t next_enum_ID = 1; /* provide unique ID for enumerators */
 static char secure_storage_path[MAX_EXT_PATH_NAME] = {0};
 
 static uint32_t next_storage_id = 1;
@@ -176,13 +178,15 @@ static FILE *storage_id_to_file(uint32_t storage_blob_id)
 	return NULL;
 }
 
-static void close_object(uint32_t storage_blob_id, void *objectID, size_t objectIDLen)
+static uint32_t close_object(uint32_t storage_blob_id, void *objectID, size_t objectIDLen)
 {
 	struct list_head *pos;
 	struct storage_element *current_element = NULL;
 
-	if (!IS_VALID_STORAGE_BLOB(storage_blob_id))
-		return;
+	if (!IS_VALID_STORAGE_BLOB(storage_blob_id)) {
+		OT_LOG(LOG_ERR, "Not a valid storage object");
+		return 1;
+	}
 
 
 	LIST_FOR_EACH(pos, &elements_head) {
@@ -200,11 +204,15 @@ static void close_object(uint32_t storage_blob_id, void *objectID, size_t object
 			       "objectID does not match internal object id, closing file anyways\n");
 
 
-		if (current_element->file && fclose(current_element->file) != 0)
+		if (current_element->file && fclose(current_element->file) != 0) {
 			OT_LOG(LOG_ERR, "Something went wrong with file closing\n");
+			return 1;
+		}
 
 		free(current_element);
 	}
+
+	return 0;
 }
 
 TEE_Result alloc_storage_path(void *objectID,
@@ -229,14 +237,13 @@ TEE_Result alloc_storage_path(void *objectID,
 
 	if (snprintf(dir_path, MAX_EXT_PATH_NAME, "%s%s/", secure_storage_path, UUID)
 	    == MAX_EXT_PATH_NAME){
-		OT_LOG(LOG_ERR, "secure storage dir path is too long\n");
+		OT_LOG(LOG_ERR, "secure storage dir path is too long");
 		free(dir_path);
 		return TEE_ERROR_OVERFLOW;
 	}
 
-
 	if (name_with_dir_path) {
-		*name_with_dir_path = calloc(1, MAX_EXT_PATH_NAME);
+		*name_with_dir_path = calloc(1, MAX_EXT_PATH_NAME + 1);
 		if (*name_with_dir_path == NULL) {
 			free(dir_path);
 			return TEE_ERROR_OUT_OF_MEMORY;
@@ -247,7 +254,7 @@ TEE_Result alloc_storage_path(void *objectID,
 
 		if (snprintf(*name_with_dir_path, MAX_EXT_PATH_NAME, "%s%s", dir_path, hex_ID)
 		    == MAX_EXT_PATH_NAME) {
-			OT_LOG(LOG_ERR, "secure storage name path is too long\n");
+			OT_LOG(LOG_ERR, "secure storage name path is too long");
 			free(dir_path);
 			free(*name_with_dir_path);
 			*name_with_dir_path = NULL;
@@ -275,10 +282,11 @@ uint32_t ext_object_id_to_storage_id(char *objectid, size_t objectid_len)
 			return current_element->storage_blob_id;
 		}
 	}
+
 	return 0;
 }
 
-void ext_delete_storage_blob(uint32_t storage_blob_id, void *objectID, size_t objectIDLen)
+uint32_t ext_delete_storage_blob(uint32_t storage_blob_id, void *objectID, size_t objectIDLen)
 {
 	char *name_with_dir_path;
 	char *dir_path;
@@ -286,24 +294,29 @@ void ext_delete_storage_blob(uint32_t storage_blob_id, void *objectID, size_t ob
 
 	object_file = storage_id_to_file(storage_blob_id);
 
-	if (object_file)
-		close_object(storage_blob_id, objectID, objectIDLen);
+	if (object_file && close_object(storage_blob_id, objectID, objectIDLen)) {
+		return 1;
 
+	}
+	
 	if (alloc_storage_path(objectID, objectIDLen, &name_with_dir_path, &dir_path)) {
 		OT_LOG(LOG_ERR, "Bad parameters\n");
-		return;
+		return 1;
 	}
 
 	/* TODO: Check that correct file is closed and removed! FILE == objectID */
-
-	if (remove(name_with_dir_path) < 0)
+	
+	if (remove(name_with_dir_path) < 0) {
 		OT_LOG(LOG_ERR, "Failed to remove file: %s", name_with_dir_path);
-
+		return 1;
+	}
+	
 	if (is_directory_empty(dir_path))
 		rmdir(dir_path);
 
 	free(name_with_dir_path);
 	free(dir_path);
+	return 0;
 }
 
 void ext_close_storage_blob(uint32_t storage_blob_id)
@@ -336,13 +349,14 @@ uint32_t ext_open_storage_blob(char *objectID, size_t objectIDlen, bool create_i
 			ret_mkdir = mkdir(secure_storage_path, 0777);
 			if (ret_mkdir != 0 && errno != EEXIST) {
 				OT_LOG(LOG_ERR, "Cannot create Secure Storage directory: %s\n",
-						strerror(errno));
+				strerror(errno));
 				goto ret;
 			}
+
 			ret_mkdir = mkdir(dir_path, 0777);
 			if (ret_mkdir != 0 && errno != EEXIST) {
 				OT_LOG(LOG_ERR, "Cannot create UUID directory: %s\n",
-						strerror(errno));
+				strerror(errno));
 				goto ret;
 			}
 
@@ -350,7 +364,6 @@ uint32_t ext_open_storage_blob(char *objectID, size_t objectIDlen, bool create_i
 
 			if (is_directory_empty(dir_path))
 				rmdir(dir_path);
-
 		}
 	}
 
@@ -368,6 +381,7 @@ size_t ext_get_storage_blob_size(uint32_t storage_blob_id)
 {
 	FILE *file = storage_id_to_file(storage_blob_id);
 	struct stat st;
+
 	if (file) {
 		if (fstat(fileno(file), &st))
 			return 0; /* some error occured */
@@ -378,9 +392,9 @@ size_t ext_get_storage_blob_size(uint32_t storage_blob_id)
 
 bool ext_change_object_ID(uint32_t storage_blob_id,
 			  void *objectID,
-			  uint32_t objectIDLen,
+			  size_t objectIDLen,
 			  void *new_objectID,
-			  uint32_t new_objectIDLen)
+			  size_t new_objectIDLen)
 {
 	struct list_head *pos;
 	struct storage_element *current_element;
@@ -405,11 +419,11 @@ bool ext_change_object_ID(uint32_t storage_blob_id,
 	/* TODO: Check if TA can change object ID */
 
 	if (access(new_name_with_dir_path, F_OK) == 0) {
-		OT_LOG(LOG_ERR, "Cannot change object ID, because new ID is in use\n");
+		OT_LOG(LOG_ERR, "Cannot change object ID, because new ID is in use [%d]", errno);
 		ret_val = false;
 		goto exit;
 	}
-
+	
 	if (rename(name_with_dir_path, new_name_with_dir_path) != 0) {
 		OT_LOG(LOG_ERR, "Rename function failed\n");
 		ret_val = false;
@@ -429,7 +443,6 @@ bool ext_change_object_ID(uint32_t storage_blob_id,
 	}
 
 exit:
-
 	free(name_with_dir_path);
 	free(new_name_with_dir_path);
 	return ret_val;
@@ -454,6 +467,11 @@ uint32_t ext_write_stream(uint32_t storage_blob_id, uint32_t offset, void *data,
 {
 	FILE *file = storage_id_to_file(storage_blob_id);
 	uint32_t written = 0;
+
+	if (!file) {
+		OT_LOG(LOG_ERR, "trying to write non-existing storage blob\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
 
 	if (fseek(file, offset, SEEK_SET) != 0) {
 		OT_LOG(LOG_ERR, "fseek failed\n");
@@ -573,18 +591,21 @@ bool ext_start_enumerator(uint32_t start_enum_ID)
 	char UUID[TEE_UUID_LEN_HEX];
 	struct storage_enumerator *start_enum;
 
-	if (!get_uuid(UUID))
+	if (!get_uuid(UUID)) {
+		OT_LOG(LOG_ERR, "UUID Not found");
 		return false;
+	}
 
 	if (snprintf(dir_path, MAX_EXT_PATH_NAME, "%s%s/", secure_storage_path, UUID)
 	    == MAX_EXT_PATH_NAME) {
 		/* TEE_ERROR_OUT_OF_MEMORY */
+		OT_LOG(LOG_ERR, "Out of memory");
 		return false;
 	}
 
 	start_enum = get_enum(start_enum_ID);
 	if (start_enum == NULL) {
-		OT_LOG(LOG_ERR, "Enumerator: Enumerator not valid\n");
+		OT_LOG(LOG_ERR, "Enumerator: Enumerator not valid");
 		return false;
 	}
 
@@ -625,13 +646,11 @@ void ext_reset_enumerator(uint32_t reset_enum_ID)
 		closedir(reset_enum->dir);
 
 	reset_enum->dir = NULL;
-
-	ext_start_enumerator(reset_enum_ID);
 }
 
 
 bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
-				       struct storage_obj_meta_data *recv_data_to_caller)
+				       struct ss_object_meta_info *recv_data_to_caller)
 {
 	char name_with_path[MAX_EXT_PATH_NAME] = {0};
 	char UUID[TEE_UUID_LEN_HEX];
@@ -653,7 +672,7 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 		return false; /* enumeration not started */
 
 	/* Init struct where next object to be read */
-	memset(recv_data_to_caller, 0, sizeof(struct storage_obj_meta_data));
+	memset(recv_data_to_caller, 0, sizeof(struct ss_object_meta_info));
 
 	/* Open next persistant object from storage */
 	do {
@@ -675,26 +694,28 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 			OT_LOG(LOG_ERR, "Enumerator: name path size overflow\n");
 			return false; /* TEE_ERROR_GENERIC */
 		}
-
+		
 		next_object = fopen(name_with_path, "rb");
 
-		if (next_object == NULL)
+		if (next_object == NULL) {
 			continue;
+		}
 
-		if (fread(recv_data_to_caller, sizeof(struct storage_obj_meta_data), 1,
+		if (fread(recv_data_to_caller, sizeof(struct ss_object_meta_info), 1,
 			  next_object) != 1) {
 			OT_LOG(LOG_ERR, "Error at read file (enumeration); errno: %i\n", errno);
-			memset(recv_data_to_caller, 0, sizeof(struct storage_obj_meta_data));
+			memset(recv_data_to_caller, 0, sizeof(struct ss_object_meta_info));
 			fclose(next_object); /* Skip to next object */
 			next_object = NULL;
 			continue;
 		}
 
 		/* meta size - object meta info == attributes (structs) + buffers == all Attrs */
-		recv_data_to_caller->info.objectSize =
-		    recv_data_to_caller->meta_size - sizeof(struct storage_obj_meta_data);
+//		recv_data_to_caller->info.objectSize =
+//		    recv_data_to_caller->meta_size - sizeof(struct storage_obj_meta_data);
 
-		/* calculate data size */
+		// calculate data size
+		// NOTE: Why we are not using data_size from ss_object_meta_info
 		if (fseek(next_object, 0, SEEK_END) != 0)
 			OT_LOG(LOG_ERR, "fseek error at get next enumeration; errno: %i\n", errno);
 
@@ -702,11 +723,11 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 		if (end_pos == -1L)
 			OT_LOG(LOG_ERR, "ftell error at get next enumeration; errno: %i\n", errno);
 
-		if (end_pos - recv_data_to_caller->meta_size > UINT32_MAX)
+		if (end_pos - recv_data_to_caller->data_begin > UINT32_MAX)
 			recv_data_to_caller->info.dataSize = UINT32_MAX;
 		else
 			recv_data_to_caller->info.dataSize =
-			    ftell(next_object) - recv_data_to_caller->meta_size;
+			    ftell(next_object) - recv_data_to_caller->data_begin;
 
 		/* Zero data position */
 		recv_data_to_caller->info.dataPosition = 0;

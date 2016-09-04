@@ -1,5 +1,8 @@
 /*****************************************************************************
 ** Copyright (C) 2015 Intel                                                 **
+** Copyright (C) 2015-2021 Tanel Dettenborn                                 **
+** Copyright (C) 2015-2021 Brian McGillion                                  **
+** Copyright (C) 2022 Technology Innovation Institute (TII)                 **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -19,6 +22,7 @@
 
 #include <stdint.h>
 #include "tee_storage_common.h"
+#include "opentee_manager_storage_api.h"
 
 /* checks that storage blob is not illegal */
 #define IS_VALID_STORAGE_BLOB(a) (a != 0 && a != 0xFFFFFFFF)
@@ -53,7 +57,7 @@ void ext_close_storage_blob(uint32_t storage_blob_id);
  * closes and deletes valid storage id,
  * should only be called once for object
  */
-void ext_delete_storage_blob(uint32_t storage_blob_id, void *objectID, size_t objectIDLen);
+uint32_t ext_delete_storage_blob(uint32_t storage_blob_id, void *objectID, size_t objectIDLen);
 
 /* !brief
  * returns the size of storage id,
@@ -66,9 +70,9 @@ size_t ext_get_storage_blob_size(uint32_t storage_blob_id);
  */
 bool ext_change_object_ID(uint32_t storage_blob_id,
 			  void *objectID,
-			  uint32_t objectIDLen,
+			  size_t objectIDLen,
 			  void *new_objectID,
-			  uint32_t new_objectIDLen);
+			  size_t new_objectIDLen);
 
 /* !brief reads datalen amount of bytes from offset of storage_blob return bytes read
  *
@@ -111,6 +115,6 @@ bool ext_start_enumerator(uint32_t start_enum_ID);
  * recv_data_to_caller must be valid pointer
  */
 bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
-				       struct storage_obj_meta_data *recv_data_to_caller);
+				       struct ss_object_meta_info *recv_data_to_caller);
 
 #endif /* EMULATOR_MANAGER_EXT_storage_blob_API_H_ */
