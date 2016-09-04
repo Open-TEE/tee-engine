@@ -38,7 +38,7 @@ typedef struct {
 
 typedef struct {
 	uint32_t objectType;
-	uint32_t objectSize;
+	uint32_t keySize;
 	uint32_t maxObjectSize;
 	uint32_t objectUsage;
 	uint32_t dataSize;
@@ -103,25 +103,28 @@ typedef struct __TEE_ObjectEnumHandle* TEE_ObjectEnumHandle;
 #define TEE_DATA_MAX_POSITION			0xFFFFFFFF
 #define TEE_OBJECT_ID_MAX_LEN			64
 
-/* clang-format on */
+/* Operation States */
+#define TEE_OPERATION_STATE_INITIAL			0x00000000
+#define TEE_OPERATION_STATE_ACTIVE			0x00000001
 
+/* clang-format on */
 /*
  * ## Generic Object Functions ##
  */
 
 /*!
- * \brief TEE_GetObjectInfo
+ * \brief TEE_GetObjectInfo1
  * \param object
  * \param objectInfo
  */
-void TEE_GetObjectInfo(TEE_ObjectHandle object, TEE_ObjectInfo *objectInfo);
+void TEE_GetObjectInfo1(TEE_ObjectHandle object, TEE_ObjectInfo *objectInfo);
 
 /*!
- * \brief TEE_RestrictObjectUsage
+ * \brief TEE_RestrictObjectUsage1
  * \param object
  * \param objectUsage
  */
-void TEE_RestrictObjectUsage(TEE_ObjectHandle object, uint32_t objectUsage);
+void TEE_RestrictObjectUsage1(TEE_ObjectHandle object, uint32_t objectUsage);
 
 /*!
  * \brief TEE_GetObjectBufferAttribute
@@ -206,11 +209,11 @@ void TEE_InitRefAttribute(TEE_Attribute *attr, uint32_t attributeID, void *buffe
 void TEE_InitValueAttribute(TEE_Attribute *attr, uint32_t attributeID, uint32_t a, uint32_t b);
 
 /*!
- * \brief TEE_CopyObjectAttributes
+ * \brief TEE_CopyObjectAttributes1
  * \param destObject
  * \param srcObject
  */
-void TEE_CopyObjectAttributes(TEE_ObjectHandle destObject, TEE_ObjectHandle srcObject);
+void TEE_CopyObjectAttributes1(TEE_ObjectHandle destObject, TEE_ObjectHandle srcObject);
 
 /*!
  * \brief TEE_GenerateKey
@@ -257,10 +260,10 @@ TEE_Result TEE_CreatePersistentObject(uint32_t storageID, void *objectID, size_t
 				      TEE_ObjectHandle *object);
 
 /*!
- * \brief TEE_CloseAndDeletePersistentObject
+ * \brief TEE_CloseAndDeletePersistentObject1
  * \param object
  */
-void TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object);
+TEE_Result TEE_CloseAndDeletePersistentObject1(TEE_ObjectHandle object);
 
 /*!
  * \brief TEE_RenamePersistentObject
