@@ -5,10 +5,10 @@ lib_LTLIBRARIES += libManagerApi.la
 libManagerApi_la_includes = \
 	include/core_control_resources.h \
 	include/ta_exit_states.h \
+	include/tee_logging.h \
 	internal_api/tee_object_handle.h \
 	internal_api/tee_data_types.h \
 	internal_api/tee_storage_api.h \
-	internal_api/opentee_storage_common.h \
 	manager/extern_resources.h \
 	manager/io_thread.h \
 	manager/logic_thread.h \
@@ -29,7 +29,7 @@ libManagerApi_la_SOURCES = ${libManagerApi_la_includes} \
 	manager/ta_dir_watch.c \
 	manager/shm_mem.c \
 	common/tee_list.c \
-	internal_api/opentee_storage_common.c 
+	common/tee_logging.c
 
 libManagerApi_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/include \

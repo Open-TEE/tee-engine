@@ -1,5 +1,8 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2015 Open-TEE project.	                                    **
+** Copyright (C) 2015-2021 Tanel Dettenborn                                 **
+** Copyright (C) 2015-2021 Brian McGillion                                  **
+** Copyright (C) 2022 Technology Innovation Institute (TII)                 **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,29 +17,24 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_OBJECT_HANDLE_H__
-#define __TEE_OBJECT_HANDLE_H__
+#ifndef __OBJECT_HANDLE_H__
+#define __OBJECT_HANDLE_H__
 
 #include <stdio.h>
-#include "tee_storage_api.h"
+#include "crypto/operation_handle.h"
 
-struct persistant_object_info {
+struct persistant_object {
 	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
 	uint32_t obj_id_len;
-	uint32_t  storage_blob_id;
-	size_t data_begin;
-	/* size after data begin */
-	size_t data_size;
-	/* position in stream starting from data_begin */
-	size_t data_position;
+	uint32_t data_begin;
+	uint32_t data_size;
+	uint32_t data_position;
 };
 
 struct __TEE_ObjectHandle {
-	struct persistant_object_info per_object;
+	struct persistant_object per_object;
 	TEE_ObjectInfo objectInfo;
-	TEE_Attribute *attrs;
-	uint32_t attrs_count;
-	uint32_t maxObjSizeBytes;
+	struct gp_key *key;
 };
 
-#endif /* __TEE_OBJECT_HANDLE_H__ */
+#endif /* __OBJECT_HANDLE_H__ */

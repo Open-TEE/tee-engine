@@ -1,17 +1,20 @@
 /*****************************************************************************
-** Copyright (C) 2015 Intel                                                 **
-**                                                                          **
-** Licensed under the Apache License, Version 2.0 (the "License");          **
-** you may not use this file except in compliance with the License.         **
-** You may obtain a copy of the License at                                  **
-**                                                                          **
-**      http://www.apache.org/licenses/LICENSE-2.0                          **
-**                                                                          **
-** Unless required by applicable law or agreed to in writing, software      **
-** distributed under the License is distributed on an "AS IS" BASIS,        **
+** Copyright (C) 2015 Intel						    **
+** Copyright (C) 2015-2021 Tanel Dettenborn                                 **
+** Copyright (C) 2015-2021 Brian McGillion                                  **
+** Copyright (C) 2022 Technology Innovation Institute (TII)                 **
+**									    **
+** Licensed under the Apache License, Version 2.0 (the "License");	    **
+** you may not use this file except in compliance with the License.	    **
+** You may obtain a copy of the License at				    **
+**									    **
+**	http://www.apache.org/licenses/LICENSE-2.0			    **
+**									    **
+** Unless required by applicable law or agreed to in writing, software	    **
+** distributed under the License is distributed on an "AS IS" BASIS,	    **
 ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. **
-** See the License for the specific language governing permissions and      **
-** limitations under the License.                                           **
+** See the License for the specific language governing permissions and	    **
+** limitations under the License.					    **
 *****************************************************************************/
 
 #include <string.h>
@@ -25,28 +28,30 @@
 #include <errno.h>
 #include <stdint.h>
 
-#include "tee_storage_api.h"
+//#include "tee_storage_api.h"
 #include "tee_memory.h"
-#include "tee_storage_common.h"
-#include "tee_object_handle.h"
+//#include "tee_storage_common.h"
+//#include "tee_object_handle.h"
 #include "tee_logging.h"
 #include "tee_time_api.h" /*TEE_TIMEOUT_INFINITE*/
 #include "com_protocol.h" /*MGR CMD IDs*/
 #include "tee_internal_client_api.h"
 
 #include "opentee_internal_api.h"
-#include "opentee_storage_common.h"
+//#include "opentee_storage_common.h"
 #include "opentee_manager_storage_api.h"
 #include "ext_storage_stream_api.h"
 
 #include "tee_data_types.h"
 #include "tee_storage_api.h"
-#include "tee_panic.h"
+//#include "tee_panic.h"
 #include "tee_memory.h"
-#include "tee_storage_common.h"
-#include "tee_logging.h"
+//#include "tee_storage_common.h"
 
 #include "tee_list.h"
+
+//#include "storage/storage_utils.h"
+
 
 TEE_UUID current_TA_uuid;
 
@@ -69,6 +74,10 @@ static void __attribute__((constructor)) storage_init()
 static void add_storage_blob_id(uint32_t storage_blob_id, uint32_t flags)
 {
 	struct secure_storage_element *current = calloc(1, sizeof(struct secure_storage_element));
+
+	//TODO: Calloc might fail!
+
+
 	current->storage_blob_id = storage_blob_id;
 	current->opening_flags = flags;
 	current->ref_count = 1;
@@ -116,270 +125,54 @@ static void remove_storage_blob_ref(uint32_t storage_blob_id)
 	}
 }
 
-TEE_Result validate_object_handle(TEE_ObjectHandle object)
-{
-	TEE_Result result = TEE_SUCCESS;
-	struct secure_storage_element *current_element;
-
-	current_element = get_storage_blob_element(object->per_object.storage_blob_id);
-
-	if (!current_element ||
-	    !current_element->is_valid) {
-
-		OT_LOG(LOG_ERR,	"Not a proper persistent object. Closed, returning corrupt\n");
-		MGR_TEE_CloseObject(object);
-
-		result = TEE_ERROR_CORRUPT_OBJECT;
-	}
-	return result;
-}
-
-static TEE_Result load_attributes(TEE_ObjectHandle obj)
-{
-	size_t i;
-
-	if (obj == NULL || !IS_VALID_STORAGE_BLOB(obj->per_object.storage_blob_id)) {
-		OT_LOG(LOG_ERR, "Something went wrong with persistent object attribute loading\n");
-		return TEE_ERROR_GENERIC;
-	}
-
-	if (obj->attrs_count == 0) {
-		obj->attrs = NULL;
-		return TEE_SUCCESS;
-	}
-
-	/* Alloc memory for attributes (pointers) */
-	obj->attrs = calloc(obj->attrs_count, sizeof(TEE_Attribute));
-	if (obj->attrs == NULL) {
-		OT_LOG(LOG_ERR, "Cannot load attributes, because out of memory\n");
-		return TEE_ERROR_OUT_OF_MEMORY;
-	}
-
-	for (i = 0; i < obj->attrs_count; ++i) {
-		if (ext_read_stream(obj->per_object.storage_blob_id, obj->per_object.data_begin,
-				    &obj->attrs[i], sizeof(TEE_Attribute))
-		    != sizeof(TEE_Attribute)) {
-			OT_LOG(LOG_ERR, "read_stream returned incorrect size for TEE_attribute");
-			goto err_at_read;
-		}
-
-		obj->per_object.data_begin += sizeof(TEE_Attribute);
-
-		if (!is_value_attribute(obj->attrs[i].attributeID)) {
-			obj->attrs[i].content.ref.buffer = calloc(1, obj->maxObjSizeBytes);
-			if (obj->attrs[i].content.ref.buffer == NULL) {
-				free_attrs(obj);
-				free(obj->attrs);
-				return TEE_ERROR_OUT_OF_MEMORY;
-			}
-
-			if (ext_read_stream(obj->per_object.storage_blob_id,
-					    obj->per_object.data_begin,
-					    obj->attrs[i].content.ref.buffer,
-					    obj->attrs[i].content.ref.length)
-			    != obj->attrs[i].content.ref.length) {
-				OT_LOG(LOG_ERR, "read_stream returned incorrect size buf(%u)",
-						obj->attrs[i].content.ref.length);
-				goto err_at_read;
-			}
-
-			obj->per_object.data_begin += obj->attrs[i].content.ref.length;
-		}
-	}
-
-	return TEE_SUCCESS;
-
-err_at_read:
-	OT_LOG(LOG_ERR, "Error at fread\n");
-	free_attrs(obj);
-	free(obj->attrs);
-	return TEE_ERROR_GENERIC;
-}
-
-static bool serialize_attributes_to_storage(TEE_ObjectHandle object,
-					    uint32_t storage_blob_id, size_t *offset)
-{
-	size_t i;
-
-	if (object == NULL)
-		return true;
-
-	if (!IS_VALID_STORAGE_BLOB(storage_blob_id))
-		return false;
-
-	/* Write attributes to storage (if there is attributes)
-	 * Serilization strategy: for (i = 0; i < attributes count in obj; ++i)
-	 *				write TEE_Attribute (struct) to file
-	 *				if TEE_Attribute != value attribute
-	 *					write attribute buffer to file
-	 *
-	 * if write should fail -> delete a whole file
-	 */
-
-	for (i = 0; i < object->attrs_count; ++i) {
-		if (ext_write_stream(storage_blob_id,
-				     *offset, &object->attrs[i], sizeof(TEE_Attribute))
-		    != sizeof(TEE_Attribute))
-			return false;
-		(*offset) +=  sizeof(TEE_Attribute);
-
-		if (!is_value_attribute(object->attrs[i].attributeID)) {
-			if (ext_write_stream(storage_blob_id, *offset,
-					     object->attrs[i].content.ref.buffer,
-					     object->attrs[i].content.ref.length)
-			    != object->attrs[i].content.ref.length)
-				return false;
-
-			(*offset) +=  object->attrs[i].content.ref.length;
-		}
-	}
-
-	return true;
-}
-
-static TEE_Result deep_copy_object(TEE_ObjectHandle *dst_obj, TEE_ObjectHandle src_obj)
-{
-	TEE_Result tee_ret = TEE_ERROR_OUT_OF_MEMORY;
-	TEE_ObjectHandle cpy_obj;
-	int attr_count;
-
-	if (dst_obj == NULL)
-		return TEE_ERROR_GENERIC;
-
-	/* malloc for object handler and cpy that */
-	cpy_obj = calloc(1, sizeof(struct __TEE_ObjectHandle));
-	if (cpy_obj == NULL)
-		goto err_out_of_mem_1;
-
-	/* Attributes are copied, if object is containing attributes. This is done, because
-	 * pure data object is not containing attributes */
-	if (src_obj != NULL && src_obj->attrs_count > 0) {
-		attr_count = valid_obj_type_and_attr_count(src_obj->objectInfo.objectType);
-		if (attr_count == -1) {
-			tee_ret = TEE_ERROR_GENERIC;
-			goto err_out_of_mem_2;
-		}
-
-		memcpy(cpy_obj, src_obj, sizeof(struct __TEE_ObjectHandle));
-
-		/* Move single function*/
-		/* Malloc for attribute pointers */
-		cpy_obj->attrs = calloc(src_obj->attrs_count, sizeof(TEE_Attribute));
-		if (cpy_obj->attrs == NULL)
-			goto err_out_of_mem_2;
-
-		/* Malloc space for attributes (attribute buffers) */
-		switch (src_obj->objectInfo.objectType) {
-		case TEE_TYPE_AES:
-		case TEE_TYPE_DES:
-		case TEE_TYPE_DES3:
-		case TEE_TYPE_HMAC_MD5:
-		case TEE_TYPE_HMAC_SHA1:
-		case TEE_TYPE_HMAC_SHA224:
-		case TEE_TYPE_HMAC_SHA256:
-		case TEE_TYPE_HMAC_SHA384:
-		case TEE_TYPE_HMAC_SHA512:
-		case TEE_TYPE_GENERIC_SECRET:
-		case TEE_TYPE_RSA_KEYPAIR:
-                case TEE_TYPE_RSA_PUBLIC_KEY:
-		case TEE_TYPE_DSA_PUBLIC_KEY:
-		case TEE_TYPE_DSA_KEYPAIR:
-			if (!malloc_for_attrs(cpy_obj, attr_count))
-				goto err_out_of_mem_3;
-			break;
-
-		case TEE_TYPE_DH_KEYPAIR:
-			/* -1, because DH contains one value attribute */
-			if (!malloc_for_attrs(cpy_obj, attr_count - 1))
-				goto err_out_of_mem_3;
-			break;
-
-		default:
-			/* Should never get here */
-			tee_ret = TEE_ERROR_GENERIC;
-			goto err_out_of_mem_3;
-		}
-
-		copy_all_attributes(src_obj, cpy_obj);
-	}
-
-	*dst_obj = cpy_obj;
-
-	return TEE_SUCCESS;
-
-err_out_of_mem_3:
-	free_object(cpy_obj);
-	cpy_obj = NULL;
-err_out_of_mem_2:
-	free(cpy_obj);
-err_out_of_mem_1:
-	OT_LOG(LOG_ERR, "Cannot malloc space for object\n");
-	return tee_ret;
-}
-
 /************************************************************************************************
 *												 *
 *												 *
 *												 *
 *												 *
-* ############################################################################################# *
-* #											       # *
-* #  ---------------------------------------------------------------------------------------  # *
-* #  |										            |  # *
-* #  | #    #   #  # ## I n t e r n a l   A P I   f u n c t i o n s ## #  #   #    #     # |  # *
-* #  |										            |  # *
-* #  ---------------------------------------------------------------------------------------  # *
-* #											       # *
-* ############################################################################################# *
+* #############################################################################################  *
+* #											      #  *
+* #  ---------------------------------------------------------------------------------------  #  *
+* #  |											    | #  *
+* #  | #    #	#  # ## I n t e r n a l	  A P I	  f u n c t i o n s ## #  #   #	   #	 # |  #  *
+* #  |											    | #  *
+* #  ---------------------------------------------------------------------------------------  #  *
+* #											      #  *
+* #############################################################################################  *
 *												 *
 *												 *
 *												 *
 *												 *
 ************************************************************************************************/
 
-void MGR_TEE_CloseObject(TEE_ObjectHandle object)
+void MGR_TEE_CloseObject(void *objectID, uint32_t objectIDLen)
 {
-	if (object == NULL)
-		return;
+	uint32_t storage_blob_id = 0;
 
-	if (object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)
-		remove_storage_blob_ref(object->per_object.storage_blob_id);
-
-	free_object(object);
-	return;
+	storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
+	remove_storage_blob_ref(storage_blob_id);
 }
 
-TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size_t objectIDLen,
-					uint32_t flags, TEE_ObjectHandle *object)
+TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID,
+					void *objectID,
+					size_t objectIDLen,
+					uint32_t flags,
+					void **attrs, uint32_t *attrSize,
+					struct persistant_object *per_obj,
+					TEE_ObjectInfo *objectInfo)
 {
-	TEE_ObjectHandle new_object = NULL;
-	struct storage_obj_meta_data meta_info_from_storage;
 	TEE_Result ret_val = TEE_SUCCESS;
 	uint32_t storage_blob_id = 0;
 	uint32_t original_opening_flags;
 	struct secure_storage_element *current_element;
+	struct ss_object_meta_info object_meta_info = {0};
 
-	if (object == NULL)
-		return TEE_ERROR_GENERIC;
-
-	if (storageID != TEE_STORAGE_PRIVATE)
-		return TEE_ERROR_ITEM_NOT_FOUND;
-
-	if (objectID == NULL) {
-		OT_LOG(LOG_ERR, "ObjectID buffer is NULL\n");
-		return TEE_ERROR_GENERIC;
-	}
-
-	if (objectIDLen > TEE_OBJECT_ID_MAX_LEN) {
-		OT_LOG(LOG_ERR, "ObjectID length too big\n");
-		return TEE_ERROR_BAD_PARAMETERS;
-	}
+	storageID = storageID;
 
 	storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
 
-	/* is already open, check that it is allowed to share */
 	if (IS_VALID_STORAGE_BLOB(storage_blob_id)) {
-
+		// is already open, check that it is allowed to share
 		current_element = get_storage_blob_element(storage_blob_id);
 		if (!current_element)
 			return TEE_ERROR_GENERIC;
@@ -427,90 +220,93 @@ TEE_Result MGR_TEE_OpenPersistentObject(uint32_t storageID, void *objectID, size
 		add_storage_blob_id(storage_blob_id, flags);
 	}
 
-	/* Access granted. Malloc space for new object handler */
-	new_object = calloc(1, sizeof(struct __TEE_ObjectHandle));
-	if (new_object == NULL) {
-		OT_LOG(LOG_ERR, "Cannot malloc space for object handler\n");
-		ret_val = TEE_ERROR_GENERIC;
-		goto err;
-	}
-
-	/* Read persistent object file meta info from storage and fill it new object */
-	memset(&meta_info_from_storage, 0, sizeof(struct storage_obj_meta_data));
-
-	if (ext_read_stream(storage_blob_id,
-			    0, &meta_info_from_storage, sizeof(struct storage_obj_meta_data))
-	    != sizeof(struct storage_obj_meta_data)) {
+	if (sizeof(struct ss_object_meta_info) !=
+	    ext_read_stream(storage_blob_id, 0, &object_meta_info,
+			    sizeof(struct ss_object_meta_info))) {
 		OT_LOG(LOG_ERR, "Cannot read object meta data\n");
 		ret_val = TEE_ERROR_GENERIC;
-		goto err;
+		goto err_1;
 	}
 
-	/* also load_attributes(new_object) increases this */
-	new_object->per_object.data_begin = sizeof(struct storage_obj_meta_data);
-
-	if (meta_info_from_storage.obj_id_len > TEE_OBJECT_ID_MAX_LEN) {
-		OT_LOG(LOG_ERR, "meta_info_from_storage.obj_id_len length too big\n");
-		goto err;
+	if (object_meta_info.attribute_size > 0) {
+		//Load attributes
+		*attrs = calloc(1, object_meta_info.attribute_size);
+		if (*attrs == NULL) {
+			ret_val = TEE_ERROR_OUT_OF_MEMORY;
+			goto err_1;
+		}
+		
+		if (object_meta_info.attribute_size !=
+		    ext_read_stream(storage_blob_id,
+				    object_meta_info.attr_begin,
+				    *attrs, object_meta_info.attribute_size)) {
+			OT_LOG(LOG_ERR, "Cannot read object meta data\n");
+			ret_val = TEE_ERROR_GENERIC;
+			goto err_2;
+		}
 	}
 
-	memcpy(&new_object->objectInfo, &meta_info_from_storage.info, sizeof(TEE_ObjectInfo));
-	new_object->attrs_count = meta_info_from_storage.attrs_count;
-	new_object->per_object.obj_id_len = meta_info_from_storage.obj_id_len;
-	memcpy(new_object->per_object.obj_id, meta_info_from_storage.obj_id,
-	       meta_info_from_storage.obj_id_len);
+	//All return vales
+	*attrSize = object_meta_info.attribute_size;
+	per_obj->data_begin = object_meta_info.data_begin;
+	per_obj->data_position = 0;
+	per_obj->data_size = object_meta_info.data_size;
+	per_obj->obj_id_len = object_meta_info.obj_id_len;
+	memcpy(&per_obj->obj_id, &object_meta_info.obj_id, object_meta_info.obj_id_len);
 
-	/* Reproduct/fill rest of object parameters */
-	new_object->per_object.storage_blob_id = storage_blob_id;
-	new_object->maxObjSizeBytes = keysize_in_bytes(new_object->objectInfo.maxObjectSize);
-
-
-	/* Load object attributes */
-	ret_val = load_attributes(new_object);
-	if (ret_val != TEE_SUCCESS)
-		goto err;
-
-	/* Initialization/calculation of data position, size and data begin variables */
-	new_object->per_object.data_position = 0;
-
-
-	new_object->per_object.data_size =
-			ext_get_storage_blob_size(new_object->per_object.storage_blob_id)
-			- new_object->per_object.data_begin;
-
-	/* Handler flags update */
-	new_object->objectInfo.handleFlags = 0; /* reset flags */
-	new_object->objectInfo.handleFlags |=
-	    (TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED | flags);
-
-	*object = new_object;
+	//TODO: Object info :/
+	objectInfo->dataPosition = 0;
+	objectInfo->dataSize = object_meta_info.data_size;
+	objectInfo->keySize = object_meta_info.info.keySize;
+	objectInfo->maxObjectSize = object_meta_info.info.keySize;
+	objectInfo->objectType = object_meta_info.info.objectType;
+	objectInfo->objectUsage = object_meta_info.info.objectUsage;
+	
+	objectInfo->handleFlags = 0; // reset flags
+	objectInfo->handleFlags |=
+		(TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED | flags);
 
 	return ret_val;
+ err_2:
+	free(*attrs);
 
-err:
+ err_1:
 	remove_storage_blob_ref(storage_blob_id);
-
-	free_object(new_object);
-	*object = NULL;
 	return ret_val;
 }
 
-TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, uint32_t objectIDLen,
-					  uint32_t flags, TEE_ObjectHandle attributes,
-					  void *initialData, size_t initialDataLen,
-					  TEE_ObjectHandle *object)
+TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID,
+					  void *objectID,
+					  size_t objectIDLen,
+					  uint32_t flags,
+					  void *attrs,
+					  uint32_t attrSize,
+					  uint8_t persistent_type,
+					  TEE_ObjectInfo *info,
+					  struct persistant_object *per_obj,
+					  void *initialData,
+					  size_t initialDataLen)
 {
-	struct storage_obj_meta_data meta_info_to_storage;
-	TEE_Result result;
-	uint32_t storage_blob_id;
-	size_t begin = 0;
-	struct secure_storage_element *current_element;
+	struct secure_storage_element *current_element = NULL;
+	struct ss_object_meta_info object_meta_info = {0};
 	char *file_name_with_path = NULL;
 	int ret;
+	uint32_t ss_id;
 
-	storageID = storageID; /* Not used */
+	storageID = storageID; // Not used
 
-	/* Check if object already exist */
+	// TODO:
+	// Pre-check if object fits to storage: GP defines position in 32bit..
+	//if (attributes)
+	//	object_attrs_size = object_attribute_size(&attributes->key->gp_attrs);
+
+	//if (initialDataLen > (TEE_MAX_DATA_SIZE - object_attrs_size))
+	//	TEE_Panic(TEE_ERROR_OVERFLOW);
+
+
+	// Check if object already exist
+	// TODO (improvement): Not a correct way. We could use internal
+	//   data structures. Would be more consistent
 	if (alloc_storage_path(objectID, objectIDLen, &file_name_with_path, NULL)) {
 		OT_LOG(LOG_ERR, "Bad parameters or random error");
 		return TEE_ERROR_GENERIC;
@@ -526,196 +322,170 @@ TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID, void *objectID, ui
 			/* it is already existing, we don't have right to over write */
 			return TEE_ERROR_ACCESS_CONFLICT;
 		}
-
 	}
 
 	/* is already open, check that it is allowed to share */
-	storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
-	if (IS_VALID_STORAGE_BLOB(storage_blob_id)) {
+	ss_id = ext_object_id_to_storage_id(objectID, objectIDLen);
+	if (IS_VALID_STORAGE_BLOB(ss_id)) {
 
-		/* Open, lets close it */
-		storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
-		current_element = get_storage_blob_element(storage_blob_id);
-		if (current_element)
+		/* It is open, lets close it */
+		//*ss_id = ext_object_id_to_storage_id(objectID, objectIDLen);
+		current_element = get_storage_blob_element(ss_id);
+		if (current_element) {
 			current_element->is_valid = 0;
+		}
 
-		ext_delete_storage_blob(storage_blob_id, objectID, objectIDLen);
-
+		ext_delete_storage_blob(ss_id, objectID, objectIDLen);
 	}
 
-	storage_blob_id = ext_open_storage_blob(objectID, objectIDLen, true);
-	add_storage_blob_id(storage_blob_id, flags);
+	//TODO: Not checking return value (for some odd reason)
+	ss_id = ext_open_storage_blob(objectID, objectIDLen, true);
+	add_storage_blob_id(ss_id, flags);
 
-	if (attributes != NULL &&
-	    !(attributes->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED)) {
-		OT_LOG(LOG_ERR, "CAnnot create a persistent object from uninitialised object\n");
-		return TEE_ERROR_BAD_PARAMETERS;
-	}
+	// Metainfo: Fill | General
+	object_meta_info.attr_begin = sizeof(struct ss_object_meta_info);
+	object_meta_info.data_begin = sizeof(struct ss_object_meta_info) + attrSize;
+	object_meta_info.data_size = initialDataLen;
+	object_meta_info.attribute_size = attrSize;
+	memcpy(object_meta_info.obj_id, objectID, objectIDLen);
+	object_meta_info.obj_id_len = objectIDLen;
 
-	/* Access has been granted. Fill needed info for object storing */
-	memset(&meta_info_to_storage, 0, sizeof(struct storage_obj_meta_data));
-
-	if (attributes != NULL) {
-		memcpy(&meta_info_to_storage.info, &attributes->objectInfo, sizeof(TEE_ObjectInfo));
-		meta_info_to_storage.attrs_count = attributes->attrs_count;
+	// Metainfo: Fill | Object info
+	if (persistent_type == COM_MGR_PERSISTENT_DATA_OBJECT) {
+		object_meta_info.info.objectType = TEE_TYPE_DATA;
+		object_meta_info.info.keySize = 0;
 	} else {
-		meta_info_to_storage.attrs_count = 0;
+
+		//TODO: ObjectInfo
+		//Does not contain info..
+		memcpy(&object_meta_info.info, info, sizeof(TEE_ObjectInfo));
+		//object_meta_info.info.keySize = BYTE2BITS(attributes->key->key_lenght);
+		//object_meta_info.data_begin += object_attrs_size;
 	}
 
-	meta_info_to_storage.meta_size =
-	    sizeof(struct storage_obj_meta_data) + object_attribute_size(attributes);
-
-	memcpy(meta_info_to_storage.obj_id, objectID, objectIDLen);
-	meta_info_to_storage.obj_id_len = objectIDLen;
-
-	/* Meta info is filled. Write meta info to storage */
-	if (ext_write_stream(storage_blob_id,
-			     begin, &meta_info_to_storage, sizeof(meta_info_to_storage))
-	    != sizeof(meta_info_to_storage))
-		goto err_at_meta_or_init_data_write;
-	begin += sizeof(meta_info_to_storage);
-
-	/* store attributes */
-	if (!serialize_attributes_to_storage(attributes, storage_blob_id, &begin))
-		goto err_at_meta_or_init_data_write;
-
-
-
-	if (initialData != NULL) {
-		if (ext_write_stream(storage_blob_id,
-				     begin, initialData, initialDataLen) != initialDataLen)
-			goto err_at_meta_or_init_data_write;
+	// Metainfo: Write
+	if (sizeof(struct ss_object_meta_info) !=
+	    ext_write_stream(ss_id, 0, &object_meta_info, sizeof(struct ss_object_meta_info))) {
+		goto err;
 	}
 
-	if (object != NULL) {
-		result = deep_copy_object(object, attributes);
-		if (result != TEE_SUCCESS)
-			goto err_at_obj_alloc;
-
-		/* update current state to allocated handle */
-		(*object)->objectInfo.handleFlags = 0; /* reset flags */
-		(*object)->objectInfo.handleFlags |=
-		    (TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED | flags);
-
-		(*object)->per_object.data_position = initialDataLen;
-
-		(*object)->per_object.data_begin = begin;
-
-		(*object)->per_object.data_size = initialDataLen;
-
-		/* Cpy obj ID to alloceted object */
-		memcpy((*object)->per_object.obj_id, objectID, objectIDLen);
-		(*object)->per_object.obj_id_len = objectIDLen;
-
-		/* sign storage "location"(=file) */
-		(*object)->per_object.storage_blob_id = storage_blob_id;
-
-	} else {
-		remove_storage_blob_ref(storage_blob_id);
-		ext_close_storage_blob(storage_blob_id);
+	// store attributes
+	if (object_meta_info.attribute_size > 0) {
+		if (object_meta_info.attribute_size !=
+		    ext_write_stream(ss_id, object_meta_info.attr_begin, attrs, object_meta_info.attribute_size)) {
+			goto err;
+		}
 	}
+
+	// write initi data
+	if (initialData) {
+		if (initialDataLen != ext_write_stream(ss_id,
+						       object_meta_info.data_begin,
+						       initialData, initialDataLen)) {
+			OT_LOG_ERR("InitialData write failed\n");
+			goto err;
+		}
+	}
+
+	//Returned
+	per_obj->data_begin = object_meta_info.data_begin;
+	per_obj->data_position = 0;
+	per_obj->data_size = initialDataLen;
+	per_obj->obj_id_len = objectIDLen;
+	memcpy(&per_obj->obj_id, objectID, objectIDLen);
 
 	return TEE_SUCCESS;
 
-err_at_meta_or_init_data_write:
-	OT_LOG(LOG_ERR, "Error with write\n");
-	ext_delete_storage_blob(storage_blob_id, objectID, objectIDLen);
-	return TEE_ERROR_STORAGE_NO_SPACE;
-
-err_at_obj_alloc:
-	OT_LOG(LOG_ERR, "Cannot alloc object\n");
-	ext_delete_storage_blob(storage_blob_id, objectID, objectIDLen);
-	(*object) = NULL;
-	if (result == TEE_ERROR_OUT_OF_MEMORY)
-		return TEE_ERROR_OUT_OF_MEMORY;
-
+err:
+	ext_delete_storage_blob(ss_id, objectID, objectIDLen);
 	return TEE_ERROR_GENERIC;
 }
 
-TEE_Result MGR_TEE_RenamePersistentObject(TEE_ObjectHandle object,
-					  void *newObjectID,
-					  uint32_t newObjectIDLen)
+TEE_Result MGR_TEE_RenamePersistentObject(void *objectID, size_t objectIDLen,
+					  void *newObjectID, size_t newObjectIDLen)
 {
-	struct storage_obj_meta_data meta_info_to_storage;
-	TEE_Result result;
+	struct secure_storage_element *current_element = NULL;
+	struct ss_object_meta_info object_meta_info = {0};
 	size_t bytes;
+	uint32_t ss_id;
 
-	if (object == NULL || !(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
-		OT_LOG(LOG_ERR, "ObjectID buffer is NULL or not persistent object\n");
-		return TEE_ERROR_BAD_PARAMETERS;
+	if (objectID == NULL || newObjectID == NULL) {
+		//Sanity check
+		OT_LOG_ERR("Object objecjtID or newObjectID NULL");
+		return TEE_ERROR_GENERIC;
+	}
+	
+	ss_id = ext_object_id_to_storage_id(objectID, objectIDLen);
+	if (IS_VALID_STORAGE_BLOB(ss_id)) {
+		current_element = get_storage_blob_element(ss_id);
+		if (!current_element->is_valid) {
+			OT_LOG_ERR("Not a valid storage element");
+			return TEE_ERROR_GENERIC;
+		}
+
+		if (!(current_element->opening_flags & TEE_DATA_FLAG_EXCLUSIVE)) {
+			OT_LOG_ERR("Unable to rename due opened with TEE_DATA_FLAG_EXCLUSIVE");
+			return TEE_ERROR_GENERIC;
+		}
+	} else {
+		OT_LOG_ERR("Internal error: Cant rename object which is not open");
+		return TEE_ERROR_GENERIC;
 	}
 
-	if (newObjectIDLen > TEE_OBJECT_ID_MAX_LEN) {
-		OT_LOG(LOG_ERR, "ObjectID length too big\n");
-		return TEE_ERROR_BAD_PARAMETERS;
-	}
-
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META)) {
-		OT_LOG(LOG_ERR, "TEE_RenamePerObj: No rights\n");
-		return TEE_ERROR_BAD_STATE;
-	}
-	result = validate_object_handle(object);
-
-	if (result != TEE_SUCCESS)
-		return result;
-
-
-	if (!ext_change_object_ID(object->per_object.storage_blob_id,
-				  object->per_object.obj_id, object->per_object.obj_id_len,
+	if (!ext_change_object_ID(ss_id,
+				  objectID, objectIDLen,
 				  newObjectID, newObjectIDLen)) {
-		OT_LOG(LOG_ERR, "Access conflict: ID exists\n");
+		OT_LOG(LOG_ERR, "Access conflict: ID exists");
 		return TEE_ERROR_ACCESS_CONFLICT;
 	}
 
-	bytes = ext_read_stream(object->per_object.storage_blob_id,
-				0, &meta_info_to_storage, sizeof(meta_info_to_storage));
-	if (bytes != sizeof(meta_info_to_storage)) {
-		OT_LOG(LOG_ERR, "rename done: not able to read metadata\n");
+	bytes = ext_read_stream(ss_id, 0, &object_meta_info, sizeof(struct ss_object_meta_info));
+	if (bytes != sizeof(struct ss_object_meta_info)) {
+		OT_LOG(LOG_ERR, "Unable to read object meta info");
 		return TEE_ERROR_GENERIC;
 	}
-	memset(meta_info_to_storage.obj_id, 0, sizeof(meta_info_to_storage.obj_id));
-	memcpy(meta_info_to_storage.obj_id, newObjectID, newObjectIDLen);
-	meta_info_to_storage.obj_id_len = newObjectIDLen;
-	bytes = ext_write_stream(object->per_object.storage_blob_id,
-				 0, &meta_info_to_storage, sizeof(meta_info_to_storage));
-	if (bytes != sizeof(meta_info_to_storage)) {
-		OT_LOG(LOG_ERR, "rename done: not able to write metadata\n");
-		return TEE_ERROR_GENERIC;
+	
+	memset(object_meta_info.obj_id, 0, TEE_OBJECT_ID_MAX_LEN);
+	memcpy(object_meta_info.obj_id, newObjectID, newObjectIDLen);
+	object_meta_info.obj_id_len = newObjectIDLen;
+	
+	bytes = ext_write_stream(ss_id, 0, &object_meta_info, sizeof(struct ss_object_meta_info));
+	if (bytes != sizeof(struct ss_object_meta_info)) {
+		//TODO: Delete and close object. Can't used anymore due meta corrupted.
+		OT_LOG(LOG_ERR, "Object corrupted");
+		return TEE_ERROR_CORRUPT_OBJECT;
 	}
+
 	return TEE_SUCCESS;
 }
 
-void MGR_TEE_CloseAndDeletePersistentObject(TEE_ObjectHandle object)
+TEE_Result MGR_TEE_CloseAndDeletePersistentObject(void *objectID, size_t objectIDLen)
 {
 	struct secure_storage_element *current_element;
+	uint32_t storage_blob_id = 0;
 
-	if (object == NULL)
-		return;
+	storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
 
-	if (!(object->objectInfo.handleFlags & TEE_HANDLE_FLAG_PERSISTENT)) {
-		OT_LOG(LOG_ERR, "Not a persistent object\n");
-		return;
+	current_element = get_storage_blob_element(storage_blob_id);
+	if (current_element == NULL) {		
+		OT_LOG(LOG_ERR, "Unable find element");
+		return TEE_ERROR_GENERIC;
+	}
+	
+	//Enforce flag
+	if (!(current_element->opening_flags & TEE_DATA_FLAG_ACCESS_WRITE_META)) {
+		OT_LOG(LOG_ERR, "Opened with wrong flags");
+		return TEE_ERROR_GENERIC;
+	}
+	
+	current_element->is_valid = 0;
+	remove_storage_blob_ref(storage_blob_id);
+	if (ext_delete_storage_blob(storage_blob_id, objectID, objectIDLen)) {
+		return TEE_ERROR_GENERIC;
 	}
 
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE_META)) {
-		OT_LOG(LOG_ERR, "TEE_CloAndDelPerObj: No rights\n");
-		return;
-	}
 
-	if (validate_object_handle(object)) {
-		OT_LOG(LOG_ERR, "TEE_CloAndDelPerObj: Close and delete for corrupted handle\n");
-		return;
-	}
-
-	current_element = get_storage_blob_element(object->per_object.storage_blob_id);
-	if (current_element)
-		current_element->is_valid = 0;
-
-	remove_storage_blob_ref(object->per_object.storage_blob_id);
-	ext_delete_storage_blob(object->per_object.storage_blob_id,
-				object->per_object.obj_id, object->per_object.obj_id_len);
-
-	free_object(object);
+	return TEE_SUCCESS;
 }
 
 TEE_Result MGR_TEE_AllocatePersistentObjectEnumerator(TEE_ObjectEnumHandle *objectEnumerator)
@@ -775,9 +545,9 @@ TEE_Result MGR_TEE_StartPersistentObjectEnumerator(TEE_ObjectEnumHandle objectEn
 TEE_Result MGR_TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
 					   TEE_ObjectInfo *objectInfo,
 					   void *objectID,
-					   uint32_t *objectIDLen)
+					   size_t *objectIDLen)
 {
-	struct storage_obj_meta_data recv_per_obj;
+	struct ss_object_meta_info recv_per_obj;
 
 	if (objectEnumerator == NULL || objectID == NULL || objectIDLen == NULL)
 		return TEE_ERROR_GENERIC;
@@ -796,117 +566,206 @@ TEE_Result MGR_TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator
 	return TEE_SUCCESS;
 }
 
-TEE_Result MGR_TEE_ReadObjectData(TEE_ObjectHandle object, void *buffer, size_t size,
-				  uint32_t *count)
+TEE_Result MGR_TEE_ReadObjectData(void *objectID, size_t objectIDLen,
+				  void *buffer, size_t size,
+				  uint32_t *count,
+				  size_t *pos)
 {
-	TEE_Result result;
+	//TODO: property api
+	
+	uint32_t storage_blob_id;
+	struct ss_object_meta_info object_meta_info;
+	struct secure_storage_element *ss_element;
+	
+	storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
 
-	if (object == NULL || buffer == NULL || count == NULL)
+	if (!IS_VALID_STORAGE_BLOB(storage_blob_id)) {
+		//TODO: Check if valid blob
+		OT_LOG_ERR("TEE_ReadObjectData objectID not found");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	ss_element = get_storage_blob_element(storage_blob_id);
+
+	if (!ss_element->is_valid) {
+		OT_LOG_ERR("TEE_ReadObjectData objectID not found");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+	
+	if (!(ss_element->opening_flags & TEE_DATA_FLAG_ACCESS_READ)) {
+		OT_LOG_ERR("TEE_ReadObjectData unable read due missing"
+			   " access right (missing TEE_DATA_FLAG_ACCESS_READ)");
+		return TEE_ERROR_ACCESS_DENIED;
+	}
+
+	// It is a valid object and it is open
+	if (sizeof(struct ss_object_meta_info) !=
+	    ext_read_stream(storage_blob_id, 0, &object_meta_info,
+			    sizeof(struct ss_object_meta_info))) {
+		OT_LOG(LOG_ERR, "TEE_ReadObjectData generic read error");
 		return TEE_ERROR_GENERIC;
+	}
 
 	*count = 0;
 
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_READ)) {
-		OT_LOG(LOG_ERR, "Can not read persistent object data: Not proper access rights\n");
-		return TEE_ERROR_ACCESS_DENIED;
-	}
-
-	result = validate_object_handle(object);
-	if (result != TEE_SUCCESS)
-		return result;
-
-	if (object->per_object.data_position >= object->per_object.data_size) {
-		/* if creater or equal, need to return 0 read and set the position to end */
-		object->per_object.data_position = object->per_object.data_size;
+	if (*pos >= object_meta_info.data_size) {
+		//if creater or equal, need to return 0 read and set the position to end
+		*pos = object_meta_info.data_size;
 		return TEE_SUCCESS;
 	}
 
-	*count = ext_read_stream(object->per_object.storage_blob_id,
-				 object->per_object.data_begin + object->per_object.data_position,
+	*count = ext_read_stream(storage_blob_id,
+				 object_meta_info.data_begin + *pos,
 				 buffer, size);
-	object->per_object.data_position += *count;
-
+	
+	*pos += *count;
 	return TEE_SUCCESS;
 }
 
-TEE_Result MGR_TEE_WriteObjectData(TEE_ObjectHandle object,
-				   void *buffer,
-				   size_t size,
-				   uint8_t write_type)
+TEE_Result MGR_TEE_WriteObjectData(void *objectID, size_t objectIDLen,
+				   void *buffer, size_t size,
+				   size_t *pos)
 {
-	TEE_Result result;
-	size_t write_bytes;
+	TEE_Result rv;
+	size_t ss_cur_total_size, ss_pos_total_size, write_bytes = 0;
+	uint32_t storage_blob_id;
+	struct ss_object_meta_info object_meta_info;
+	struct secure_storage_element *ss_element;
 
-	if (object == NULL || buffer == NULL)
-		return TEE_ERROR_GENERIC;
+	//TODO: Overflow check
+	
+	storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
 
-	if (write_type == COM_MGR_CMD_ID_WRITE_OBJ_DATA &&
-	    !(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE)) {
-		OT_LOG(LOG_ERR, "Can not write persistent object data: Not proper access rights\n");
-		return TEE_ERROR_ACCESS_DENIED;
+	if (!IS_VALID_STORAGE_BLOB(storage_blob_id)) {
+		//TODO: Check if valid blob
+		OT_LOG_ERR("TEE_WriteObjectData objectID not found");
+		return TEE_ERROR_ITEM_NOT_FOUND;
 	}
 
-	result = validate_object_handle(object);
-	if (result != TEE_SUCCESS)
-		return result;
+	ss_element = get_storage_blob_element(storage_blob_id);
 
-	if (object->per_object.data_position > object->per_object.data_size) {
-		result = MGR_TEE_TruncateObjectData(object, object->per_object.data_position);
-		if (result != TEE_SUCCESS) {
-			OT_LOG(LOG_ERR, "Could not increase file size before writing\n");
-			return result;
+	if (!ss_element->is_valid) {
+		OT_LOG_ERR("TEE_WriteObjectData objectID not found");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+	
+	if (!(ss_element->opening_flags & TEE_DATA_FLAG_ACCESS_WRITE)) {
+		OT_LOG_ERR("TEE_WriteObjectData unable write due missing access "
+			   "right (missing TEE_DATA_FLAG_ACCESS_WRITE)");
+		return TEE_ERROR_ACCESS_DENIED;
+	}
+	
+	// It is a valid object and it is open
+	if (sizeof(struct ss_object_meta_info) !=
+	    ext_read_stream(storage_blob_id, 0, &object_meta_info,
+			    sizeof(struct ss_object_meta_info))) {
+		OT_LOG(LOG_ERR, "TEE_WriteObjectData generic read error");
+		return TEE_ERROR_GENERIC;
+	}
+
+	//Total size includes meta and attributes
+ 	ss_cur_total_size = object_meta_info.data_size;
+	ss_pos_total_size = *pos + size;
+		
+	if (*pos > object_meta_info.data_size) {
+		//TODO/NOTE: Is this a problem? Just to be
+		//caution and handling it as an error.
+		OT_LOG_ERR("TEE_WriteObjectData write pos greater"
+			   " than data size (pos[%lu]; dataSize[%u])",
+			   *pos, object_meta_info.data_size);
+		return TEE_ERROR_GENERIC;
+	}
+
+	if (ss_pos_total_size > ss_cur_total_size) {
+		//Note: Truncate will also update object meta data!
+		rv = MGR_TEE_TruncateObjectData(objectID, objectIDLen, ss_pos_total_size, NULL);
+		if (rv != TEE_SUCCESS) {
+			OT_LOG(LOG_ERR, "TEE_WriteObjectData object truncate failed");
+			return rv;
 		}
 	}
 
-
-	write_bytes = ext_write_stream(object->per_object.storage_blob_id,
-				       object->per_object.data_begin +
-				       object->per_object.data_position,
+	write_bytes = ext_write_stream(storage_blob_id,
+				       object_meta_info.data_begin + *pos,
 				       buffer, size);
-
 	if (write_bytes != size) {
-		OT_LOG(LOG_DEBUG, "Stream write error has been occurred\n");
+		OT_LOG(LOG_DEBUG, "TEE_WriteObjectData write failed. Object data corrupted!");
+		//TODO: Handle error. File is corrupted so we need to delete!?
 		return TEE_ERROR_GENERIC;
 	}
 
-	if ((write_bytes + object->per_object.data_position) > object->per_object.data_size)
-		object->per_object.data_size = object->per_object.data_position + write_bytes;
-
-	object->per_object.data_position += write_bytes;
-
+	*pos += write_bytes;
+	
 	return TEE_SUCCESS;
 }
 
-TEE_Result MGR_TEE_TruncateObjectData(TEE_ObjectHandle object, uint32_t size)
+TEE_Result MGR_TEE_TruncateObjectData(void *objectID, size_t objectIDLen, size_t size, size_t *pos)
 {
-	TEE_Result result = TEE_SUCCESS;
+	TEE_Result rv;
+	uint32_t storage_blob_id;
+	struct ss_object_meta_info object_meta_info;
+	struct secure_storage_element *ss_element;
+	
+	storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
 
-	if (object == NULL)
-		return TEE_ERROR_GENERIC;
+	if (!IS_VALID_STORAGE_BLOB(storage_blob_id)) {
+		OT_LOG_ERR("TEE_TruncateObjectData objectID not found");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
 
-	if (!(object->objectInfo.handleFlags & TEE_DATA_FLAG_ACCESS_WRITE)) {
-		OT_LOG(LOG_ERR, "Can not write persistent object data: Not proper access rights\n");
+	ss_element = get_storage_blob_element(storage_blob_id);
+
+	if (!ss_element->is_valid) {
+		OT_LOG_ERR("TEE_TruncateObjectData objectID not found");
+		return TEE_ERROR_CORRUPT_OBJECT;
+	}
+	
+	if (!(ss_element->opening_flags & TEE_DATA_FLAG_ACCESS_WRITE)) {
+		OT_LOG_ERR("TEE_TruncateObjectData unable write due missing"
+			   " access right (missing TEE_DATA_FLAG_ACCESS_WRITE)");
 		return TEE_ERROR_ACCESS_DENIED;
 	}
-
-	result = validate_object_handle(object);
-	if (result != TEE_SUCCESS)
-		return result;
-
-	result = ext_truncate_storage_blob(object->per_object.storage_blob_id,
-					      object->per_object.data_begin + size);
-	if (result != TEE_SUCCESS) {
-		OT_LOG(LOG_ERR, "Could not truncate\n");
-		return result;
+	
+	// It is a valid object and it is open
+	if (sizeof(struct ss_object_meta_info) !=
+	    ext_read_stream(storage_blob_id, 0, &object_meta_info,
+			    sizeof(struct ss_object_meta_info))) {
+		OT_LOG(LOG_ERR, "TEE_TruncateObjectData generic read error");
+		return TEE_ERROR_GENERIC;
 	}
 
-	object->per_object.data_size = size;
+	rv = ext_truncate_storage_blob(storage_blob_id,
+				       object_meta_info.data_begin + size);
+	if (rv != TEE_SUCCESS) {
+		OT_LOG(LOG_ERR, "TEE_TruncateObjectData failed with 0x%x\n", rv);
+		//TODO: Handle error. File is corrupted so we need to delete!?
+		return rv;
+	}
 
-	return result;
+	object_meta_info.data_size = size;
+
+	if (sizeof(struct ss_object_meta_info) !=
+	    ext_write_stream(storage_blob_id, 0, &object_meta_info,
+			     sizeof(struct ss_object_meta_info))) {
+		OT_LOG(LOG_ERR, "TEE_TruncateObjectData generic write failure");
+		//TODO: Delete and close object. Can't used anymore due meta corrupted.
+		return TEE_ERROR_CORRUPT_OBJECT;
+	}
+
+	if (pos != NULL && *pos > size) {
+		*pos = size;
+	}
+	
+	return rv;
 }
 
 TEE_Result MGR_TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_Whence whence)
 {
+	object = object;
+	offset = offset;
+	whence = whence;
+		
+	/*
 	TEE_Result result;
 	int64_t begin;
 	int64_t end;
@@ -923,7 +782,7 @@ TEE_Result MGR_TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_W
 	end = object->per_object.data_size;
 	pos = object->per_object.data_position;
 
-	/* if whence is SEEK_CUR should stay as current pos */
+	// if whence is SEEK_CUR should stay as current pos
 	if (whence == TEE_DATA_SEEK_END)
 		pos = end;
 	else if (whence == TEE_DATA_SEEK_SET)
@@ -931,7 +790,7 @@ TEE_Result MGR_TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_W
 
 	pos += (int64_t)offset;
 
-	/* check for underflow */
+	// check for underflow
 	if (pos < begin)
 		pos = begin;
 
@@ -939,6 +798,38 @@ TEE_Result MGR_TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_W
 		return TEE_ERROR_OVERFLOW;
 
 	object->per_object.data_position = pos;
+*/
+	return TEE_SUCCESS;
+}
 
+TEE_Result MGR_TEE_GetObjectInfo1(void *objectID, size_t objectIDLen, uint32_t *dataSize)
+{
+	uint32_t storage_blob_id;
+	struct ss_object_meta_info object_meta_info;
+	struct secure_storage_element *ss_element;
+	
+	storage_blob_id = ext_object_id_to_storage_id(objectID, objectIDLen);
+
+	if (!IS_VALID_STORAGE_BLOB(storage_blob_id)) {
+		OT_LOG_ERR("MGR_TEE_GetObjectInfo1 objectID not found");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	ss_element = get_storage_blob_element(storage_blob_id);
+	
+	if (!ss_element->is_valid) {
+		OT_LOG_ERR("MGR_TEE_GetObjectInfo1 objectID not found");
+		return TEE_ERROR_CORRUPT_OBJECT;
+	}
+	
+	// It is a valid object and it is open
+	if (sizeof(struct ss_object_meta_info) !=
+	    ext_read_stream(storage_blob_id, 0, &object_meta_info,
+			    sizeof(struct ss_object_meta_info))) {
+		OT_LOG(LOG_ERR, "TEE_TruncateObjectData generic read error");
+		return TEE_ERROR_GENERIC;
+	}
+	
+	*dataSize = object_meta_info.data_size;
 	return TEE_SUCCESS;
 }
