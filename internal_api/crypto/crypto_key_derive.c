@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2015 Open-TEE project.	                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,29 +14,15 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_OBJECT_HANDLE_H__
-#define __TEE_OBJECT_HANDLE_H__
+#include "../tee_crypto_api.h"
+#include "../tee_panic.h"
 
-#include <stdio.h>
-#include "tee_storage_api.h"
+void TEE_DeriveKey(TEE_OperationHandle operation,
+		   TEE_Attribute *params,
+		   uint32_t paramCount,
+		   TEE_ObjectHandle derivedKey)
+{
+	/* Not used by PKCS11TA */
 
-struct persistant_object_info {
-	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
-	uint32_t obj_id_len;
-	uint32_t  storage_blob_id;
-	size_t data_begin;
-	/* size after data begin */
-	size_t data_size;
-	/* position in stream starting from data_begin */
-	size_t data_position;
-};
-
-struct __TEE_ObjectHandle {
-	struct persistant_object_info per_object;
-	TEE_ObjectInfo objectInfo;
-	TEE_Attribute *attrs;
-	uint32_t attrs_count;
-	uint32_t maxObjSizeBytes;
-};
-
-#endif /* __TEE_OBJECT_HANDLE_H__ */
+	TEE_Panic(TEE_ERROR_NOT_IMPLEMENTED);
+}
