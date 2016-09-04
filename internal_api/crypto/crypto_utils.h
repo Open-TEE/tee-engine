@@ -1,5 +1,5 @@
 /*****************************************************************************
-** Copyright (C) 2013 Secure Systems Group.                                 **
+** Copyright (C) 2015 Open-TEE project.	                                    **
 **                                                                          **
 ** Licensed under the Apache License, Version 2.0 (the "License");          **
 ** you may not use this file except in compliance with the License.         **
@@ -14,29 +14,30 @@
 ** limitations under the License.                                           **
 *****************************************************************************/
 
-#ifndef __TEE_OBJECT_HANDLE_H__
-#define __TEE_OBJECT_HANDLE_H__
+#ifndef __CRYPTO_UTILS_H__
+#define __CRYPTO_UTILS_H__
 
-#include <stdio.h>
-#include "tee_storage_api.h"
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
 
-struct persistant_object_info {
-	char obj_id[TEE_OBJECT_ID_MAX_LEN + 1];
-	uint32_t obj_id_len;
-	uint32_t  storage_blob_id;
-	size_t data_begin;
-	/* size after data begin */
-	size_t data_size;
-	/* position in stream starting from data_begin */
-	size_t data_position;
-};
+#include "../tee_crypto_api.h"
+#include "../tee_data_types.h"
 
-struct __TEE_ObjectHandle {
-	struct persistant_object_info per_object;
-	TEE_ObjectInfo objectInfo;
-	TEE_Attribute *attrs;
-	uint32_t attrs_count;
-	uint32_t maxObjSizeBytes;
-};
+extern mbedtls_entropy_context ot_mbedtls_entropy;
+extern mbedtls_ctr_drbg_context ot_mbedtls_ctr_drbg;
 
-#endif /* __TEE_OBJECT_HANDLE_H__ */
+int valid_mode_and_algorithm(uint32_t algorithm, uint32_t mode);
+
+bool valid_key_size_for_algorithm(uint32_t algorithm, uint32_t key);
+
+bool supported_algorithms(uint32_t algorithm, uint32_t key_size);
+
+uint32_t get_operation_class(uint32_t algorithm);
+
+bool alg_requires_2_keys(uint32_t algorithm);
+
+uint32_t get_alg_hash_lenght(uint32_t algorithm);
+
+TEE_Result valid_key_and_operation(TEE_ObjectHandle key, TEE_OperationHandle operation);
+
+#endif
