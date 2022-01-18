@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "baa041b7_fbb736d5",
+        "filename": "internal_api/storage/storage_utils.h",
+        "patchSetId": 13
+      },
+      "lineNbr": 40,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2022-01-18T12:21:06Z",
+      "side": 1,
+      "message": "You seem to have some problem with your editor, you keep turning tabs into spaces.",
+      "range": {
+        "startLine": 40,
+        "startChar": 0,
+        "endLine": 40,
+        "endChar": 8
+      },
+      "revId": "39a3b4c6ccd37be2afa4e7238321bf5ae6bcd988",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735"
+    }
+  ]
+}

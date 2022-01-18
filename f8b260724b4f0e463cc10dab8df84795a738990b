@@ -1,0 +1,73 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "baa041b7_e7f454f2",
+        "filename": "internal_api/crypto/operation_handle.h",
+        "patchSetId": 3
+      },
+      "lineNbr": 61,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2022-01-18T12:21:06Z",
+      "side": 1,
+      "message": "Why not store this as a pointer to a context? then just calloc(1, sizeof(mbedtls_rsa_context)) when you initialize it and then free() after calling mbedtls_free() ?\n\nThis way the union is the same size for RSA and secret (both pointer sized)",
+      "range": {
+        "startLine": 61,
+        "startChar": 0,
+        "endLine": 61,
+        "endChar": 27
+      },
+      "revId": "f8b260724b4f0e463cc10dab8df84795a738990b",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "baa041b7_c7dcb076",
+        "filename": "internal_api/storage/storage_utils.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 228,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2022-01-18T12:21:06Z",
+      "side": 1,
+      "message": "call free() here on the malloc\u0027d ctx",
+      "range": {
+        "startLine": 228,
+        "startChar": 2,
+        "endLine": 228,
+        "endChar": 18
+      },
+      "revId": "f8b260724b4f0e463cc10dab8df84795a738990b",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "baa041b7_a7d76c4e",
+        "filename": "internal_api/storage/transient_object_api.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 272,
+      "author": {
+        "id": 1000797
+      },
+      "writtenOn": "2022-01-18T12:21:06Z",
+      "side": 1,
+      "message": "malloc space for the ctx here, then init it?",
+      "range": {
+        "startLine": 272,
+        "startChar": 0,
+        "endLine": 272,
+        "endChar": 50
+      },
+      "revId": "f8b260724b4f0e463cc10dab8df84795a738990b",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735"
+    }
+  ]
+}
