@@ -8,16 +8,20 @@ libCommonApi_la_includes = \
 	include/epoll_wrapper.h \
 	include/h_table.h \
 	include/tee_list.h \
-	include/tee_logging.h
+	include/tee_logging.h \
+	internal_api/tee_storage_api.h \
+	internal_api/tee_crypto_api.h
 
 libCommonApi_la_SOURCES = ${libCommonApi_la_includes} \
 	common/com_protocol.c \
 	common/elf_read.c \
 	common/epoll_wrapper.c \
-	common/tee_list.c
+	common/tee_list.c \
+	common/tee_logging.c
 
 libCommonApi_la_CFLAGS = ${AM_CFLAGS} \
-	-iquote $(top_srcdir)/include
+	-iquote $(top_srcdir)/include \
+	-iquote $(top_srcdir)/internal_api
 
 libCommonApi_la_LDFLAGS = ${AM_LDFLAGS} \
 	-lelf \

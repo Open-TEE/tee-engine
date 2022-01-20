@@ -55,8 +55,7 @@ libInternalApi_la_SOURCES = ${libInternalApi_la_includes} \
 	internal_api/storage/storage_utils.c \
 	internal_api/storage/transient_object_api.c \
 	internal_api/new_tee_crypto_api.c \
-	internal_api/new_tee_storage_api.c \
-	common/tee_logging.c
+	internal_api/new_tee_storage_api.c
 
 libInternalApi_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/include \
@@ -65,5 +64,6 @@ libInternalApi_la_CFLAGS = ${AM_CFLAGS} \
 libInternalApi_la_LDFLAGS = ${AM_LDFLAGS} \
 	-lssl -lcrypto -lmbedcrypto
 
-libInternalApi_la_LIBADD =
+libInternalApi_la_LIBADD = \
+	libCommonApi.la
 

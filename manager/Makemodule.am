@@ -27,9 +27,7 @@ libManagerApi_la_SOURCES = ${libManagerApi_la_includes} \
 	manager/logic_thread.c \
 	manager/mainloop.c \
 	manager/ta_dir_watch.c \
-	manager/shm_mem.c \
-	common/tee_list.c \
-	common/tee_logging.c
+	manager/shm_mem.c
 
 libManagerApi_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/include \
