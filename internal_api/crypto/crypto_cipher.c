@@ -27,7 +27,6 @@
 #include "operation_handle.h"
 #include "storage/object_handle.h"
 
-#include "opentee_storage_common.h"
 #include "tee_logging.h"
 
 #include <mbedtls/cipher.h>

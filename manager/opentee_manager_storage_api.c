@@ -28,29 +28,18 @@
 #include <errno.h>
 #include <stdint.h>
 
-//#include "tee_storage_api.h"
 #include "tee_memory.h"
-//#include "tee_storage_common.h"
-//#include "tee_object_handle.h"
 #include "tee_logging.h"
 #include "tee_time_api.h" /*TEE_TIMEOUT_INFINITE*/
 #include "com_protocol.h" /*MGR CMD IDs*/
 #include "tee_internal_client_api.h"
-
 #include "opentee_internal_api.h"
-//#include "opentee_storage_common.h"
 #include "opentee_manager_storage_api.h"
 #include "ext_storage_stream_api.h"
-
 #include "tee_data_types.h"
 #include "tee_storage_api.h"
-//#include "tee_panic.h"
 #include "tee_memory.h"
-//#include "tee_storage_common.h"
-
 #include "tee_list.h"
-
-//#include "storage/storage_utils.h"
 
 
 TEE_UUID current_TA_uuid;
@@ -307,6 +296,7 @@ TEE_Result MGR_TEE_CreatePersistentObject(uint32_t storageID,
 	// Check if object already exist
 	// TODO (improvement): Not a correct way. We could use internal
 	//   data structures. Would be more consistent
+
 	if (alloc_storage_path(objectID, objectIDLen, &file_name_with_path, NULL)) {
 		OT_LOG(LOG_ERR, "Bad parameters or random error");
 		return TEE_ERROR_GENERIC;
@@ -764,42 +754,8 @@ TEE_Result MGR_TEE_SeekObjectData(TEE_ObjectHandle object, int32_t offset, TEE_W
 	object = object;
 	offset = offset;
 	whence = whence;
-		
-	/*
-	TEE_Result result;
-	int64_t begin;
-	int64_t end;
-	int64_t pos;
 
-	if (object == NULL)
-		return TEE_ERROR_GENERIC;
-
-	result = validate_object_handle(object);
-	if (result != TEE_SUCCESS)
-		return result;
-
-	begin = 0;
-	end = object->per_object.data_size;
-	pos = object->per_object.data_position;
-
-	// if whence is SEEK_CUR should stay as current pos
-	if (whence == TEE_DATA_SEEK_END)
-		pos = end;
-	else if (whence == TEE_DATA_SEEK_SET)
-		pos = begin;
-
-	pos += (int64_t)offset;
-
-	// check for underflow
-	if (pos < begin)
-		pos = begin;
-
-	if (pos > TEE_DATA_MAX_POSITION)
-		return TEE_ERROR_OVERFLOW;
-
-	object->per_object.data_position = pos;
-*/
-	return TEE_SUCCESS;
+	return TEE_ERROR_NOT_IMPLEMENTED;
 }
 
 TEE_Result MGR_TEE_GetObjectInfo1(void *objectID, size_t objectIDLen, uint32_t *dataSize)

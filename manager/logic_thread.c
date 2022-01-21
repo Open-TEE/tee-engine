@@ -37,7 +37,6 @@
 #include "tee_storage_api.h"
 #include "opentee_internal_api.h"
 #include "opentee_manager_storage_api.h"
-#include "opentee_storage_common.h"
 #include "tee_data_types.h"
 
 /* Used for hashtable init */

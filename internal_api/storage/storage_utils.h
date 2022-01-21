@@ -33,7 +33,11 @@
 //#define TEE_MAX_DATA_SIZE (TEE_DATA_MAX_POSITION - sizeof(struct ss_object_meta_info))
 #define TEE_MAX_DATA_SIZE TEE_DATA_MAX_POSITION
 
-char *get_ss_path(uint32_t *path_len);
+int keysize_in_bytes(uint32_t key_in_bits);
+
+uint32_t keysize_in_bits(uint32_t key_in_bytes);
+
+void free_gp_attributes(struct gp_attributes *gp_attr);
 
 int valid_object_type_and_max_size(uint32_t obj_type, uint32_t obj_size);
 
@@ -50,11 +54,5 @@ void close_persistan_object(void *objectID, uint32_t objectIDLen);
 TEE_Attribute *get_attr_from_attrArr(uint32_t ID,
 				     TEE_Attribute *attrs,
 				     uint32_t attrCount);
-
-TEE_Result get_broken_tee_ss_file_name_with_path(void *objectID,
-						 size_t objectIDLen,
-						 char *broken_tee_name_with_path,
-						 uint32_t broken_tee_name_with_path_len);
-
 
 #endif /* __STORAGE_UTILS_H__ */

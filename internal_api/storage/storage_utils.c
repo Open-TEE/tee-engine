@@ -27,7 +27,6 @@
 #include "tee_logging.h"
 #include "tee_storage_api.h"
 #include "opentee_internal_api.h"
-#include "opentee_storage_common.h"
 #include "crypto/operation_handle.h"
 #include "tee_panic.h"
 #include "tee_storage_api.h"
@@ -42,6 +41,52 @@ static bool multiple_of_8(uint32_t number)
 static bool multiple_of_64(uint32_t number)
 {
 	return !(number % 64) ? true : false;
+}
+
+void free_gp_attributes(struct gp_attributes *gp_attr)
+{
+	uint32_t i;
+
+	if (gp_attr == NULL) {
+		return;
+	}
+
+	if (gp_attr->attrs == NULL) {
+		return;
+	}
+
+	for (i = 0; i < gp_attr->attrs_count; i++) {
+		// Zero is illegal attributeID.
+		if (gp_attr->attrs[i].attributeID == 0) {
+			//We might jump out, but this function supports
+			//middle alloc free
+			continue;
+		}
+
+		if (is_value_attribute(gp_attr->attrs[i].attributeID)) {
+			continue;
+		} else {
+			free(gp_attr->attrs[i].content.ref.buffer);
+		}
+	}
+
+	free(gp_attr->attrs);
+}
+
+uint32_t keysize_in_bits(uint32_t key_in_bytes)
+{
+	//TODO: Move to "common between storage/crypto"
+	//TODO: Overflow check.
+	return key_in_bytes * 8; 
+}
+
+int keysize_in_bytes(uint32_t key_in_bits)
+{
+	//TODO: Move to "common between storage/crypto"
+	if (key_in_bits <= UINT_MAX - 7)
+		key_in_bits += 7;
+
+	return key_in_bits / 8;
 }
 
 TEE_Attribute *get_attr_from_attrArr(uint32_t ID,

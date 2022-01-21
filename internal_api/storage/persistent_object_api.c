@@ -30,7 +30,142 @@
 #include "object_handle.h"
 #include "storage_utils.h"
 #include "tee_logging.h"
-#include "opentee_storage_common.h"
+
+static void inc_offset(unsigned char **mem_in, size_t offset)
+{
+	if (*mem_in != NULL) {
+		*mem_in += offset;
+	}
+}
+
+static size_t memcpy_ret_n(void *dest, void *src, size_t n)
+{
+	if (dest != NULL){
+		memcpy(dest, src, n);
+	}
+
+	return n;
+}
+
+static TEE_Result deserialize_gp_attribute(unsigned char *mem_in,
+					   struct gp_attributes *attributes)
+{
+	uint32_t n = 0;
+	TEE_Attribute attr = {0};
+
+	//Counter part: serialize_gp_attribute
+
+	//Function will malloc gp_attribute buffers.
+	//NOTE!!! NOT GP COMPLIENT. Buffer sizes are not maxObjectSizes!
+
+	if (attributes == NULL && mem_in == NULL) {
+		return TEE_SUCCESS;
+	}
+	
+	memcpy_ret_n(&attributes->attrs_count, mem_in, sizeof(attributes->attrs_count));
+	mem_in += sizeof(attributes->attrs_count);
+
+	if (attributes->attrs_count == 0) {
+		return TEE_SUCCESS;
+	}
+
+	attributes->attrs = calloc(attributes->attrs_count, sizeof(TEE_Attribute));
+	if (attributes->attrs == NULL) {
+		goto err;
+	}
+
+	for (n = 0; n < attributes->attrs_count; ++n) {
+		memcpy_ret_n(&attributes->attrs[n].attributeID, mem_in, sizeof(attr.attributeID));
+		mem_in += sizeof(attr.attributeID);
+		
+		if (is_value_attribute(attr.attributeID)) {
+			memcpy_ret_n(&attributes->attrs[n].content.value.a, mem_in, sizeof(attr.content.value.a));
+			mem_in += sizeof(attr.content.value.a);
+
+			memcpy_ret_n(&attributes->attrs[n].content.value.b, mem_in, sizeof(attr.content.value.b));
+			mem_in += sizeof(attr.content.value.b);
+		} else {
+			memcpy_ret_n(&attributes->attrs[n].content.ref.length, mem_in, sizeof(attr.content.ref.length));
+			mem_in += sizeof(attr.content.ref.length);
+
+			attributes->attrs[n].content.ref.buffer = calloc(1, attributes->attrs[n].content.ref.length);
+			if (attributes->attrs[n].content.ref.buffer == NULL) {
+				goto err;
+			}
+
+			memcpy_ret_n(attributes->attrs[n].content.ref.buffer,
+				     mem_in, attributes->attrs[n].content.ref.length);
+			mem_in += attributes->attrs[n].content.ref.length;
+		}
+	}
+
+	return TEE_SUCCESS;
+ err:
+	free_gp_attributes(attributes);
+	return TEE_ERROR_OUT_OF_MEMORY;
+}
+
+static size_t serialize_gp_attribute(struct gp_attributes *attributes,
+				     unsigned char *mem_in)
+{
+	TEE_Attribute *attr = NULL;
+	uint32_t n = 0;
+	size_t offset = 0;
+
+	//If mem_in is NULL, functio serialization size
+	//Note: using offset variable rather pointer arithmetic.
+
+	//Strategy
+	//
+	// What (size of what)
+	//################################
+	//# attr count (sizeof)
+	//#---------------------------------
+	//# attrID     (sizeof)
+	//#----------------------------------
+	//# (if VALUE     else REF
+	//#  a (sizeof)    |  lenght (sizeof)
+	//#-----------------------
+	//#  b (sizeof)    |  buffer (lenght)
+	//#-----------------------------------
+	//# attrID.. (as many as attr count)
+	//#--...
+	
+	if (attributes == NULL) {
+		return offset;
+	}
+
+	if (attributes->attrs_count == 0) {
+		return offset;
+	}
+
+	offset += memcpy_ret_n(mem_in, &attributes->attrs_count, sizeof(attributes->attrs_count));
+	inc_offset(&mem_in, sizeof(attributes->attrs_count));
+	
+	for (n = 0; n < attributes->attrs_count; ++n) {
+
+		attr = &attributes->attrs[n];
+
+		offset += memcpy_ret_n(mem_in, &attr->attributeID, sizeof(attr->attributeID));
+		inc_offset(&mem_in, sizeof(attributes->attrs_count));
+
+		if (is_value_attribute(attr->attributeID)) {
+			offset += memcpy_ret_n(mem_in, &attr->content.value.a, sizeof(attr->content.value.a));
+			inc_offset(&mem_in, sizeof(attr->content.value.a));
+
+			offset += memcpy_ret_n(mem_in, &attr->content.value.b, sizeof(attr->content.value.b));
+			inc_offset(&mem_in, sizeof(attr->content.value.b));
+		} else {
+			offset += memcpy_ret_n(mem_in, &attr->content.ref.length, sizeof(attr->content.ref.length));
+			inc_offset(&mem_in, sizeof(attr->content.ref.length));
+
+			offset += memcpy_ret_n(mem_in, attr->content.ref.buffer, attr->content.ref.length);
+			inc_offset(&mem_in, attr->content.ref.length);
+		}
+	}
+
+	return offset;
+}
 
 static TEE_Result create_persistent_handle(TEE_ObjectHandle *new_object,
 					   TEE_ObjectHandle attributes,

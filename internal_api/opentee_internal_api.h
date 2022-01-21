@@ -93,12 +93,6 @@ struct com_mrg_rename_persistent {
 	size_t newObjectIDLen;//[IN]
 } __attribute__((aligned));
 
-/*
-struct com_mrg_rename_persistent_resp {
-	uint32_t newStorageID;
-} __attribute__((aligned));
-*/
-
 struct com_mrg_transfer_data_persistent {
 	uint8_t objectID[TEE_OBJECT_ID_MAX_LEN];//[IN]
 	size_t objectIDLen;//[IN]

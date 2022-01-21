@@ -21,7 +21,6 @@
 #define EMULATOR_MANAGER_EXT_STORAGE_BLOB_API_H_
 
 #include <stdint.h>
-#include "tee_storage_common.h"
 #include "opentee_manager_storage_api.h"
 
 /* checks that storage blob is not illegal */

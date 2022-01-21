@@ -31,7 +31,6 @@
 #include "crypto/operation_handle.h"
 #include "crypto/crypto_asym.h"
 #include "tee_internal_api.h"
-#include "opentee_storage_common.h"
 #include "crypto/crypto_utils.h"
 
 static int malloc_attr(TEE_Attribute *init_attr,

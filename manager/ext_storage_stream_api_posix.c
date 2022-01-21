@@ -33,7 +33,6 @@
 
 #include "tee_storage_api.h"
 #include "tee_memory.h"
-#include "tee_storage_common.h"
 #include "tee_logging.h"
 #include "tee_time_api.h" /*TEE_TIMEOUT_INFINITE*/
 #include "com_protocol.h" /*MGR CMD IDs*/
@@ -709,10 +708,6 @@ bool ext_get_next_obj_from_enumeration(uint32_t get_next_ID,
 			next_object = NULL;
 			continue;
 		}
-
-		/* meta size - object meta info == attributes (structs) + buffers == all Attrs */
-//		recv_data_to_caller->info.objectSize =
-//		    recv_data_to_caller->meta_size - sizeof(struct storage_obj_meta_data);
 
 		// calculate data size
 		// NOTE: Why we are not using data_size from ss_object_meta_info

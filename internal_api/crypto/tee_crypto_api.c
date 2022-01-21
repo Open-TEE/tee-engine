@@ -22,13 +22,13 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "crypto/crypto_ae.h"
-#include "crypto/crypto_asym.h"
-#include "crypto/crypto_cipher.h"
-#include "crypto/crypto_digest.h"
-#include "crypto/crypto_mac.h"
-#include "crypto/crypto_utils.h"
-#include "crypto/operation_handle.h"
+#include "crypto_ae.h"
+#include "crypto_asym.h"
+#include "crypto_cipher.h"
+#include "crypto_digest.h"
+#include "crypto_mac.h"
+#include "crypto_utils.h"
+#include "operation_handle.h"
 #include "storage/object_handle.h"
 #include "storage/storage_utils.h"
 #include "tee_crypto_api.h"
