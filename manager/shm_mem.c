@@ -134,7 +134,6 @@ void open_shm_region(struct manager_msg *man_msg)
 	open_shm->msg_hdr.shareable_fd[0] = fd;
 	open_shm->msg_hdr.shareable_fd_count = 1;
 	new_shm->fd = fd;
-
 out:
 	open_shm->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 	add_msg_out_queue_and_notify(man_msg);

@@ -312,7 +312,7 @@ static TEE_Result get_shm_from_manager_and_map_region(struct ta_shared_mem *ta_s
 				(PROT_WRITE | PROT_READ), MAP_SHARED,
 				open_shm->msg_hdr.shareable_fd[0], 0);
 	if (ta_shm_mem->addr == MAP_FAILED) {
-		OT_LOG(LOG_ERR, "Failed to MMAP");
+		OT_LOG(LOG_ERR, "Failed to MMAP (errno [%d])", errno);
 		ret = TEEC_ERROR_OUT_OF_MEMORY;
 		free_shm_and_from_manager(ta_shm_mem);
 	}
@@ -585,9 +585,10 @@ static int open_shared_mem(int fd, void **buffer, uint32_t size, bool isOutput)
 		return 0;
 
 	if (isOutput)
-		flag |= O_RDONLY; /* It is an outbuffer only so we just need read access */
-	else
 		flag |= O_RDWR;
+	else
+		flag |= O_RDONLY; /* It is an inbuffer only so we just need read access */
+
 
 #ifndef ANDROID
 	if (fstat(fd, &file_stat) == -1) {
@@ -667,7 +668,7 @@ static TEE_Result copy_params_to_com_msg_op(struct com_msg_operation *operation,
 	return ret;
 }
 
-static void map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uint32_t *TEE_types)
+static int map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uint32_t *TEE_types)
 {
 	int types[4] = {0}, i;
 
@@ -728,10 +729,12 @@ static void map_TEEC_param_types_to_TEE(struct com_msg_operation *operation, uin
 
 		} else {
 			OT_LOG(LOG_ERR, "Warning: Unknow parameter type");
+			return 1;
 		}
 	}
 
 	*TEE_types = TEE_PARAM_TYPES(types[0], types[1], types[2], types[3]);
+	return 0;
 }
 
 static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Param *params,
@@ -740,33 +743,37 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 	uint32_t param_types = operation->paramTypes;
 	bool isOutput;
 	int ret = 0, i, n = 0;
+	uint32_t i_param_type;
 
 	memset(params, 0, 4 * sizeof(TEE_Param));
 
+	if (map_TEEC_param_types_to_TEE(operation, tee_param_types)) {
+		return 1;
+	}
+
 	FOR_EACH_TA_PARAM(i) {
 
-		if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_NONE ||
-		    TEE_PARAM_TYPE_GET(param_types, i) == TEEC_VALUE_OUTPUT ||
-		    TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_VALUE_OUTPUT) {
+		i_param_type = TEE_PARAM_TYPE_GET(*tee_param_types, i);
+
+		if (i_param_type == TEE_PARAM_TYPE_NONE ||
+		    i_param_type == TEE_PARAM_TYPE_VALUE_OUTPUT) {
 			continue;
 
-		} else if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_VALUE_INPUT ||
-			   TEE_PARAM_TYPE_GET(param_types, i) == TEEC_VALUE_INOUT ||
-			   TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_VALUE_INOUT ||
-			   TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_VALUE_INPUT) {
+		} else if (i_param_type == TEE_PARAM_TYPE_VALUE_INOUT ||
+			   i_param_type == TEE_PARAM_TYPE_VALUE_INPUT) {
 
 			memcpy(&params[i].value,
 			       &operation->params[i].param.value, sizeof(params[i].value));
 
-		} else {
+		} else if (i_param_type == TEE_PARAM_TYPE_MEMREF_OUTPUT ||
+			   i_param_type == TEE_PARAM_TYPE_MEMREF_INOUT ||
+			   i_param_type == TEE_PARAM_TYPE_MEMREF_INPUT) {
 
 			/* determine if this is a readonly memory area */
-			if (TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_TEMP_OUTPUT ||
-			    TEE_PARAM_TYPE_GET(param_types, i) == TEEC_MEMREF_PARTIAL_OUTPUT ||
-			    TEE_PARAM_TYPE_GET(param_types, i) == TEE_PARAM_TYPE_MEMREF_OUTPUT) {
-				isOutput = true;
-			} else {
+			if (i_param_type == TEE_PARAM_TYPE_MEMREF_INPUT) {
 				isOutput = false;
+			} else {
+				isOutput = true;
 			}
 
 			params[i].memref.size = operation->params[i].param.memref.size;
@@ -777,10 +784,13 @@ static int copy_com_msg_op_to_param(struct com_msg_operation *operation, TEE_Par
 					    operation->params[i].param.memref.size,
 					    isOutput) == -1)
 				ret = -1;
+
+		} else {
+			OT_LOG(LOG_ERR, "Not supported TEE_PARAM_TYPE_XXXXX [%u]",
+			       TEE_PARAM_TYPE_GET(param_types, i));
+			ret = -1;
 		}
 	}
-
-	map_TEEC_param_types_to_TEE(operation, tee_param_types);
 
 	if (ret == -1) /* clean up all memory that has been mmaped because of the error */
 		copy_params_to_com_msg_op(operation, params, *tee_param_types);

@@ -239,11 +239,6 @@ void receive_from_manager(struct epoll_event *event, int man_sockfd)
 		response_msg = new_ta_task->msg;
 		free(new_ta_task);
 
-		while (header->shareable_fd_count > 0) {
-			header->shareable_fd_count--;
-			close(header->shareable_fd[header->shareable_fd_count]);
-		}
-
 		/* Inform the TA thread that we have a task to be completed */
 		if (pthread_cond_signal(&block_condition)) {
 			OT_LOG(LOG_ERR, "Failed signal to block thread");
