@@ -45,22 +45,27 @@ static mbedtls_md_type_t map_gp_pkcs_hash(uint32_t pkcs_algorithm)
 		
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA1:
 	case TEE_ALG_ECDSA_SHA1:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
 		return MBEDTLS_MD_SHA1;
 		
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA224:
 	case TEE_ALG_ECDSA_SHA224:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
 		return MBEDTLS_MD_SHA224;
 		
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_ECDSA_SHA256:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
 		return MBEDTLS_MD_SHA256;
 		
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_ECDSA_SHA384:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA384:
 		return MBEDTLS_MD_SHA384;
 		
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
 	case TEE_ALG_ECDSA_SHA512:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512:
 		return MBEDTLS_MD_SHA512;
 
 	default:
@@ -238,18 +243,34 @@ static TEE_Result do_rsa_pkcs_encrypt(TEE_OperationHandle operation,
 		return TEE_ERROR_SHORT_BUFFER;
 	}
 
-	rv_mbedtls = mbedtls_rsa_set_padding((mbedtls_rsa_context *)operation->ctx.rsa.ctx,
-					     MBEDTLS_RSA_PKCS_V15, 0);
-	if (rv_mbedtls) {
-		print_mbedtls_to_syslog(rv_mbedtls);
-		OT_LOG_ERR("ERROR: Internal error when setting RSA padding");
-		TEE_Panic(TEE_ERROR_GENERIC);
+	if (operation->operation_info.algorithm == TEE_ALG_RSAES_PKCS1_V1_5) {
+		rv_mbedtls = mbedtls_rsa_set_padding((mbedtls_rsa_context *)operation->ctx.rsa.ctx,
+						     MBEDTLS_RSA_PKCS_V15, 0);
+		if (rv_mbedtls) {
+			print_mbedtls_to_syslog(rv_mbedtls);
+			OT_LOG_ERR("ERROR: Internal error when setting RSA padding");
+			TEE_Panic(TEE_ERROR_GENERIC);
+		}
+
+		rv_mbedtls = mbedtls_rsa_rsaes_pkcs1_v15_encrypt(operation->ctx.rsa.ctx,
+								 mbedtls_ctr_drbg_random,
+								 &ot_mbedtls_ctr_drbg,
+								 srcLen, srcData, destData);
+	} else {
+		rv_mbedtls = mbedtls_rsa_set_padding((mbedtls_rsa_context *)operation->ctx.rsa.ctx,
+						     MBEDTLS_RSA_PKCS_V21, map_gp_pkcs_hash(operation->operation_info.algorithm));
+		if (rv_mbedtls) {
+			print_mbedtls_to_syslog(rv_mbedtls);
+			OT_LOG_ERR("ERROR: Internal error when setting RSA padding");
+			TEE_Panic(TEE_ERROR_GENERIC);
+		}
+
+		rv_mbedtls = mbedtls_rsa_rsaes_oaep_encrypt(operation->ctx.rsa.ctx,
+							    mbedtls_ctr_drbg_random,
+							    &ot_mbedtls_ctr_drbg, NULL, 0,
+							    srcLen, srcData, destData);
 	}
 
-	rv_mbedtls = mbedtls_rsa_rsaes_pkcs1_v15_encrypt(operation->ctx.rsa.ctx,
-							 mbedtls_ctr_drbg_random,
-							 &ot_mbedtls_ctr_drbg,
-							 srcLen, srcData, destData);
 	if (rv_mbedtls != 0) {
 		print_mbedtls_to_syslog(rv_mbedtls);
 		OT_LOG_ERR("ERROR: Internal RSA encrypt error (1)");
@@ -283,19 +304,37 @@ static TEE_Result do_rsa_pkcs_decrypt(TEE_OperationHandle operation,
 		return TEE_ERROR_SHORT_BUFFER;
 	}
 	
-	rv_mbedtls = mbedtls_rsa_set_padding((mbedtls_rsa_context *)operation->ctx.rsa.ctx,
-					     MBEDTLS_RSA_PKCS_V15, 0);
-	if (rv_mbedtls) {
-		print_mbedtls_to_syslog(rv_mbedtls);
-		OT_LOG_ERR("ERROR: Internal error when setting RSA padding");
-		TEE_Panic(TEE_ERROR_GENERIC);
+	if (operation->operation_info.algorithm == TEE_ALG_RSAES_PKCS1_V1_5) {
+		rv_mbedtls = mbedtls_rsa_set_padding((mbedtls_rsa_context *)operation->ctx.rsa.ctx,
+						     MBEDTLS_RSA_PKCS_V15, 0);
+		if (rv_mbedtls) {
+			print_mbedtls_to_syslog(rv_mbedtls);
+			OT_LOG_ERR("ERROR: Internal error when setting RSA padding");
+			TEE_Panic(TEE_ERROR_GENERIC);
+		}
+
+		mbedtlsOlen = *destLen;
+		rv_mbedtls = mbedtls_rsa_rsaes_pkcs1_v15_decrypt(operation->ctx.rsa.ctx,
+								 mbedtls_ctr_drbg_random,
+								 &ot_mbedtls_ctr_drbg,
+								 destLen, srcData, destData, mbedtlsOlen);
+	} else {
+		rv_mbedtls = mbedtls_rsa_set_padding((mbedtls_rsa_context *)operation->ctx.rsa.ctx,
+						     MBEDTLS_RSA_PKCS_V21, map_gp_pkcs_hash(operation->operation_info.algorithm));
+
+		if (rv_mbedtls) {
+			print_mbedtls_to_syslog(rv_mbedtls);
+			OT_LOG_ERR("ERROR: Internal error when setting RSA padding");
+			TEE_Panic(TEE_ERROR_GENERIC);
+		}
+
+		mbedtlsOlen = *destLen;
+		mbedtls_rsa_rsaes_oaep_decrypt(operation->ctx.rsa.ctx,
+					       mbedtls_ctr_drbg_random,
+					       &ot_mbedtls_ctr_drbg, NULL, 0,
+					       destLen, srcData, destData, mbedtlsOlen);
 	}
 
-	mbedtlsOlen = *destLen;
-	rv_mbedtls = mbedtls_rsa_rsaes_pkcs1_v15_decrypt(operation->ctx.rsa.ctx,
-							 mbedtls_ctr_drbg_random,
-							 &ot_mbedtls_ctr_drbg,
-							 destLen, srcData, destData, mbedtlsOlen);
 	if (rv_mbedtls != 0) {
 		print_mbedtls_to_syslog(rv_mbedtls);
 		OT_LOG_ERR("ERROR: Internal RSA decrypt error (1)");
@@ -584,7 +623,12 @@ bool assign_asym_key(TEE_OperationHandle operation, TEE_ObjectHandle key)
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA224:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
-	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:		
+	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA384:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512:
 		return assign_rsa_key_to_ctx(key->key->gp_attrs.attrs,
 					     key->key->gp_attrs.attrs_count,
 					     operation->ctx.rsa.ctx,
@@ -617,7 +661,12 @@ TEE_Result init_gp_asym(TEE_OperationHandle operation)
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA224:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
-	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:		
+	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA384:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512:
 		operation->ctx.rsa.ctx = calloc(1, sizeof(mbedtls_rsa_context));
 		if (operation->ctx.rsa.ctx == NULL) {
 			OT_LOG(LOG_ERR, "Out of memory");
@@ -669,6 +718,11 @@ void free_gp_asym(TEE_OperationHandle operation)
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA384:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512:
 		mbedtls_rsa_free(operation->ctx.rsa.ctx);
 		free(operation->ctx.rsa.ctx);
 		operation->ctx.rsa.ctx = NULL;
@@ -735,6 +789,11 @@ TEE_Result TEE_AsymmetricEncrypt(TEE_OperationHandle operation,
 
 	switch (operation->operation_info.algorithm) {
 	case TEE_ALG_RSAES_PKCS1_V1_5:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA384:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512:
 		return do_rsa_pkcs_encrypt(operation, srcData, srcLen, destData, destLen);
 	default:
 		OT_LOG_ERR("TEE_AsymmetricEncrypt panics due not supported "
@@ -779,6 +838,11 @@ TEE_Result TEE_AsymmetricDecrypt(TEE_OperationHandle operation,
 
 	switch (operation->operation_info.algorithm) {
 	case TEE_ALG_RSAES_PKCS1_V1_5:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA384:
+	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512:
 		return do_rsa_pkcs_decrypt(operation, srcData, srcLen, destData, destLen);
 	default:
 		OT_LOG_ERR("TEE_AsymmetricDecrypt panics due algorithm not supported [%u]",
