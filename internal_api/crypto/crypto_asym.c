@@ -46,26 +46,31 @@ static mbedtls_md_type_t map_gp_pkcs_hash(uint32_t pkcs_algorithm)
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA1:
 	case TEE_ALG_ECDSA_SHA1:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
 		return MBEDTLS_MD_SHA1;
 		
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA224:
 	case TEE_ALG_ECDSA_SHA224:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA224:
 		return MBEDTLS_MD_SHA224;
 		
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_ECDSA_SHA256:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
 		return MBEDTLS_MD_SHA256;
 		
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_ECDSA_SHA384:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA384:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
 		return MBEDTLS_MD_SHA384;
 		
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
 	case TEE_ALG_ECDSA_SHA512:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 		return MBEDTLS_MD_SHA512;
 
 	default:
@@ -128,7 +133,8 @@ static TEE_Result do_ecdsa_verify(TEE_OperationHandle operation,
 }
 static TEE_Result do_rsa_pkcs_signature(TEE_OperationHandle operation,
 					void *digest, size_t digestLen,
-					void *signature, size_t *signatureLen)
+					void *signature, size_t *signatureLen,
+					bool pssPadding)
 {
 	size_t maxDigestLen;
 	int rv_mbedtls;
@@ -156,13 +162,26 @@ static TEE_Result do_rsa_pkcs_signature(TEE_OperationHandle operation,
 		TEE_Panic(TEE_ERROR_GENERIC);
 	}
 	
-	rv_mbedtls = mbedtls_rsa_rsassa_pkcs1_v15_sign(operation->ctx.rsa.ctx,
-						       mbedtls_ctr_drbg_random,
-						       &ot_mbedtls_ctr_drbg,
-						       map_gp_pkcs_hash(operation->operation_info.algorithm),
-						       get_alg_hash_lenght(operation->operation_info.algorithm),
-						       digest,
-						       signature);
+	if (false == pssPadding) {
+		rv_mbedtls = mbedtls_rsa_rsassa_pkcs1_v15_sign(operation->ctx.rsa.ctx,
+							       mbedtls_ctr_drbg_random,
+							       &ot_mbedtls_ctr_drbg,
+							       map_gp_pkcs_hash(operation->operation_info.algorithm),
+							       get_alg_hash_lenght(operation->operation_info.algorithm),
+							       digest,
+							       signature);
+	} else {
+		rv_mbedtls = mbedtls_rsa_set_padding((mbedtls_rsa_context *)operation->ctx.rsa.ctx,
+						     MBEDTLS_RSA_PKCS_V21, map_gp_pkcs_hash(operation->operation_info.algorithm));
+
+		rv_mbedtls = mbedtls_rsa_rsassa_pss_sign(operation->ctx.rsa.ctx,
+							 mbedtls_ctr_drbg_random,
+							 &ot_mbedtls_ctr_drbg,
+							 map_gp_pkcs_hash(operation->operation_info.algorithm),
+							 get_alg_hash_lenght(operation->operation_info.algorithm),
+							 digest,
+							 signature);
+	}
 		
 	if (rv_mbedtls != 0) {
 		print_mbedtls_to_syslog(rv_mbedtls);
@@ -176,7 +195,8 @@ static TEE_Result do_rsa_pkcs_signature(TEE_OperationHandle operation,
 
 static TEE_Result do_rsa_pkcs_verify(TEE_OperationHandle operation,
 				     void *digest, size_t digestLen,
-				     void *signature, size_t signatureLen)
+				     void *signature, size_t signatureLen,
+				     bool pssPadding)
 {
 	size_t maxDigestLen;
 	int rv_mbedtls;
@@ -196,19 +216,27 @@ static TEE_Result do_rsa_pkcs_verify(TEE_OperationHandle operation,
 		return TEE_ERROR_SHORT_BUFFER;
 	}
 
-	//OpenTEE internal sanity check. 
-	rv_mbedtls = mbedtls_rsa_check_privkey(operation->ctx.rsa.ctx);
-	if (rv_mbedtls != 0) {
-		print_mbedtls_to_syslog(rv_mbedtls);
-		OT_LOG_ERR("ERROR: internal crypto error (RSA verify; RSA key corrupted)");
-		TEE_Panic(TEE_ERROR_GENERIC);
+	if (false == pssPadding) {
+		//OpenTEE internal sanity check.
+		rv_mbedtls = mbedtls_rsa_check_privkey(operation->ctx.rsa.ctx);
+		if (rv_mbedtls != 0) {
+			print_mbedtls_to_syslog(rv_mbedtls);
+			OT_LOG_ERR("ERROR: internal crypto error (RSA verify; RSA key corrupted)");
+			TEE_Panic(TEE_ERROR_GENERIC);
+		}
+
+		rv_mbedtls = mbedtls_rsa_rsassa_pkcs1_v15_verify(operation->ctx.rsa.ctx,
+								 map_gp_pkcs_hash(operation->operation_info.algorithm),
+								 digestLen,
+								 digest,
+								 signature);
+	} else {
+		rv_mbedtls = mbedtls_rsa_rsassa_pss_verify(operation->ctx.rsa.ctx,
+							   map_gp_pkcs_hash(operation->operation_info.algorithm),
+							   digestLen,
+							   digest,
+							   signature);
 	}
-	
-	rv_mbedtls = mbedtls_rsa_rsassa_pkcs1_v15_verify(operation->ctx.rsa.ctx,
-							 map_gp_pkcs_hash(operation->operation_info.algorithm),
-							 digestLen,
-							 digest,
-							 signature);
 	if (rv_mbedtls != 0) {
 		print_mbedtls_to_syslog(rv_mbedtls);
 		OT_LOG_ERR("ERROR: Internal crypto error (RSA verify)");
@@ -624,6 +652,11 @@ bool assign_asym_key(TEE_OperationHandle operation, TEE_ObjectHandle key)
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA224:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
@@ -662,6 +695,11 @@ TEE_Result init_gp_asym(TEE_OperationHandle operation)
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA224:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
@@ -718,6 +756,11 @@ void free_gp_asym(TEE_OperationHandle operation)
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA224:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA224:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
@@ -900,7 +943,13 @@ TEE_Result TEE_AsymmetricSignDigest(TEE_OperationHandle operation,
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
-		return do_rsa_pkcs_signature(operation, digest, digestLen, signature, signatureLen);
+		return do_rsa_pkcs_signature(operation, digest, digestLen, signature, signatureLen, false);
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA224:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
+		return do_rsa_pkcs_signature(operation, digest, digestLen, signature, signatureLen, true);
 	case TEE_ALG_ECDSA_SHA1:
 	case TEE_ALG_ECDSA_SHA224:
 	case TEE_ALG_ECDSA_SHA256:
@@ -960,7 +1009,13 @@ TEE_Result TEE_AsymmetricVerifyDigest(TEE_OperationHandle operation,
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA256:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA384:
 	case TEE_ALG_RSASSA_PKCS1_V1_5_SHA512:
-		return do_rsa_pkcs_verify(operation, digest, digestLen, signature, signatureLen);
+		return do_rsa_pkcs_verify(operation, digest, digestLen, signature, signatureLen, false);
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA224:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA384:
+	case TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512:
+		return do_rsa_pkcs_verify(operation, digest, digestLen, signature, signatureLen, true);
 	case TEE_ALG_ECDSA_SHA1:
 	case TEE_ALG_ECDSA_SHA224:
 	case TEE_ALG_ECDSA_SHA256:
