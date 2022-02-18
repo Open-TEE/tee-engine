@@ -544,7 +544,7 @@ bool valid_key_size_for_algorithm(uint32_t algorithm, uint32_t key)
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA384:
 	case TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512:
-		if (key >= 256 && key <= 2048)
+		if (key >= 256 && key <= 4096)
 			return true;
 		return false;
 
