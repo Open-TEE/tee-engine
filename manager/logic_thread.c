@@ -1545,6 +1545,13 @@ static void close_session(struct manager_msg *man_msg)
 	}
 
 	if (session->status == sess_panicked) {
+		// TODO: Maybe we should rather monitor session state at the TA?
+		// Following is not a hack, but more like suboptimal solution.
+		// Response needs to send when session has opened, but e.g. other
+		// side has crashed. Only needed for ta2ta communication.
+		if (sender_proc->p_type == proc_t_TA) {
+			send_close_resp_msg_to_sender(sender_proc); 
+		}
 		list_unlink(&session->list);
 		free_sess(session);
 		return;
@@ -1723,6 +1730,8 @@ static void gen_man_and_err_and_send(struct sesLink *ta_sess, uint8_t exit_statu
 		((struct com_msg_error *)man_msg->msg)->ret = TEE_ERROR_TARGET_DEAD;
 		((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TRUSTED_APP;
 
+		// Recipient is waiting message so this will be reponse
+		((struct com_msg_error *)man_msg->msg)->msg_hdr.msg_type = COM_TYPE_RESPONSE;
 	} else {
 		((struct com_msg_error *)man_msg->msg)->ret = TEE_ERROR_GENERIC;
 		((struct com_msg_error *)man_msg->msg)->ret_origin = TEE_ORIGIN_TEE;
