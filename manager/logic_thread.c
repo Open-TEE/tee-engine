@@ -937,7 +937,6 @@ static void invoke_cmd(struct manager_msg *man_msg)
 
 	if (session->status == sess_panicked) {
 		gen_err_msg_and_add_to_out(man_msg, TEE_ORIGIN_TEE, TEE_ERROR_TARGET_DEAD);
-		free_sess(session);
 		return;
 	}
 
@@ -1546,6 +1545,7 @@ static void close_session(struct manager_msg *man_msg)
 	}
 
 	if (session->status == sess_panicked) {
+		list_unlink(&session->list);
 		free_sess(session);
 		return;
 	}
