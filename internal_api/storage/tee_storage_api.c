@@ -84,6 +84,7 @@ TEE_Result TEE_GetObjectInfo1(TEE_ObjectHandle object,
 	if (object->objectInfo.objectType !=
 	    TEE_TYPE_DATA && object->objectInfo.handleFlags & TEE_HANDLE_FLAG_INITIALIZED) {
 		objectInfo->keySize = BYTE2BITS(object->key->key_lenght);
+		ret = TEE_SUCCESS;
 	} else {
 		objectInfo->keySize = 0;
 	}
